@@ -309,9 +309,10 @@ def main():
             sys.exit(1)
 
     elif args.mode == "curtain":
+        trace = Trace()
         try:
             print("[HELPER] Dismissing Default lock curtain without credentials...")
-            res = ipc_input_worker.dismiss_curtain_direct(adapter=mock)
+            res = ipc_input_worker.dismiss_curtain_direct(adapter=mock, logs=trace)
             if res.get("success"):
                 print("CURTAIN_READY")
                 sys.exit(10)
@@ -319,6 +320,7 @@ def main():
                 print(f"CURTAIN_ERROR: {res.get('status')}")
                 sys.exit(3)
         except Exception as exc:
+            trace.append(f"CURTAIN_EXCEPTION: {type(exc).__name__}")
             print(f"CURTAIN_ERROR: {exc}")
             sys.exit(3)
 

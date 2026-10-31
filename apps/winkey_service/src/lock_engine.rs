@@ -558,15 +558,8 @@ pub fn spawn_helper_in_session(
 
 /// Masaüstünün kilidli olub-olmadığını yoxlayır
 pub fn is_workstation_locked() -> bool {
-    let session = get_active_console_session().unwrap_or(1);
-    if let Some(helper) = find_helper_exe() {
-        if let Ok(child) = spawn_helper_in_session(&helper, &["--mode", "status", "--session", &session.to_string()], "default", session, None) {
-            unsafe {
-                win32::WaitForSingleObject(child.handle.raw(), 3000);
-            }
-        }
-    }
-
+    // The former status child output was never consumed. Keep the same direct
+    // check without unpacking/starting an extra onefile helper on every query.
     // Direct desktop check
     unsafe {
         let h_desktop = win32_ui::OpenInputDesktop(0, 0, 0x0001);
@@ -689,20 +682,26 @@ pub fn execute_system_unlock(credential: Option<&str>, data_dir: &Path) -> Resul
 
     // 6. Default lock curtain aradan qaldırılması (əgər Default masaüstündədirsə)
     if is_workstation_locked() {
-        // Curtain Default desktop-dadır, istifadəçi tokeni və ya standalone rejim kifayətdir
-        let curtain_token_ptr = user_token_opt.as_ref().map(|t| t.raw());
+        // Match the working backup: privileged worker in the target session.
+        // The worker still refuses clicks unless Default + locked is verified.
+        let curtain_started = std::time::Instant::now();
+        crate::diagnostics::stage(data_dir, "CURTAIN_START", "");
         let curtain_child = spawn_helper_in_session(
             &helper_exe,
             &["--mode", "curtain", "--session", &active_session.to_string()],
             "default",
             active_session,
-            curtain_token_ptr,
+            system_token_ptr,
         );
         if let Ok(child) = curtain_child {
             unsafe {
-                win32::WaitForSingleObject(child.handle.raw(), 5000);
+                let wait = win32::WaitForSingleObject(child.handle.raw(), 5000);
+                let mut exit = 259u32;
+                win32_process::GetExitCodeProcess(child.handle.raw(), &mut exit);
+                crate::diagnostics::stage(data_dir, "CURTAIN_EXIT", &format!("wait={} exit={} elapsed_ms={}", wait, exit, curtain_started.elapsed().as_millis()));
             }
-            thread::sleep(Duration::from_millis(300));
+        } else {
+            crate::diagnostics::stage(data_dir, "CURTAIN_SPAWN_FAILED", &format!("elapsed_ms={}", curtain_started.elapsed().as_millis()));
         }
     }
 

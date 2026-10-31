@@ -40,6 +40,10 @@ user32.SetCursorPos.argtypes = [ctypes.c_int, ctypes.c_int]
 user32.SetCursorPos.restype = wintypes.BOOL
 user32.GetSystemMetrics.argtypes = [ctypes.c_int]
 user32.GetSystemMetrics.restype = ctypes.c_int
+user32.SendMessageTimeoutW.argtypes = [HANDLE, wintypes.UINT, ctypes.c_size_t,
+                                     ctypes.c_ssize_t, wintypes.UINT, wintypes.UINT,
+                                     ctypes.POINTER(ctypes.c_size_t)]
+user32.SendMessageTimeoutW.restype = ctypes.c_ssize_t
 
 HWND_BROADCAST = 0xFFFF
 WM_SYSCOMMAND = 0x0112
@@ -113,7 +117,10 @@ class Win32Adapter:
         return sent
 
     def wake_screen(self):
-        user32.SendMessageW(HWND_BROADCAST, WM_SYSCOMMAND, SC_MONITORPOWER, MONITOR_ON)
+        result = ctypes.c_size_t()
+        # Never block the curtain worker indefinitely on an unresponsive window.
+        user32.SendMessageTimeoutW(HWND_BROADCAST, WM_SYSCOMMAND, SC_MONITORPOWER,
+                                   MONITOR_ON, 0x0002, 200, ctypes.byref(result))
         user32.mouse_event(0x0001, 1, 0, 0, 0)
         user32.mouse_event(0x0001, 0xFFFFFFFF, 0, 0, 0)
 
@@ -248,7 +255,9 @@ def dismiss_curtain_direct(adapter=None, logs: list = None) -> dict:
         logs = []
 
     logs.append("CURTAIN_START: Verifying lock and desktop state")
+    logs.append("CURTAIN_WAKE_START")
     adapter.wake_screen()
+    logs.append("CURTAIN_WAKE_DONE")
     
     state = adapter.get_lock_state()
     current_desktop = state.get("desktop", "").lower()
