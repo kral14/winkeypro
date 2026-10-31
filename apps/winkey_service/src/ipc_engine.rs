@@ -16,7 +16,7 @@ pub enum IpcCommand {
     GetStatus,
     TriggerMockAction { action_name: String },
     InjectPin { dummy_payload: String },
-    ProvisionDevice { device_id: String, device_secret: String },
+    ProvisionDevice { device_id: String, device_secret: String, #[serde(default)] gateway_origin: Option<String> },
     StoreUserCredential { pin: String },
     StopService,
 }

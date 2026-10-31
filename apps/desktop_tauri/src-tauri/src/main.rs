@@ -11,6 +11,7 @@ use ed25519_dalek::{SigningKey, VerifyingKey, Signer};
 use tauri::Manager;
 use tauri::menu::{Menu, MenuItem};
 use tauri::tray::{TrayIconBuilder, TrayIconEvent, MouseButton, MouseButtonState};
+mod gateway_config;
 
 use windows_sys::Win32::Foundation::{GetLastError, LocalFree, HLOCAL};
 use windows_sys::Win32::Security::Cryptography::{
@@ -229,10 +230,14 @@ pub fn provision_device_to_service_ipc(device_id: &str, device_secret: &str) -> 
     let pipe_path = "\\\\.\\pipe\\WinKey_Service_IPC\0";
     let pipe_w: Vec<u16> = pipe_path.encode_utf16().collect();
 
+    let gateway_origin = fs::read_to_string(get_app_data_dir().join("config.json")).ok()
+        .and_then(|raw| serde_json::from_str::<serde_json::Value>(&raw).ok())
+        .and_then(|cfg| cfg.get("gateway_origin").and_then(|v| v.as_str()).map(String::from));
     let cmd = serde_json::json!({
         "ProvisionDevice": {
             "device_id": device_id,
-            "device_secret": device_secret
+            "device_secret": device_secret,
+            "gateway_origin": gateway_origin
         }
     });
     let cmd_str = format!("{}\n", cmd);
@@ -366,6 +371,7 @@ pub struct DeviceStatusDto {
     pub active_console_session_id: u32,
     pub version: String,
     pub gateway_origin: String,
+    pub cloud_gateway_origin: String,
 }
 
 #[derive(Serialize, Deserialize, Clone, Debug)]
@@ -706,10 +712,12 @@ fn get_device_status() -> Result<DeviceStatusDto, String> {
     let mut device_id = String::new();
     let mut gateway_origin = std::env::var("WINKEY_GATEWAY_ORIGIN")
         .unwrap_or_else(|_| "http://127.0.0.1:8788".to_string());
+    let mut cloud_gateway_origin = gateway_config::CLOUD_ORIGIN.to_string();
 
     if cfg_file.exists() {
         if let Ok(raw) = fs::read_to_string(&cfg_file) {
             if let Ok(json) = serde_json::from_str::<serde_json::Value>(&raw) {
+                cloud_gateway_origin = gateway_config::cloud_origin(json.get("cloud_gateway_origin").and_then(|v| v.as_str()));
                 if let Some(gw) = json.get("gateway_origin").and_then(|v| v.as_str()) {
                     if !gw.trim().is_empty() {
                         gateway_origin = gw.trim().trim_end_matches('/').to_string();
@@ -735,6 +743,7 @@ fn get_device_status() -> Result<DeviceStatusDto, String> {
         active_console_session_id: active_console,
         version: "0.1.0".to_string(),
         gateway_origin,
+        cloud_gateway_origin,
     })
 }
 
@@ -765,7 +774,7 @@ fn set_computer_name(name: String) -> Result<String, String> {
 // 3.1 Gateway origin təyini
 #[tauri::command]
 fn set_gateway_origin(origin: String) -> Result<String, String> {
-    let clean = origin.trim().trim_end_matches('/').to_string();
+    let clean = gateway_config::normalize(&origin)?;
     if clean.is_empty() {
         return Err("Gateway ünvanı boş ola bilməz".to_string());
     }
@@ -780,6 +789,7 @@ fn set_gateway_origin(origin: String) -> Result<String, String> {
     };
 
     val["gateway_origin"] = serde_json::json!(clean);
+    val["cloud_gateway_origin"] = serde_json::json!(clean);
     val["updated_at"] = serde_json::json!(std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).unwrap().as_secs());
 
     fs::write(&cfg_file, val.to_string()).map_err(|e| format!("Saxlama xətası: {}", e))?;
@@ -802,7 +812,7 @@ fn generate_qr_pairing(mode: Option<String>) -> Result<PairingPayloadDto, String
 
     let target_origin = if let Some(ref m) = mode {
         if m == "cloud" || m == "internet" {
-            "https://winkey-remote-nesib.beigesong32770.chatgpt.site".to_string()
+            gateway_config::cloud_origin(cfg_val.get("cloud_gateway_origin").and_then(|v| v.as_str()))
         } else {
             "http://127.0.0.1:8788".to_string()
         }
@@ -812,7 +822,7 @@ fn generate_qr_pairing(mode: Option<String>) -> Result<PairingPayloadDto, String
             .filter(|s| !s.trim().is_empty())
             .unwrap_or_else(|| "http://127.0.0.1:8788".to_string())
     };
-    let origin = target_origin.trim().trim_end_matches('/').to_string();
+    let origin = gateway_config::normalize(&target_origin)?;
     let request = |path: &str, payload: serde_json::Value, token: Option<&str>| -> Result<serde_json::Value, String> {
         eprintln!("[PAIRING] POST {} started", path);
         let mut req = ureq::post(&format!("{}{}", origin, path))
@@ -838,8 +848,13 @@ fn generate_qr_pairing(mode: Option<String>) -> Result<PairingPayloadDto, String
     let computer_name = cfg_val.get("computer_name").and_then(|v| v.as_str()).map(String::from)
         .unwrap_or_else(|| std::env::var("COMPUTERNAME").unwrap_or_else(|_| "Windows-PC".to_string()));
     let secret_file = get_app_data_dir().join("device_secret.dpapi");
+    use sha2::{Digest, Sha256};
+    let endpoint_secret_file = get_app_data_dir().join(format!("device_secret_{:x}.dpapi", Sha256::digest(origin.as_bytes())));
+    let previous_origin = cfg_val.get("gateway_origin").and_then(|v| v.as_str()).unwrap_or("");
+    let secret_source = if endpoint_secret_file.exists() { Some(&endpoint_secret_file) }
+        else if previous_origin.trim_end_matches('/') == origin { Some(&secret_file) } else { None };
     let old_secret = if cfg_val.get("device_id").and_then(|v| v.as_str()) == Some(device_id.as_str()) {
-        fs::read(&secret_file).ok().and_then(|b| dpapi_unprotect(&b).ok()).and_then(|b| String::from_utf8(b).ok())
+        secret_source.and_then(|path| fs::read(path).ok()).and_then(|b| dpapi_unprotect(&b).ok()).and_then(|b| String::from_utf8(b).ok())
     } else { None };
 
     let (secret, pair_code, expires_at) = (|| -> Result<(String, String, u64), String> {
@@ -880,9 +895,9 @@ fn generate_qr_pairing(mode: Option<String>) -> Result<PairingPayloadDto, String
     })?;
 
     let challenge_hex = String::new();
-    if let Ok(encrypted) = dpapi_protect(secret.as_bytes()) {
-        let _ = fs::write(&secret_file, encrypted);
-    }
+    let encrypted = dpapi_protect(secret.as_bytes())?;
+    fs::write(&endpoint_secret_file, &encrypted).map_err(|_| "E_SECRET_SAVE")?;
+    fs::write(&secret_file, &encrypted).map_err(|_| "E_SECRET_SAVE")?;
     cfg_val["device_id"] = serde_json::json!(device_id);
     cfg_val["computer_name"] = serde_json::json!(computer_name);
     cfg_val["gateway_origin"] = serde_json::json!(origin);

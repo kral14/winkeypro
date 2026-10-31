@@ -12,6 +12,7 @@ function reportUiError(kind, source = '', line = 0) {
 window.addEventListener('error', event => reportUiError('script', event.filename || '', event.lineno || 0));
 window.addEventListener('unhandledrejection', () => reportUiError('unhandled-promise'));
 console.log('[WinKey] app.js yükləndi');
+let configuredCloudOrigin = 'http://158.101.172.228:8080';
 
 // 1. Qlobal Tab Dəyişmə Funksiyası
 function switchTab(target) {
@@ -175,8 +176,9 @@ async function loadStatus() {
     if (s) {
       if (document.getElementById('lblPcName')) document.getElementById('lblPcName').textContent = s.computer_name;
       if (document.getElementById('txtPcName')) document.getElementById('txtPcName').value = s.computer_name;
-      if (document.getElementById('txtGatewayOrigin') && s.gateway_origin) {
-        document.getElementById('txtGatewayOrigin').value = s.gateway_origin;
+      if (s.cloud_gateway_origin) configuredCloudOrigin = s.cloud_gateway_origin;
+      if (document.getElementById('txtGatewayOrigin')) {
+        document.getElementById('txtGatewayOrigin').value = configuredCloudOrigin;
       }
       if (document.getElementById('lblServiceStatus')) document.getElementById('lblServiceStatus').textContent = s.service_status === 'RUNNING' ? 'İşləyir (Running)' : s.service_status;
       if (document.getElementById('lblPinStatus')) document.getElementById('lblPinStatus').textContent = s.pin_ready ? 'Qorunur (Hazırdır)' : 'Təyin Edilməyib';
@@ -304,7 +306,7 @@ function initButtons() {
         btnCloud.style.fontWeight = '600';
       }
       if (banner) {
-        banner.innerHTML = '<span>🌐 <strong>Bulud Rejimi:</strong> İnternet vasitəsilə istənilən yerdən idarəetmə. Gateway: <code>https://winkey-remote-nesib.beigesong32770.chatgpt.site</code></span>';
+        banner.textContent = '🌐 İnternet rejimi — Server: ' + configuredCloudOrigin;
       }
     }
   }
@@ -353,6 +355,8 @@ function initButtons() {
       }
       try {
         await callNative('set_gateway_origin', { origin });
+        configuredCloudOrigin = origin.replace(/\/+$/, '');
+        updateModeUI('cloud');
         showToast('toastGateway', '✓ Gateway ünvanı təyin edildi: ' + origin);
         refreshQrForCurrentMode();
       } catch (err) {

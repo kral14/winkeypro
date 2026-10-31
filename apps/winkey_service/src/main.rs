@@ -524,7 +524,7 @@ fn run_ipc_worker_loop(stop_signal: Arc<AtomicBool>, is_mock: bool, data_dir: Pa
                             serde_json::to_string(&IpcResponse::Ack).unwrap()
                         } else if req_str.contains("ProvisionDevice") {
                             println!("[IPC_PROVISION] Autentifikasiya olunmuş interaktiv istifadəçidən cihaz təminatı qəbul edildi.");
-                            if let Ok(IpcCommand::ProvisionDevice { device_id, device_secret }) = serde_json::from_str::<IpcCommand>(&req_str) {
+                            if let Ok(IpcCommand::ProvisionDevice { device_id, device_secret, gateway_origin }) = serde_json::from_str::<IpcCommand>(&req_str) {
                                 match storage::save_device_secret_dpapi(&data_dir, &device_secret) {
                                     Ok(_) => {
                                         let cfg_file = data_dir.join("config.json");
@@ -537,6 +537,9 @@ fn run_ipc_worker_loop(stop_signal: Arc<AtomicBool>, is_mock: bool, data_dir: Pa
                                             serde_json::json!({})
                                         };
                                         cfg_val["device_id"] = serde_json::json!(device_id);
+                                        if let Some(origin) = gateway_origin {
+                                            cfg_val["gateway_origin"] = serde_json::json!(origin);
+                                        }
                                         cfg_val["server_confirmed"] = serde_json::json!(true);
                                         if let Some(obj) = cfg_val.as_object_mut() {
                                             obj.remove("device_secret");
