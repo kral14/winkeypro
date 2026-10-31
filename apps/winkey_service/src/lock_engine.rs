@@ -36,6 +36,8 @@ pub mod win32_ui {
             wParam: usize,
             lParam: isize,
         ) -> isize;
+        pub fn SendMessageTimeoutW(hWnd: *mut c_void, Msg: u32, wParam: usize, lParam: isize,
+            fuFlags: u32, uTimeout: u32, lpdwResult: *mut usize) -> isize;
         pub fn mouse_event(
             dwFlags: u32,
             dx: u32,
@@ -629,11 +631,15 @@ pub fn lock_workstation() -> Result<(), String> {
 /// Ekranı və Winlogon masaüstünü oyatma siqnalı
 pub fn wake_screen() {
     unsafe {
-        win32_ui::SendMessageW(
+        let mut result = 0usize;
+        win32_ui::SendMessageTimeoutW(
             win32_ui::HWND_BROADCAST as *mut c_void,
             win32_ui::WM_SYSCOMMAND,
             win32_ui::SC_MONITORPOWER,
             win32_ui::MONITOR_ON,
+            0x0002, // SMTO_ABORTIFHUNG
+            500,
+            &mut result,
         );
         win32_ui::mouse_event(win32_ui::MOUSEEVENTF_MOVE, 1, 0, 0, 0);
         win32_ui::mouse_event(win32_ui::MOUSEEVENTF_MOVE, (-1i32) as u32, 0, 0, 0);
@@ -641,7 +647,8 @@ pub fn wake_screen() {
 }
 
 /// REM-016, REM-017, REM-018, REM-019 & REM-020: Real Cross-Session Helper Launch & Local Credential IPC
-pub fn execute_system_unlock(credential: Option<&str>) -> Result<String, String> {
+pub fn execute_system_unlock(credential: Option<&str>, data_dir: &Path) -> Result<String, String> {
+    crate::diagnostics::stage(data_dir, "UNLOCK_START", "");
     // 1. Aktiv konsol sessiyası yoxlanılır
     let active_session = get_active_console_session()
         .ok_or_else(|| "E_NO_ACTIVE_CONSOLE_SESSION: Aktiv istifadəçi konsol sessiyası mövcud deyil".to_string())?;
@@ -663,9 +670,12 @@ pub fn execute_system_unlock(credential: Option<&str>) -> Result<String, String>
         format!("E_UNLOCK_SYSTEM_SERVICE_REQUIRED: Kilidi açmaq üçün SYSTEM Windows xidməti lazımdır. {}", err)
     })?;
     eprintln!("[UNLOCK_STAGE] SYSTEM_TOKEN_OK session={}", active_session);
+    crate::diagnostics::stage(data_dir, "SYSTEM_TOKEN_OK", "");
 
     // 4. Ekran oyadılır
+    crate::diagnostics::stage(data_dir, "WAKE_START", "");
     wake_screen();
+    crate::diagnostics::stage(data_dir, "WAKE_DONE", "");
 
     // 5. REM-019: Token Ayrımı:
     // a) User Token: WTSQueryUserToken yalnız user SID təsdiqi və IPC DACL üçündür
@@ -696,6 +706,7 @@ pub fn execute_system_unlock(credential: Option<&str>) -> Result<String, String>
         }
     }
 
+    crate::diagnostics::stage(data_dir, "CURTAIN_DONE", "");
     // 7. REM-017: Məhdud ömürlü dar DACL-li Ephemeral Named Pipe yaradılması
     let pipe_id = format!("WinKey_Ephemeral_Credential_{}", uuid::Uuid::new_v4().simple());
     let pipe_path = format!("\\\\.\\pipe\\{}", pipe_id);
@@ -768,6 +779,7 @@ pub fn execute_system_unlock(credential: Option<&str>) -> Result<String, String>
         "--ipc-pipe", &pipe_id,
         "--expected-server-pid", &current_service_pid.to_string(),
     ];
+    crate::diagnostics::stage(data_dir, "UNLOCK_HELPER_SPAWN", "");
 
     let child = spawn_helper_in_session(
         &helper_exe,
@@ -929,6 +941,7 @@ pub fn execute_system_unlock(credential: Option<&str>) -> Result<String, String>
         win32::DisconnectNamedPipe(pipe_guard.raw());
     }
 
+    crate::diagnostics::stage(data_dir, "CREDENTIAL_ACK_OK", "");
     // 12. Helper Prosesinin Nəticəsi və Exit Code Gözlənilməsi (15s Timeout)
     unsafe {
         let wait_child = win32::WaitForSingleObject(child.handle.raw(), 15000);
@@ -942,6 +955,7 @@ pub fn execute_system_unlock(credential: Option<&str>) -> Result<String, String>
             return Err("E_GET_EXIT_CODE_FAILED: Helper çıxış kodu alına bilmədi".to_string());
         }
 
+        crate::diagnostics::stage(data_dir, "UNLOCK_HELPER_EXIT", &format!("exit={}", exit_code));
         if exit_code == 0 {
             Ok("SUCCESS_UNLOCKED".to_string())
         } else {

@@ -6,6 +6,7 @@ mod ipc_engine;
 mod lock_engine;
 mod recovery_engine;
 mod storage;
+mod diagnostics;
 
 use std::ffi::c_void;
 use std::fs;
@@ -699,15 +700,18 @@ fn run_gateway_poller_loop(stop_signal: Arc<AtomicBool>, is_mock: bool, data_dir
                                 "pin_ready": storage::credential_ready(&data_dir)
                             });
 
-                            if let Ok(resp) = ureq::post(&poll_url)
+                            diagnostics::stage(&data_dir, "POLL_START", "");
+                            let poll_result = ureq::post(&poll_url)
                                 .timeout(Duration::from_secs(4))
                                 .set("Authorization", &format!("Bearer {}", sec))
-                                .send_json(poll_body)
-                            {
+                                .send_json(poll_body);
+                            if let Ok(resp) = poll_result {
+                                diagnostics::stage(&data_dir, "POLL_OK", "");
                                 if let Ok(resp_json) = resp.into_json::<serde_json::Value>() {
                                     if let Some(cmd) = resp_json.get("command").filter(|c| !c.is_null()) {
                                         let cmd_id = cmd.get("id").and_then(|v| v.as_str()).unwrap_or("");
                                         let action = cmd.get("action").and_then(|v| v.as_str()).unwrap_or("");
+                                        diagnostics::stage(&data_dir, "COMMAND_RECEIVED", action);
                                         println!("[GATEWAY_COMMAND] Gələn əmr: ID={}, Əməliyyat={}", cmd_id, action);
 
                                         // Səlahiyyətli Handler və Real Lock/Unlock Adapteri
@@ -725,7 +729,7 @@ fn run_gateway_poller_loop(stop_signal: Arc<AtomicBool>, is_mock: bool, data_dir
                                             // REM-020: Server və ya şəbəkədən PIN qəbul edilmir! PIN yalnız lokal xidmət DPAPI vault-undan oxunur:
                                             match storage::load_user_credential_dpapi(&data_dir) {
                                                 Ok(local_pin) => {
-                                                    match lock_engine::execute_system_unlock(Some(&local_pin)) {
+                                                    match lock_engine::execute_system_unlock(Some(&local_pin), &data_dir) {
                                                         Ok(res) => (true, res),
                                                         Err(e) => {
                                                             println!("[HANDLER_BORDER] {}", e);
@@ -743,6 +747,7 @@ fn run_gateway_poller_loop(stop_signal: Arc<AtomicBool>, is_mock: bool, data_dir
                                         };
 
                                         // Nəticəni Gateway-ə çatdırırıq
+                                        diagnostics::stage(&data_dir, "COMMAND_FINISHED", status_str.split_whitespace().next().unwrap_or("UNKNOWN"));
                                         let res_url = format!("{}/agent/result", orig.trim_end_matches('/'));
                                         let res_body = serde_json::json!({
                                             "device_id": did,
@@ -751,12 +756,19 @@ fn run_gateway_poller_loop(stop_signal: Arc<AtomicBool>, is_mock: bool, data_dir
                                             "status": status_str
                                         });
 
-                                        let _ = ureq::post(&res_url)
+                                        let result_delivery = ureq::post(&res_url)
                                             .timeout(Duration::from_secs(3))
                                             .set("Authorization", &format!("Bearer {}", sec))
                                             .send_json(res_body);
+                                        diagnostics::stage(&data_dir, "RESULT_DELIVERY", if result_delivery.is_ok() { "OK" } else { "FAILED" });
                                     }
                                 }
+                            } else {
+                                let code = match poll_result.err().unwrap() {
+                                    ureq::Error::Status(status, _) => format!("HTTP={}", status),
+                                    _ => "TRANSPORT_OR_TIMEOUT".to_string(),
+                                };
+                                diagnostics::stage(&data_dir, "POLL_FAILED", &code);
                             }
                         }
                     }

@@ -379,7 +379,7 @@ fn handle_client(
         } else if action == "unlock" {
             println!("[LOCAL_GATEWAY] Kompüterin kilidi açılır (Lokal DPAPI)...");
             match storage::load_user_credential_dpapi(&data_dir) {
-                Ok(local_pin) => match lock_engine::execute_system_unlock(Some(&local_pin)) {
+                Ok(local_pin) => match lock_engine::execute_system_unlock(Some(&local_pin), &data_dir) {
                     Ok(res) => (true, res),
                     Err(e) => (false, format!("UNLOCK_FAILED: {}", e)),
                 },
