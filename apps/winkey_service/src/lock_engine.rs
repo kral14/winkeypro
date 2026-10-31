@@ -596,29 +596,34 @@ pub fn is_workstation_locked() -> bool {
 
 /// Win32 LockWorkStation çağırışı (Hədəf interaktiv sessiya üzərindən)
 pub fn lock_workstation() -> Result<(), String> {
-    let session = get_active_console_session().unwrap_or(1);
-
-    if let Some(helper) = find_helper_exe() {
-        if let Ok(child) = spawn_helper_in_session(&helper, &["--mode", "lock", "--session", &session.to_string()], "default", session, None) {
-            unsafe {
-                win32::WaitForSingleObject(child.handle.raw(), 4000);
-                let mut exit_code = 0u32;
-                if win32_process::GetExitCodeProcess(child.handle.raw(), &mut exit_code) != 0 && exit_code == 0 {
-                    return Ok(());
-                }
-            }
-        }
-    }
-
-    // Direct fallback
+    let session = get_active_console_session().ok_or("E_NO_ACTIVE_CONSOLE_SESSION")?;
+    let helper = find_helper_exe().ok_or("E_LOCK_HELPER_UNAVAILABLE")?;
+    let mut current_session = 0;
     unsafe {
-        let res = win32_ui::LockWorkStation();
-        if res != 0 {
-            Ok(())
-        } else {
-            Err("Win32 LockWorkStation çağırışı uğursuz oldu".to_string())
+        if win32_process::ProcessIdToSessionId(win32_process::GetCurrentProcessId(), &mut current_session) == 0 {
+            return Err(format!("E_LOCK_SESSION_QUERY: WinError={}", win32::GetLastError()));
         }
     }
+    // Session 0 must launch with the interactive USER token on Default desktop.
+    // Never fall back to LockWorkStation in the service's own session.
+    let token = if current_session != session { Some(get_target_session_user_token(session)?) } else { None };
+    let child = spawn_helper_in_session(&helper, &["--mode", "lock", "--session", &session.to_string()],
+        "default", session, token.as_ref().map(|t| t.raw()))?;
+    println!("[LOCK_HELPER] service_session={} target_session={} child_pid={}", current_session, session, child.pid);
+    unsafe {
+        let wait = win32::WaitForSingleObject(child.handle.raw(), 4000);
+        if wait != win32::WAIT_OBJECT_0 {
+            win32_process::TerminateProcess(child.handle.raw(), 99);
+            win32::WaitForSingleObject(child.handle.raw(), 1000);
+            return Err(format!("E_LOCK_HELPER_WAIT: wait={}", wait));
+        }
+        let mut exit_code = 0u32;
+        if win32_process::GetExitCodeProcess(child.handle.raw(), &mut exit_code) == 0 {
+            return Err(format!("E_LOCK_HELPER_EXIT_QUERY: WinError={}", win32::GetLastError()));
+        }
+        if exit_code != 0 { return Err(format!("E_LOCK_HELPER_EXIT: code={}", exit_code)); }
+    }
+    Ok(())
 }
 
 /// Ekranı və Winlogon masaüstünü oyatma siqnalı

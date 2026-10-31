@@ -283,3 +283,14 @@ pub fn load_user_credential_dpapi(data_dir: &Path) -> Result<String, String> {
 
     Err("E_NO_LOCAL_CREDENTIAL: Kompüterdə Windows PIN saxlanılmayıb. Əvvəlcə WinKey Desktop-da PIN saxlayın.".to_string())
 }
+
+pub fn credential_ready(data_dir: &Path) -> bool {
+    match load_user_credential_dpapi(data_dir) {
+        Ok(mut credential) => {
+            let ready = !credential.is_empty();
+            credential.zeroize();
+            ready
+        }
+        Err(_) => false,
+    }
+}

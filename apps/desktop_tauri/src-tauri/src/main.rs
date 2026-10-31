@@ -632,33 +632,26 @@ fn save_credential_dpapi(mut pin: String) -> Result<String, String> {
     }
 
     // REM-024: Heç bir plaintext credential sızmır!
-    // Əvvəlcə authenticated service IPC-sinə göndərilir, pipe əlçatan deyilsə birbaşa DPAPI vault-a yazılır
+    // Only the service can confirm a credential usable in its SYSTEM context.
     let ipc_res = store_user_credential_to_service_ipc(&pin);
     let success = match ipc_res {
         Ok(ref resp) if resp.contains("Ack") || resp.contains("PIN_STORED") => true,
-        _ => {
-            if let Ok(enc_bytes) = dpapi_protect(pin.as_bytes()) {
-                let vault_file = get_app_data_dir().join("user_credential.dpapi");
-                fs::write(&vault_file, &enc_bytes).is_ok()
-            } else {
-                false
-            }
-        }
+        _ => false,
     };
     pin.zeroize();
 
     if success {
         Ok("DPAPI_SUCCESS".to_string())
     } else {
-        Err("PIN DPAPI ilə saxlanılarkən xəta baş verdi".to_string())
+        Err("E_SERVICE_PIN_SAVE_FAILED: PIN xidmətə yazılmadı. Xidmətin işlədiyini yoxlayın və yenidən saxlayın.".to_string())
     }
 }
 
 #[tauri::command]
 fn check_credential_status() -> Result<bool, String> {
-    // REM-024: Tək service-owned vault: user_credential.dpapi
-    let vault_file = get_app_data_dir().join("user_credential.dpapi");
-    Ok(vault_file.exists() && fs::metadata(&vault_file).map(|m| m.len() > 32).unwrap_or(false))
+    let response = send_service_control_command("CREDENTIAL_READY")?;
+    let value: serde_json::Value = serde_json::from_str(&response).map_err(|_| "E_CREDENTIAL_STATUS_RESPONSE")?;
+    Ok(value.get("credential_ready").and_then(|v| v.as_bool()).unwrap_or(false))
 }
 
 // 2. Cihaz Statusu və Real Sessiya ID-ləri

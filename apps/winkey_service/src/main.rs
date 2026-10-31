@@ -503,6 +503,8 @@ fn run_ipc_worker_loop(stop_signal: Arc<AtomicBool>, is_mock: bool, data_dir: Pa
                         let req_str = String::from_utf8_lossy(&buf[..read_bytes as usize]);
                         let response_dto = if req_str.contains("PING") {
                             serde_json::to_string(&IpcResponse::Ack).unwrap()
+                        } else if req_str.trim() == "CREDENTIAL_READY" {
+                            serde_json::json!({"credential_ready": storage::credential_ready(&data_dir)}).to_string()
                         } else if req_str.contains("STATUS") {
                             serde_json::to_string(&IpcResponse::Status {
                                 service: "WinKeyService".to_string(),
@@ -694,7 +696,7 @@ fn run_gateway_poller_loop(stop_signal: Arc<AtomicBool>, is_mock: bool, data_dir
                             let poll_body = serde_json::json!({
                                 "device_id": did,
                                 "locked": locked_state,
-                                "pin_ready": true
+                                "pin_ready": storage::credential_ready(&data_dir)
                             });
 
                             if let Ok(resp) = ureq::post(&poll_url)
@@ -716,7 +718,7 @@ fn run_gateway_poller_loop(stop_signal: Arc<AtomicBool>, is_mock: bool, data_dir
                                             println!("[HANDLER] Real Win32 LockWorkStation çağırılır...");
                                             match lock_engine::lock_workstation() {
                                                 Ok(_) => (true, "SUCCESS_LOCKED".to_string()),
-                                                Err(e) => (false, format!("LOCK_FAILED: {}", e)),
+                                                Err(e) => (false, e),
                                             }
                                         } else if action == "unlock" {
                                             println!("[HANDLER] Real Win32 Unlock Adapter çağırılır (Lokal DPAPI vault-dan)...");
