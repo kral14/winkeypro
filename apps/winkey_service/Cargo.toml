@@ -1,0 +1,24 @@
+[package]
+name = "winkey_service"
+version = "0.1.0"
+description = "WinKey Pro - Windows Service & Session Security Worker"
+edition = "2021"
+
+[dependencies]
+serde = { version = "1.0", features = ["derive"] }
+serde_json = "1.0"
+sha2 = "0.10"
+uuid = { version = "1.0", features = ["v4"] }
+ureq = { version = "2.12", default-features = false, features = ["json"] }
+ed25519-dalek = { version = "2.1", default-features = false, features = ["alloc"] }
+windows-sys = { version = "0.59", features = [
+    "Win32_Foundation",
+    "Win32_System_Services",
+    "Win32_System_Threading",
+    "Win32_Security",
+    "Win32_Security_Cryptography",
+    "Win32_System_Pipes",
+    "Win32_Storage_FileSystem",
+    "Win32_System_RemoteDesktop"
+] }
+zeroize = "1.8"

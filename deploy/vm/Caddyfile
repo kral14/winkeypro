@@ -1,0 +1,18 @@
+{$WINKEY_DOMAIN} {
+    header {
+        Strict-Transport-Security "max-age=31536000"
+        Referrer-Policy "no-referrer"
+        -Server
+    }
+    request_body {
+        max_size 64KB
+    }
+    # Native uses /agent/*; clients using /api/* reach the same gateway.
+    handle_path /api/* {
+        reverse_proxy gateway:8788
+    }
+    handle {
+        reverse_proxy gateway:8788
+    }
+    # Access logs intentionally disabled: QR URLs contain one-use codes.
+}

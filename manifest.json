@@ -1,0 +1,16 @@
+{
+  "files": [
+    {
+      "path": "winkey_service.exe",
+      "sha256": "affef8680d872cb413881b132a6ae449ddc0c454728bd429e2cd5a4868d4fdfd",
+      "size": 1425920
+    },
+    {
+      "path": "winkey_helper.exe",
+      "sha256": "657289ff61a58b4b1835529ec53a1c0614e26c141dc27024ff02db68ea1ec72a",
+      "size": 8672977
+    }
+  ],
+  "timestamp": 1740000000.0,
+  "version": "0.1.0"
+}

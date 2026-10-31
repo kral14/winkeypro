@@ -1,0 +1,57 @@
+name: winkey
+services:
+  gateway:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    restart: unless-stopped
+    init: true
+    environment:
+      GATEWAY_HOST: 0.0.0.0
+      WINKEY_UPDATES_DIR: /updates
+    secrets:
+      - admin_key
+    volumes:
+      - gateway_data:/data
+    expose:
+      - "8788"
+    read_only: true
+    tmpfs:
+      - /tmp:size=16m,mode=1777
+    cap_drop: [ALL]
+    security_opt:
+      - no-new-privileges:true
+    healthcheck:
+      test: [CMD, python, -c, "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8788/healthz', timeout=4).read()"]
+      interval: 30s
+      timeout: 5s
+      start_period: 15s
+      retries: 3
+    logging:
+      driver: json-file
+      options: {max-size: "10m", max-file: "3"}
+  caddy:
+    image: caddy:2-alpine
+    restart: unless-stopped
+    environment:
+      WINKEY_DOMAIN: ${WINKEY_DOMAIN:?Run python3 deploy/vm/configure.py --domain your.domain first}
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - ./deploy/vm/Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy_data:/data
+      - caddy_config:/config
+    depends_on:
+      gateway:
+        condition: service_healthy
+    logging:
+      driver: json-file
+      options: {max-size: "10m", max-file: "3"}
+secrets:
+  admin_key:
+    file: ./deploy/vm/secrets/admin_key
+volumes:
+  gateway_data:
+  caddy_data:
+  caddy_config:

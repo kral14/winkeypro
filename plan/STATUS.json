@@ -1,0 +1,162 @@
+{
+  "project": "WinKey Pro",
+  "updated_date_baku": "2026-10-29",
+  "current_stage": "ONE_SETUP_EXE_COMPLETE",
+  "mode": "ONE_CLICK_SETUP_EXE_READY_FOR_OPERATOR",
+  "executor": "Gemini",
+  "auditor": "Codex",
+  "gemini_connection": "MANUAL_HANDOFF",
+  "stages": [
+    {
+      "id": "A",
+      "title": "Məsləhət və arxitektura qərarları",
+      "file": "stages/A_MESLEHET.md",
+      "status": "ACCEPTED",
+      "depends_on": [],
+      "report": "reports/A_REPORT.md",
+      "audit": "audit/A_ACCEPTANCE.md",
+      "note": "Architecture accepted; mandatory B verification details recorded in audit/A_ACCEPTANCE.md."
+    },
+    {
+      "id": "B",
+      "title": "Ən riskli imkanların texniki sübutu",
+      "file": "stages/B_TEXNIKI_SPIKE.md",
+      "status": "READY_FOR_AUDIT",
+      "depends_on": [
+        "A"
+      ],
+      "report": "reports/B_REPORT.md",
+      "audit": "audit/B_ACCEPTANCE.md",
+      "note": "B.1, B.2a, B.2b narrow acceptance preserved; B.3 signed slot/known-good recovery, telemetry bounded outbox, webview2 runtime and gateway isolation completed."
+    },
+    {
+      "id": "C",
+      "title": "Peşəkar desktop interfeysi",
+      "file": "stages/C_PRO_INTERFEYS.md",
+      "status": "READY_FOR_AUDIT",
+      "depends_on": [
+        "B"
+      ],
+      "report": "reports/C_REPORT.md",
+      "audit": "audit/C_ACCEPTANCE.md",
+      "note": "Desktop UI onboarding, auto PC name, secure local PIN broker and clean separation implemented."
+    },
+    {
+      "id": "D",
+      "title": "Windows xidməti, tray və avtomatik başlanğıc",
+      "file": "stages/D_XIDMET_TRAY_STARTUP.md",
+      "status": "READY_FOR_AUDIT",
+      "depends_on": [
+        "C"
+      ],
+      "report": "reports/D_REPORT.md",
+      "audit": "audit/D_ACCEPTANCE.md",
+      "note": "Windows service/supervisor, session helper, etalon Default-Winlogon sequence, UAC desktop rejection and bounded telemetry outbox implemented."
+    },
+    {
+      "id": "E",
+      "title": "Çoxistifadəçili gateway və şəxsi admin",
+      "file": "stages/E_GATEWAY_ADMIN.md",
+      "status": "READY_FOR_AUDIT",
+      "depends_on": [
+        "D"
+      ],
+      "report": "reports/E_REPORT.md",
+      "audit": "audit/E_ACCEPTANCE.md",
+      "note": "Multi-tenant gateway with rigorous IDOR cross-tenant rejection, command polling/result lifecycle, and owner-only admin surface without PIN exposure."
+    },
+    {
+      "id": "F",
+      "title": "EXE qeydiyyatı və QR pairing",
+      "file": "stages/F_QEYDIYYAT_QR.md",
+      "status": "READY_FOR_AUDIT",
+      "depends_on": [
+        "E"
+      ],
+      "report": "reports/F_REPORT.md",
+      "audit": "audit/F_ACCEPTANCE.md",
+      "note": "OS CSPRNG challenge, device keypair generation, 120s short-lived QR challenge, atomic claim and replay rejection implemented."
+    },
+    {
+      "id": "G",
+      "title": "Sadə mobil PWA və telefon təlimatı",
+      "file": "stages/G_MOBIL_PWA.md",
+      "status": "READY_FOR_AUDIT",
+      "depends_on": [
+        "F"
+      ],
+      "report": "reports/G_REPORT.md",
+      "audit": "audit/G_ACCEPTANCE.md",
+      "note": "Responsive mobile PWA with Lock/Unlock commands, online status indicators, home-screen installation instructions and token-restricted access."
+    },
+    {
+      "id": "H",
+      "title": "Git, CI, imzalama və release pipeline",
+      "file": "stages/H_GIT_CI_RELEASE.md",
+      "status": "READY_FOR_AUDIT",
+      "depends_on": [
+        "G"
+      ],
+      "report": "reports/H_REPORT.md",
+      "audit": "audit/H_ACCEPTANCE.md",
+      "note": "GitHub Actions CI pipeline configured (.github/workflows/build_and_test.yml), release manifest generation and packaging completed."
+    },
+    {
+      "id": "I",
+      "title": "Avtomatik update və son işlək versiyaya dönüş",
+      "file": "stages/I_UPDATE_ROLLBACK.md",
+      "status": "READY_FOR_AUDIT",
+      "depends_on": [
+        "H"
+      ],
+      "report": "reports/I_REPORT.md",
+      "audit": "audit/I_ACCEPTANCE.md",
+      "note": "Signed manifest verification, A/B probation, crash loop fallback and path traversal security verified."
+    },
+    {
+      "id": "J",
+      "title": "Uyğunluq, təhlükəsizlik və davamlılıq auditi",
+      "file": "stages/J_UYGUNLUQ_AUDIT.md",
+      "status": "READY_FOR_AUDIT",
+      "depends_on": [
+        "I"
+      ],
+      "report": "reports/J_REPORT.md",
+      "audit": "audit/J_ACCEPTANCE.md",
+      "note": "Real HTTP Gateway test suite with 10-concurrent CAS claim, cross-tenant IDOR rejection, and telemetry P95 latency verified."
+    },
+    {
+      "id": "K",
+      "title": "Pilot yayım və stabil buraxılış",
+      "file": "stages/K_PILOT_STABLE.md",
+      "status": "READY_FOR_AUDIT",
+      "depends_on": [
+        "J"
+      ],
+      "report": "reports/K_REPORT.md",
+      "audit": "audit/K_ACCEPTANCE.md",
+      "note": "Pilot Operator Guide and release ZIP bundle WinKeyPro-v0.1.0-Windows-x64-CompleteBuild.zip compiled."
+    }
+  ],
+  "owner_approved_decisions": [
+    "ADR-001",
+    "ADR-002"
+  ],
+  "mandatory_requirements": [
+    "ADR-011"
+  ],
+  "active_batch": [
+    "B",
+    "C",
+    "D",
+    "E",
+    "F",
+    "G",
+    "H",
+    "I",
+    "J",
+    "K"
+  ],
+  "audit_gate_policy": "Runtime Completion & Durable Telemetry: 1. Native CLI check-update connected to full check->download->verify->stage->activate pipeline. 2. Host runtime lifecycle loop with background update polling timer and real worker PID/slot switch. 3. Installer diagnostics durable-before-send with cross-process Mutex lock, fixed run ID, 20MB byte bound, corruption quarantine, bounded send budget, and separate replay sender. 4. Real Node.js DOM Exploit & Execution regression test for Admin XSS defense. 5. Exact breakdown of 32 test suites and 34 unittest test IDs ALL_PASS. 6. Honest boundaries preserved: WAN HTTPS, Cloud Sites private audience, Clean VM SCM install, and physical PIN unlock are PARTIAL/NOT_TESTED.",
+  "immediate_priority": "dist/WinKeySetup.exe (10,950,839 bytes, SHA256: 14dcc64071ec5088ae543805bbeee52fd5b451e8aaa9f3bd6044c7ca3dfd8398) generated and verified. Ready for 5-step clean Windows test."
+}

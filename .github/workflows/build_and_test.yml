@@ -1,0 +1,65 @@
+name: WinKey Pro CI Pipeline
+
+on:
+  push:
+    branches: [ main, develop ]
+  pull_request:
+    branches: [ main ]
+
+jobs:
+  build-and-test:
+    runs-on: windows-latest
+
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v4
+
+      - name: Set up Rust Toolchain
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: x86_64-pc-windows-msvc
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - name: Rust Unit and Security Tests
+        run: |
+          cargo test --manifest-path spike/winkey_spike/Cargo.toml
+          cargo run --manifest-path spike/winkey_spike/Cargo.toml
+
+      - name: Build Web Remote Next.js / PWA
+        run: |
+          npm --prefix web_remote install
+          npm --prefix web_remote run build
+
+      - name: Compile Tauri Native Desktop App
+        run: |
+          cargo build --release --manifest-path apps/desktop_tauri/src-tauri/Cargo.toml
+
+      - name: Generate SHA-256 Release Manifest
+        shell: pwsh
+        run: |
+          $bin = "apps/desktop_tauri/src-tauri/target/release/winkey_desktop.exe"
+          if (Test-Path $bin) {
+              $hash = (Get-FileHash -Path $bin -Algorithm SHA256).Hash
+              $manifest = @{
+                  product = "WinKey Pro"
+                  version = "0.1.0"
+                  platform = "windows-x64"
+                  binary = "winkey_desktop.exe"
+                  sha256 = $hash
+                  generated_at = (Get-Date).ToString("o")
+              } | ConvertTo-Json -Depth 4
+              $manifest | Out-File -FilePath "release_manifest.json" -Encoding utf8
+              Write-Host "Generated release manifest for SHA256: $hash"
+          }
+
+      - name: Upload Build Artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: winkey-pro-windows-x64
+          path: |
+            apps/desktop_tauri/src-tauri/target/release/winkey_desktop.exe
+            release_manifest.json

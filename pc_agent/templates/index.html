@@ -1,0 +1,1302 @@
+<!DOCTYPE html>
+<html lang="az">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+  <meta name="theme-color" content="#08090C">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <title>WinKey // Mobil Kilid</title>
+  
+  <link rel="manifest" href="/static/manifest.json">
+  <link rel="icon" type="image/png" href="/static/icon-192.png">
+  <link rel="apple-touch-icon" href="/static/icon-192.png">
+
+  <!-- Google Fonts: Space Grotesk + Plus Jakarta Sans + JetBrains Mono -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;600;700&family=Plus+Jakarta+Sans:wght@300;400;500;600;700;800&family=Space+Grotesk:wght@500;700&display=swap" rel="stylesheet">
+
+  <style>
+    :root {
+      --bg-base: #08090C;
+      --bg-surface: #0E1015;
+      --bg-surface-elevated: #151821;
+      --border-subtle: rgba(255, 255, 255, 0.07);
+      --border-active: rgba(56, 189, 248, 0.4);
+      --border-amber: rgba(245, 158, 11, 0.4);
+
+      --accent-cyan: #38BDF8;
+      --accent-emerald: #10B981;
+      --accent-indigo: #6366F1;
+      --accent-ruby: #F43F5E;
+      --accent-amber: #F59E0B;
+
+      --glow-cyan: 0 0 60px rgba(56, 189, 248, 0.28);
+      --glow-emerald: 0 0 60px rgba(16, 185, 129, 0.28);
+      --glow-ruby: 0 0 60px rgba(244, 63, 94, 0.28);
+      --glow-amber: 0 0 40px rgba(245, 158, 11, 0.2);
+
+      --font-main: 'Plus Jakarta Sans', -apple-system, sans-serif;
+      --font-display: 'Space Grotesk', sans-serif;
+      --font-mono: 'JetBrains Mono', monospace;
+    }
+
+    * {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+      user-select: none;
+      -webkit-user-select: none;
+      -webkit-tap-highlight-color: transparent;
+    }
+
+    body {
+      background-color: var(--bg-base);
+      color: #E2E8F0;
+      font-family: var(--font-main);
+      min-height: 100vh;
+      min-height: 100dvh;
+      display: flex;
+      flex-direction: column;
+      overflow-x: hidden;
+      position: relative;
+    }
+
+    .ambient-glow {
+      position: fixed;
+      top: -20%;
+      left: 50%;
+      transform: translateX(-50%);
+      width: 600px;
+      height: 600px;
+      background: radial-gradient(circle, rgba(56, 189, 248, 0.08) 0%, rgba(99, 102, 241, 0.03) 50%, transparent 75%);
+      pointer-events: none;
+      z-index: 0;
+      transition: background 0.8s ease;
+    }
+
+    .app-viewport {
+      position: relative;
+      z-index: 1;
+      display: flex;
+      flex-direction: column;
+      height: 100vh;
+      height: 100dvh;
+      max-width: 480px;
+      margin: 0 auto;
+      width: 100%;
+      padding: calc(env(safe-area-inset-top, 16px) + 8px) 18px calc(env(safe-area-inset-bottom, 16px) + 12px);
+      justify-content: space-between;
+    }
+
+    /* Header */
+    header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 12px;
+    }
+
+    .brand-meta {
+      display: flex;
+      flex-direction: column;
+      gap: 2px;
+    }
+
+    .brand-title {
+      font-family: var(--font-display);
+      font-size: 1.15rem;
+      font-weight: 700;
+      letter-spacing: -0.02em;
+      color: #FFFFFF;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+
+    .brand-title span.tag {
+      font-family: var(--font-mono);
+      font-size: 0.65rem;
+      background: rgba(56, 189, 248, 0.12);
+      color: var(--accent-cyan);
+      border: 1px solid rgba(56, 189, 248, 0.25);
+      padding: 2px 6px;
+      border-radius: 4px;
+      font-weight: 600;
+    }
+
+    .status-badge {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      background: rgba(255, 255, 255, 0.04);
+      border: 1px solid var(--border-subtle);
+      padding: 4px 10px;
+      border-radius: 999px;
+      font-size: 0.7rem;
+      font-family: var(--font-mono);
+      color: #94A3B8;
+      backdrop-filter: blur(8px);
+    }
+
+    .status-dot {
+      width: 7px;
+      height: 7px;
+      border-radius: 50%;
+      background-color: var(--accent-emerald);
+      box-shadow: 0 0 10px var(--accent-emerald);
+      animation: pulse 2s infinite ease-in-out;
+    }
+
+    .status-dot.disconnected {
+      background-color: var(--accent-ruby);
+      box-shadow: 0 0 10px var(--accent-ruby);
+      animation: none;
+    }
+
+    .status-dot.busy {
+      background-color: var(--accent-amber);
+      box-shadow: 0 0 10px var(--accent-amber);
+    }
+
+    .btn-icon {
+      background: rgba(255, 255, 255, 0.04);
+      border: 1px solid var(--border-subtle);
+      color: #94A3B8;
+      width: 36px;
+      height: 36px;
+      border-radius: 10px;
+      display: grid;
+      place-items: center;
+      cursor: pointer;
+      transition: all 0.2s cubic-bezier(0.16, 1, 0.3, 1);
+    }
+
+    .btn-icon:active {
+      transform: scale(0.92);
+      background: rgba(255, 255, 255, 0.08);
+      color: #FFF;
+    }
+
+    /* PROMINENT PASSWORD SETUP CARD */
+    .password-panel {
+      margin-top: 10px;
+      background: rgba(14, 16, 21, 0.85);
+      border: 1px solid var(--border-subtle);
+      border-radius: 18px;
+      padding: 14px 16px;
+      backdrop-filter: blur(12px);
+      transition: all 0.3s cubic-bezier(0.16, 1, 0.3, 1);
+    }
+
+    .password-panel.needs-setup {
+      border-color: var(--border-amber);
+      box-shadow: var(--glow-amber);
+    }
+
+    .password-panel.is-ready {
+      border-color: rgba(16, 185, 129, 0.25);
+      background: rgba(16, 185, 129, 0.03);
+    }
+
+    .password-header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 8px;
+      margin-bottom: 8px;
+    }
+
+    .password-title-group {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+
+    .password-icon {
+      width: 18px;
+      height: 18px;
+      color: var(--accent-cyan);
+    }
+
+    .password-title {
+      font-size: 0.82rem;
+      font-weight: 700;
+      color: #FFFFFF;
+      font-family: var(--font-display);
+      letter-spacing: -0.01em;
+    }
+
+    .password-toggle-btn {
+      font-family: var(--font-mono);
+      font-size: 0.68rem;
+      color: var(--accent-cyan);
+      background: rgba(56, 189, 248, 0.08);
+      border: 1px solid rgba(56, 189, 248, 0.2);
+      padding: 3px 8px;
+      border-radius: 6px;
+      cursor: pointer;
+    }
+
+    .password-body {
+      display: flex;
+      flex-direction: column;
+      gap: 10px;
+    }
+
+    .password-desc {
+      font-size: 0.72rem;
+      color: #94A3B8;
+      line-height: 1.35;
+    }
+
+    .password-input-row {
+      display: flex;
+      gap: 8px;
+    }
+
+    .password-input-wrapper {
+      position: relative;
+      flex: 1;
+    }
+
+    .password-input {
+      width: 100%;
+      background: rgba(0, 0, 0, 0.4);
+      border: 1px solid var(--border-subtle);
+      border-radius: 12px;
+      padding: 10px 38px 10px 14px;
+      font-family: var(--font-mono);
+      font-size: 0.88rem;
+      color: #FFFFFF;
+      outline: none;
+      letter-spacing: 0.05em;
+      transition: border-color 0.2s;
+    }
+
+    .password-input:focus {
+      border-color: var(--accent-cyan);
+    }
+
+    .eye-btn {
+      position: absolute;
+      right: 10px;
+      top: 50%;
+      transform: translateY(-50%);
+      background: none;
+      border: none;
+      color: #64748B;
+      cursor: pointer;
+      display: grid;
+      place-items: center;
+      padding: 4px;
+    }
+
+    .btn-save-pin {
+      background: var(--accent-cyan);
+      color: #08090C;
+      font-family: var(--font-display);
+      font-weight: 700;
+      font-size: 0.78rem;
+      padding: 0 16px;
+      border: none;
+      border-radius: 12px;
+      cursor: pointer;
+      white-space: nowrap;
+      transition: transform 0.15s ease;
+    }
+
+    .btn-save-pin:active {
+      transform: scale(0.96);
+    }
+
+    /* Saved State Minimalist Pill */
+    .password-saved-view {
+      display: none;
+      align-items: center;
+      justify-content: space-between;
+      padding: 2px 0;
+    }
+
+    .password-saved-view.active {
+      display: flex;
+    }
+
+    .saved-info {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      font-size: 0.76rem;
+    }
+
+    .saved-info .badge {
+      color: var(--accent-emerald);
+      font-weight: 600;
+    }
+
+    .saved-info .mask {
+      font-family: var(--font-mono);
+      color: #94A3B8;
+      font-size: 0.8rem;
+    }
+
+    /* Hero Section: The Master Trigger */
+    .hero-zone {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      position: relative;
+      padding: 16px 0;
+    }
+
+    .pulse-rings {
+      position: absolute;
+      width: 290px;
+      height: 290px;
+      border-radius: 50%;
+      border: 1px dashed rgba(56, 189, 248, 0.15);
+      animation: rotate 35s linear infinite;
+      pointer-events: none;
+    }
+
+    .pulse-rings::after {
+      content: '';
+      position: absolute;
+      inset: 20px;
+      border-radius: 50%;
+      border: 1px solid rgba(255, 255, 255, 0.03);
+    }
+
+    /* Biometric Master Button */
+    .master-disc {
+      position: relative;
+      width: 195px;
+      height: 195px;
+      border-radius: 50%;
+      background: radial-gradient(130% 130% at 30% 20%, #1A1F2C 0%, #0D1017 70%, #08090C 100%);
+      border: 2px solid rgba(56, 189, 248, 0.25);
+      box-shadow: var(--glow-cyan), inset 0 2px 4px rgba(255, 255, 255, 0.12), inset 0 -6px 14px rgba(0, 0, 0, 0.7);
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      gap: 6px;
+      cursor: pointer;
+      transition: all 0.35s cubic-bezier(0.16, 1, 0.3, 1);
+      z-index: 2;
+    }
+
+    .master-disc:active {
+      transform: scale(0.93);
+      border-color: var(--accent-cyan);
+      box-shadow: 0 0 80px rgba(56, 189, 248, 0.45), inset 0 0 20px rgba(56, 189, 248, 0.2);
+    }
+
+    .master-disc.state-locked {
+      border-color: rgba(244, 63, 94, 0.35);
+      box-shadow: var(--glow-ruby);
+    }
+
+    .master-disc.state-unlocking {
+      border-color: var(--accent-amber);
+      box-shadow: 0 0 60px rgba(245, 158, 11, 0.35);
+      animation: breathe 1.2s infinite ease-in-out;
+    }
+
+    .master-disc.state-unlocked {
+      border-color: var(--accent-emerald);
+      box-shadow: var(--glow-emerald);
+    }
+
+    .disc-glyph {
+      width: 50px;
+      height: 50px;
+      color: var(--accent-cyan);
+      transition: all 0.3s ease;
+      filter: drop-shadow(0 0 12px rgba(56, 189, 248, 0.4));
+    }
+
+    .disc-label {
+      font-family: var(--font-display);
+      font-size: 0.85rem;
+      font-weight: 700;
+      letter-spacing: 0.08em;
+      text-transform: uppercase;
+      color: #FFFFFF;
+      transition: all 0.3s ease;
+    }
+
+    .disc-sublabel {
+      font-family: var(--font-mono);
+      font-size: 0.6rem;
+      color: #64748B;
+      letter-spacing: 0.04em;
+    }
+
+    .action-feedback {
+      margin-top: 24px;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 4px;
+      text-align: center;
+    }
+
+    .feedback-primary {
+      font-family: var(--font-main);
+      font-size: 0.9rem;
+      font-weight: 600;
+      color: #F8FAFC;
+    }
+
+    .feedback-secondary {
+      font-family: var(--font-mono);
+      font-size: 0.68rem;
+      color: #64748B;
+    }
+
+    /* Live Diagnostic Terminal */
+    .diag-panel {
+      width: 100%;
+      margin-top: 14px;
+      background: #060709;
+      border: 1px solid rgba(255, 255, 255, 0.08);
+      border-radius: 14px;
+      overflow: hidden;
+      transition: all 0.3s cubic-bezier(0.16, 1, 0.3, 1);
+    }
+
+    .diag-panel.open {
+      border-color: rgba(56, 189, 248, 0.3);
+      box-shadow: 0 4px 24px rgba(0, 0, 0, 0.7);
+    }
+
+    .diag-header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 10px 14px;
+      background: rgba(255, 255, 255, 0.02);
+      cursor: pointer;
+    }
+
+    .diag-title-group {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+
+    .diag-pulse-dot {
+      width: 6px;
+      height: 6px;
+      border-radius: 50%;
+      background: var(--accent-cyan);
+      box-shadow: 0 0 8px var(--accent-cyan);
+    }
+
+    .diag-title {
+      font-family: var(--font-mono);
+      font-size: 0.68rem;
+      font-weight: 600;
+      color: #94A3B8;
+      letter-spacing: 0.04em;
+    }
+
+    .diag-arrow {
+      font-family: var(--font-mono);
+      font-size: 0.65rem;
+      color: var(--accent-cyan);
+    }
+
+    .diag-body {
+      display: none;
+      padding: 12px 14px;
+      border-top: 1px solid rgba(255, 255, 255, 0.05);
+      background: #030406;
+    }
+
+    .diag-panel.open .diag-body {
+      display: block;
+    }
+
+    .diag-actions-bar {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      margin-bottom: 8px;
+    }
+
+    .diag-status-tag {
+      font-family: var(--font-mono);
+      font-size: 0.62rem;
+      background: rgba(56, 189, 248, 0.1);
+      color: var(--accent-cyan);
+      padding: 2px 6px;
+      border-radius: 4px;
+      font-weight: 600;
+    }
+
+    .diag-btn-refresh {
+      background: rgba(255, 255, 255, 0.05);
+      border: 1px solid rgba(255, 255, 255, 0.1);
+      color: #94A3B8;
+      font-family: var(--font-mono);
+      font-size: 0.62rem;
+      padding: 3px 8px;
+      border-radius: 6px;
+      cursor: pointer;
+    }
+
+    .diag-btn-refresh:active {
+      background: rgba(255, 255, 255, 0.1);
+      color: #FFF;
+    }
+
+    .diag-output {
+      font-family: var(--font-mono);
+      font-size: 0.68rem;
+      line-height: 1.55;
+      color: #94A3B8;
+      white-space: pre-wrap;
+      word-break: break-word;
+      max-height: 180px;
+      overflow-y: auto;
+      margin: 0;
+    }
+
+    /* Command Dock */
+    .command-dock {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 12px;
+      background: rgba(14, 16, 21, 0.7);
+      border: 1px solid var(--border-subtle);
+      border-radius: 18px;
+      padding: 8px;
+      backdrop-filter: blur(16px);
+    }
+
+    .dock-btn {
+      background: rgba(255, 255, 255, 0.02);
+      border: 1px solid rgba(255, 255, 255, 0.04);
+      border-radius: 12px;
+      padding: 12px 10px;
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      cursor: pointer;
+      color: #94A3B8;
+      transition: all 0.2s cubic-bezier(0.16, 1, 0.3, 1);
+    }
+
+    .dock-btn:active {
+      transform: scale(0.96);
+      background: rgba(255, 255, 255, 0.06);
+      color: #FFFFFF;
+    }
+
+    .dock-btn.danger:active {
+      border-color: rgba(244, 63, 94, 0.4);
+      background: rgba(244, 63, 94, 0.08);
+      color: var(--accent-ruby);
+    }
+
+    .dock-icon {
+      width: 20px;
+      height: 20px;
+      flex-shrink: 0;
+    }
+
+    .dock-text {
+      display: flex;
+      flex-direction: column;
+      text-align: left;
+    }
+
+    .dock-text .title {
+      font-size: 0.78rem;
+      font-weight: 600;
+      color: #E2E8F0;
+    }
+
+    .dock-text .hint {
+      font-size: 0.6rem;
+      font-family: var(--font-mono);
+      color: #64748B;
+    }
+
+    .telemetry-row {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      padding: 6px 4px 0;
+      font-family: var(--font-mono);
+      font-size: 0.65rem;
+      color: #475569;
+    }
+
+    /* Modal / Drawer */
+    .drawer-overlay {
+      position: fixed;
+      inset: 0;
+      background: rgba(0, 0, 0, 0.75);
+      backdrop-filter: blur(8px);
+      z-index: 50;
+      opacity: 0;
+      pointer-events: none;
+      transition: opacity 0.3s ease;
+    }
+
+    .drawer-overlay.active {
+      opacity: 1;
+      pointer-events: auto;
+    }
+
+    .drawer-sheet {
+      position: fixed;
+      bottom: 0;
+      left: 0;
+      right: 0;
+      max-width: 480px;
+      margin: 0 auto;
+      background: var(--bg-surface);
+      border-top: 1px solid var(--border-subtle);
+      border-radius: 28px 28px 0 0;
+      padding: 24px 24px calc(env(safe-area-inset-bottom, 16px) + 24px);
+      z-index: 51;
+      transform: translateY(100%);
+      transition: transform 0.35s cubic-bezier(0.16, 1, 0.3, 1);
+    }
+
+    .drawer-sheet.active {
+      transform: translateY(0);
+    }
+
+    .drawer-handle {
+      width: 40px;
+      height: 4px;
+      background: rgba(255, 255, 255, 0.15);
+      border-radius: 4px;
+      margin: 0 auto 20px;
+    }
+
+    .drawer-title {
+      font-family: var(--font-display);
+      font-size: 1.1rem;
+      font-weight: 700;
+      color: #FFFFFF;
+      margin-bottom: 6px;
+    }
+
+    .drawer-desc {
+      font-size: 0.78rem;
+      color: #64748B;
+      margin-bottom: 20px;
+      line-height: 1.4;
+    }
+
+    .form-group {
+      display: flex;
+      flex-direction: column;
+      gap: 6px;
+      margin-bottom: 16px;
+    }
+
+    .form-label {
+      font-size: 0.72rem;
+      font-family: var(--font-mono);
+      color: #94A3B8;
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+    }
+
+    .form-input {
+      background: rgba(255, 255, 255, 0.03);
+      border: 1px solid var(--border-subtle);
+      border-radius: 12px;
+      padding: 12px 14px;
+      font-family: var(--font-mono);
+      font-size: 0.9rem;
+      color: #FFFFFF;
+      outline: none;
+    }
+
+    .drawer-actions {
+      display: flex;
+      gap: 10px;
+      margin-top: 24px;
+    }
+
+    .btn-primary {
+      flex: 1;
+      background: var(--accent-cyan);
+      color: #08090C;
+      font-family: var(--font-display);
+      font-weight: 700;
+      font-size: 0.88rem;
+      padding: 14px;
+      border: none;
+      border-radius: 14px;
+      cursor: pointer;
+    }
+
+    .btn-secondary {
+      background: rgba(255, 255, 255, 0.05);
+      color: #94A3B8;
+      font-family: var(--font-main);
+      font-weight: 600;
+      font-size: 0.85rem;
+      padding: 14px 18px;
+      border: 1px solid var(--border-subtle);
+      border-radius: 14px;
+      cursor: pointer;
+    }
+
+    @keyframes pulse {
+      0%, 100% { opacity: 1; transform: scale(1); }
+      50% { opacity: 0.4; transform: scale(0.85); }
+    }
+
+    @keyframes rotate {
+      from { transform: rotate(0deg); }
+      to { transform: rotate(360deg); }
+    }
+
+    @keyframes breathe {
+      0%, 100% { transform: scale(1); }
+      50% { transform: scale(0.97); }
+    }
+  </style>
+</head>
+<body>
+
+  <div class="ambient-glow" id="ambientGlow"></div>
+
+  <div class="app-viewport">
+    
+    <!-- Header -->
+    <header>
+      <div class="brand-meta">
+        <div class="brand-title">
+          WINKEY <span class="tag">RUSTDESK SAS</span>
+        </div>
+        <div class="status-badge" id="pcBadge">
+          <span class="status-dot" id="statusDot"></span>
+          <span id="statusText">Qoşulur...</span>
+        </div>
+      </div>
+
+      <button class="btn-icon" id="openSettingsBtn" aria-label="Parametrlər">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <circle cx="12" cy="12" r="3"></circle>
+          <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"></path>
+        </svg>
+      </button>
+    </header>
+
+    <!-- PROMINENT WINDOWS PASSWORD PANEL -->
+    <section class="password-panel needs-setup" id="passwordPanel">
+      <!-- Edit Mode Form -->
+      <div class="password-body" id="passwordEditForm">
+        <div class="password-header">
+          <div class="password-title-group">
+            <svg class="password-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <rect x="3" y="11" width="18" height="11" rx="2" ry="2"></rect>
+              <path d="M7 11V7a5 5 0 0 1 10 0v4"></path>
+            </svg>
+            <span class="password-title">Windows Parolu / PIN</span>
+          </div>
+        </div>
+        <p class="password-desc">Bir toxunuşla dərhal açılması üçün Windows şifrənizi və ya PIN kodunuzu yazın:</p>
+        <div class="password-input-row">
+          <div class="password-input-wrapper">
+            <input type="password" class="password-input" id="mainPinInput" placeholder="Windows şifrəniz və ya PIN" autocomplete="off">
+            <button class="eye-btn" id="toggleEyeBtn" type="button" aria-label="Göstər">
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"></path><circle cx="12" cy="12" r="3"></circle></svg>
+            </button>
+          </div>
+          <button class="btn-save-pin" id="mainSavePinBtn">Saxla</button>
+        </div>
+      </div>
+
+      <!-- Saved Compact View -->
+      <div class="password-saved-view" id="passwordSavedView">
+        <div class="saved-info">
+          <span class="badge">✓ Parol Aktivdir:</span>
+          <span class="mask" id="savedMask">••••••</span>
+        </div>
+        <button class="password-toggle-btn" id="editSavedPinBtn">Dəyişdir ✎</button>
+      </div>
+    </section>
+
+    <!-- Center Hero Zone (Master Unlock Trigger) -->
+    <main class="hero-zone">
+      <div class="pulse-rings"></div>
+
+      <div class="master-disc" id="masterUnlockBtn">
+        <svg class="disc-glyph" id="discIcon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+          <rect x="3" y="11" width="18" height="11" rx="2" ry="2"></rect>
+          <path d="M7 11V7a5 5 0 0 1 9.9-1"></path>
+          <circle cx="12" cy="16" r="1.5"></circle>
+        </svg>
+        <span class="disc-label" id="discLabel">KİLİDİ AÇ</span>
+        <span class="disc-sublabel" id="discSub">TƏK TOXUNUŞ</span>
+      </div>
+
+      <div class="action-feedback">
+        <div class="feedback-primary" id="feedbackTitle">Kompüterə hazır siqnal</div>
+        <div class="feedback-secondary" id="feedbackSub">Düyməyə toxunaraq Windows kilidini açın</div>
+      </div>
+
+      <!-- Live Diagnostics Terminal Panel -->
+      <section class="diag-panel" id="diagPanel">
+        <div class="diag-header" id="diagToggle">
+          <div class="diag-title-group">
+            <span class="diag-pulse-dot"></span>
+            <span class="diag-title">CANLI DİAQNOSTİKA VƏ MANEƏ LOQU</span>
+          </div>
+          <span class="diag-arrow" id="diagArrow">▼ Aç</span>
+        </div>
+        <div class="diag-body" id="diagBody">
+          <div class="diag-actions-bar">
+            <span class="diag-status-tag" id="diagStatusTag">SİSTEM HAZIRDIR</span>
+            <button class="diag-btn-refresh" id="refreshLogsBtn">Yenilə ↻</button>
+          </div>
+          <pre class="diag-output" id="diagOutput">Düyməyə basdıqda Windows-un bütün əməliyyatları və maneələr burada saniyəbəsaniyə görünəcək.</pre>
+        </div>
+      </section>
+    </main>
+
+    <!-- Bottom Command Dock & Telemetry -->
+    <footer>
+      <div class="command-dock">
+        <button class="dock-btn danger" id="lockPcBtn">
+          <svg class="dock-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <rect x="3" y="11" width="18" height="11" rx="2" ry="2"></rect>
+            <path d="M7 11V7a5 5 0 0 1 10 0v4"></path>
+          </svg>
+          <div class="dock-text">
+            <span class="title">Kilidlə</span>
+            <span class="hint">Win + L rejim</span>
+          </div>
+        </button>
+
+        <button class="dock-btn" id="wakeScreenBtn">
+          <svg class="dock-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"></polygon>
+          </svg>
+          <div class="dock-text">
+            <span class="title">Oyandır</span>
+            <span class="hint">Monitor gücü</span>
+          </div>
+        </button>
+      </div>
+
+      <div class="telemetry-row">
+        <span id="hostnameInfo">PC: Yoxlanılır...</span>
+        <span id="latencyInfo">Ping: -- ms</span>
+      </div>
+    </footer>
+
+  </div>
+
+  <!-- Settings Drawer -->
+  <div class="drawer-overlay" id="drawerOverlay"></div>
+  <div class="drawer-sheet" id="drawerSheet">
+    <div class="drawer-handle"></div>
+    <h2 class="drawer-title">Təhlükəsizlik Parametrləri</h2>
+    <p class="drawer-desc">Təhlükəsizlik tokeni yalnız sizin telefonunuzun kompüteri idarə etməsini təmin edir.</p>
+
+    <div class="form-group">
+      <label class="form-label">Təhlükəsizlik Tokeni (Secret Key)</label>
+      <input type="text" class="form-input" id="cfgToken" placeholder="winkey_secret_2026">
+    </div>
+
+    <div class="drawer-actions">
+      <button class="btn-secondary" id="closeSettingsBtn">Bağla</button>
+      <button class="btn-primary" id="saveSettingsBtn">Yadda Saxla</button>
+    </div>
+  </div>
+
+  <script>
+    // State
+    const state = {
+      isLocked: false,
+      isOnline: false,
+      isBusy: false,
+      token: localStorage.getItem('winkey_token') || 'winkey_secret_2026',
+      pin: localStorage.getItem('winkey_cached_pin') || '',
+      hasServerPin: false,
+      hostname: 'PC'
+    };
+
+    // DOM Elements
+    const masterUnlockBtn = document.getElementById('masterUnlockBtn');
+    const discLabel = document.getElementById('discLabel');
+    const discSub = document.getElementById('discSub');
+    const feedbackTitle = document.getElementById('feedbackTitle');
+    const feedbackSub = document.getElementById('feedbackSub');
+    const statusDot = document.getElementById('statusDot');
+    const statusText = document.getElementById('statusText');
+    const hostnameInfo = document.getElementById('hostnameInfo');
+    const latencyInfo = document.getElementById('latencyInfo');
+    const lockPcBtn = document.getElementById('lockPcBtn');
+    const wakeScreenBtn = document.getElementById('wakeScreenBtn');
+    const ambientGlow = document.getElementById('ambientGlow');
+
+    // Password Elements
+    const passwordPanel = document.getElementById('passwordPanel');
+    const passwordEditForm = document.getElementById('passwordEditForm');
+    const passwordSavedView = document.getElementById('passwordSavedView');
+    const mainPinInput = document.getElementById('mainPinInput');
+    const mainSavePinBtn = document.getElementById('mainSavePinBtn');
+    const editSavedPinBtn = document.getElementById('editSavedPinBtn');
+    const savedMask = document.getElementById('savedMask');
+    const toggleEyeBtn = document.getElementById('toggleEyeBtn');
+
+    // Drawer Elements
+    const openSettingsBtn = document.getElementById('openSettingsBtn');
+    const closeSettingsBtn = document.getElementById('closeSettingsBtn');
+    const saveSettingsBtn = document.getElementById('saveSettingsBtn');
+    const drawerOverlay = document.getElementById('drawerOverlay');
+    const drawerSheet = document.getElementById('drawerSheet');
+    const cfgToken = document.getElementById('cfgToken');
+
+    function triggerHaptic(pattern = [40]) {
+      if ('vibrate' in navigator) {
+        try { navigator.vibrate(pattern); } catch (e) {}
+      }
+    }
+
+    // Update Password Panel UI
+    function renderPasswordUI() {
+      if (state.pin || state.hasServerPin) {
+        passwordPanel.className = 'password-panel is-ready';
+        passwordEditForm.style.display = 'none';
+        passwordSavedView.className = 'password-saved-view active';
+        savedMask.textContent = '••••••••';
+      } else {
+        passwordPanel.className = 'password-panel needs-setup';
+        passwordEditForm.style.display = 'flex';
+        passwordSavedView.className = 'password-saved-view';
+        mainPinInput.value = '';
+      }
+    }
+
+    // Save Password
+    async function savePassword(newPin) {
+      mainSavePinBtn.disabled = true;
+      try {
+        const res = await fetch('/api/config', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({token: state.token, pin: newPin, auto_type_pin: Boolean(newPin)})
+        });
+        const data = await res.json();
+        if (!res.ok || !data.success) throw new Error(data.detail || 'PIN saxlanmadı');
+        state.pin = newPin;
+        state.hasServerPin = data.has_pin;
+        localStorage.setItem('winkey_cached_pin', state.pin);
+        renderPasswordUI();
+        triggerHaptic([40, 50]);
+        feedbackTitle.textContent = state.pin ? 'Parol Yadda Saxlanıldı ✓' : 'Parol Silindi';
+        feedbackSub.textContent = 'İndi “Kilidi Aç” düyməsinə basa bilərsiniz';
+      } catch (err) {
+        feedbackTitle.textContent = 'PIN saxlanmadı';
+        feedbackSub.textContent = err.message;
+      } finally {
+        mainSavePinBtn.disabled = false;
+      }
+    }
+
+    mainSavePinBtn.addEventListener('click', () => {
+      const val = mainPinInput.value;
+      if (!val) {
+        alert('Zəhmət olmasa Windows parolunuzu daxil edin');
+        return;
+      }
+      savePassword(val);
+    });
+
+    mainPinInput.addEventListener('keydown', (e) => {
+      if (e.key === 'Enter') {
+        savePassword(mainPinInput.value);
+      }
+    });
+
+    editSavedPinBtn.addEventListener('click', () => {
+      passwordPanel.className = 'password-panel needs-setup';
+      passwordSavedView.className = 'password-saved-view';
+      passwordEditForm.style.display = 'flex';
+      mainPinInput.value = state.pin;
+      mainPinInput.focus();
+    });
+
+    toggleEyeBtn.addEventListener('click', () => {
+      if (mainPinInput.type === 'password') {
+        mainPinInput.type = 'text';
+      } else {
+        mainPinInput.type = 'password';
+      }
+    });
+
+    // Check Status from PC
+    async function checkStatus() {
+      const t0 = performance.now();
+      try {
+        const res = await fetch(`/api/status?token=${encodeURIComponent(state.token)}`, { cache: 'no-store' });
+        const latency = Math.round(performance.now() - t0);
+        
+        if (res.ok) {
+          const data = await res.json();
+          state.isOnline = true;
+          state.isLocked = data.locked;
+          state.hasServerPin = Boolean(data.has_pin);
+          state.hostname = data.hostname || 'PC';
+          
+          // Sync server pin if local is empty
+          if (!state.pin && data.pin) {
+            state.pin = data.pin;
+            localStorage.setItem('winkey_cached_pin', state.pin);
+            renderPasswordUI();
+          }
+
+          statusDot.className = 'status-dot';
+          statusText.textContent = data.locked ? 'Kilidlidir' : 'Açıqdır';
+          hostnameInfo.textContent = `PC: ${state.hostname} · ${data.diagnostic_build || 'köhnə server'} · PID ${data.server_pid || '?'}`;
+          latencyInfo.textContent = `Ping: ${latency} ms`;
+
+          updateVisualState(data.locked);
+        } else {
+          setOfflineState();
+        }
+      } catch (err) {
+        setOfflineState();
+      }
+    }
+
+    function setOfflineState() {
+      state.isOnline = false;
+      statusDot.className = 'status-dot disconnected';
+      statusText.textContent = 'Əlaqə yoxdur';
+      latencyInfo.textContent = 'Ping: --';
+    }
+
+    function updateVisualState(locked) {
+      if (state.isBusy) return;
+
+      if (locked) {
+        masterUnlockBtn.className = 'master-disc state-locked';
+        discLabel.textContent = 'KİLİDİ AÇ';
+        discSub.textContent = 'SİSTEM KİLİDLİDİR';
+        feedbackTitle.textContent = 'Windows hazırda kiliddədir';
+        feedbackSub.textContent = (state.pin || state.hasServerPin) ? 'Düyməyə basaraq dərhal açın' : '⚠️ Əvvəlcə yuxarıda parolu qeyd edin';
+      } else {
+        masterUnlockBtn.className = 'master-disc state-unlocked';
+        discLabel.textContent = 'AÇIQDIR';
+        discSub.textContent = 'YENİDƏN OYAT';
+        feedbackTitle.textContent = 'Windows masaüstü aktivdir';
+        feedbackSub.textContent = 'Monitoru oyatmaq üçün toxuna bilərsiniz';
+      }
+    }
+
+    // Master Unlock Click
+    async function handleUnlock() {
+      if (state.isBusy) return;
+
+      // Check if password is set
+      const editing = passwordEditForm.style.display !== 'none';
+      const currentPin = (editing && mainPinInput.value) || state.pin;
+      if (!currentPin && !state.hasServerPin) {
+        await checkStatus();
+      }
+      if (!currentPin && !state.hasServerPin) {
+        triggerHaptic([40, 40, 40]);
+        feedbackTitle.textContent = '⚠️ Windows Parolu Qeyd Edilməyib!';
+        feedbackSub.textContent = 'Zəhmət olmasa yuxarıdakı xanaya parolunuzu yazın və Saxla-ya basın';
+        passwordPanel.scrollIntoView({ behavior: 'smooth' });
+        mainPinInput.focus();
+        return;
+      }
+
+      state.isBusy = true;
+      triggerHaptic([50, 40, 60]);
+
+      masterUnlockBtn.className = 'master-disc state-unlocking';
+      statusDot.className = 'status-dot busy';
+      statusText.textContent = 'Açılır...';
+      discLabel.textContent = 'AÇILIR...';
+      feedbackTitle.textContent = 'Parol Daxil Edilir...';
+      feedbackSub.textContent = 'Windows kiliddən çıxarılır';
+
+      try {
+        const res = await fetch('/api/unlock', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            token: state.token,
+            pin: currentPin
+          })
+        });
+
+        const data = await res.json();
+        if (!res.ok) throw new Error(data.detail || 'Server xətası');
+        
+        // Show live logs
+        if (data.logs && data.logs.length > 0) {
+          renderLogs([`Cəhd: ${data.attempt_id || '?'} · Versiya: ${data.build || '?'} · PIN mənbəyi: ${data.pin_source || '?'}`, ...data.logs]);
+          openDiagPanel();
+          if (data.locked) {
+            diagStatusTag.textContent = 'KİLİD AÇILMADI — LOQU YOXLAYIN';
+            diagStatusTag.style.color = '#F43F5E';
+            diagStatusTag.style.background = 'rgba(244, 63, 94, 0.15)';
+          } else {
+            diagStatusTag.textContent = 'UĞURLU: KİLİD AÇILDI';
+            diagStatusTag.style.color = '#10B981';
+            diagStatusTag.style.background = 'rgba(16, 185, 129, 0.15)';
+          }
+        }
+
+        if (data.success) {
+          triggerHaptic([30, 80, 50]);
+          masterUnlockBtn.className = 'master-disc state-unlocked';
+          discLabel.textContent = 'UĞURLU!';
+          feedbackTitle.textContent = 'Windows Kilidi Açıldı! 🎉';
+          feedbackSub.textContent = 'Masaüstü aktiv edildi';
+        } else {
+          feedbackTitle.textContent = 'Windows Kilidi Açılmadı';
+          feedbackSub.textContent = 'Aşağıdakı loqda maneənin səbəbi qeyd olunub';
+        }
+      } catch (err) {
+        feedbackTitle.textContent = 'Şəbəkə Xətası';
+        feedbackSub.textContent = err.message || 'PC ilə əlaqə yaradılmadı';
+      } finally {
+        setTimeout(() => {
+          state.isBusy = false;
+          checkStatus();
+        }, 1200);
+      }
+    }
+
+    // Diagnostic Panel Logic
+    const diagPanel = document.getElementById('diagPanel');
+    const diagToggle = document.getElementById('diagToggle');
+    const diagOutput = document.getElementById('diagOutput');
+    const diagArrow = document.getElementById('diagArrow');
+    const diagStatusTag = document.getElementById('diagStatusTag');
+    const refreshLogsBtn = document.getElementById('refreshLogsBtn');
+
+    function openDiagPanel() {
+      diagPanel.classList.add('open');
+      diagArrow.textContent = '▲ Bağla';
+    }
+
+    diagToggle.addEventListener('click', () => {
+      const isOpen = diagPanel.classList.toggle('open');
+      diagArrow.textContent = isOpen ? '▲ Bağla' : '▼ Aç';
+    });
+
+    function escapeHtml(str) {
+      return str.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
+    }
+
+    function renderLogs(logLines) {
+      diagOutput.innerHTML = logLines.map(line => {
+        const clean = escapeHtml(line);
+        if (clean.includes('[!]') || clean.includes('[XƏTA]') || clean.includes('[MANEƏ')) {
+          return `<span style="color: #F43F5E; font-weight: 600;">${clean}</span>`;
+        } else if (clean.includes('[✓ UĞURLU]')) {
+          return `<span style="color: #10B981; font-weight: 600;">${clean}</span>`;
+        } else if (clean.includes('[SƏBƏB]')) {
+          return `<span style="color: #F59E0B; font-weight: 600;">${clean}</span>`;
+        } else if (clean.includes('[*]')) {
+          return `<span style="color: #38BDF8;">${clean}</span>`;
+        }
+        return `<span>${clean}</span>`;
+      }).join('\n');
+    }
+
+    async function fetchServerLogs() {
+      try {
+        const res = await fetch(`/api/logs?token=${encodeURIComponent(state.token)}`);
+        if (res.ok) {
+          const data = await res.json();
+          renderLogs(data.logs);
+        }
+      } catch (e) {}
+    }
+
+    refreshLogsBtn.addEventListener('click', (e) => {
+      e.stopPropagation();
+      fetchServerLogs();
+    });
+
+    // Lock PC
+    async function handleLock() {
+      triggerHaptic([40, 30]);
+      try {
+        await fetch('/api/lock', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ token: state.token })
+        });
+        checkStatus();
+      } catch (err) {}
+    }
+
+    // Wake Screen
+    async function handleWake() {
+      triggerHaptic([30]);
+      try {
+        await fetch('/api/wake', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ token: state.token })
+        });
+      } catch (err) {}
+    }
+
+    // Drawer Controls
+    function openDrawer() {
+      drawerOverlay.classList.add('active');
+      drawerSheet.classList.add('active');
+      cfgToken.value = state.token;
+    }
+
+    function closeDrawer() {
+      drawerOverlay.classList.remove('active');
+      drawerSheet.classList.remove('active');
+    }
+
+    function saveDrawerSettings() {
+      state.token = cfgToken.value.trim() || 'winkey_secret_2026';
+      localStorage.setItem('winkey_token', state.token);
+      closeDrawer();
+      checkStatus();
+    }
+
+    masterUnlockBtn.addEventListener('click', handleUnlock);
+    lockPcBtn.addEventListener('click', handleLock);
+    wakeScreenBtn.addEventListener('click', handleWake);
+
+    openSettingsBtn.addEventListener('click', openDrawer);
+    closeSettingsBtn.addEventListener('click', closeDrawer);
+    drawerOverlay.addEventListener('click', closeDrawer);
+    saveSettingsBtn.addEventListener('click', saveDrawerSettings);
+
+    // Initial setup
+    renderPasswordUI();
+    checkStatus();
+    setInterval(checkStatus, 2500);
+
+    // Service Worker
+    if ('serviceWorker' in navigator) {
+      window.addEventListener('load', () => {
+        navigator.serviceWorker.register('/static/sw.js').catch(() => {});
+      });
+    }
+  </script>
+</body>
+</html>

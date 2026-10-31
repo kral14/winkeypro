@@ -1,0 +1,6 @@
+**
+!deploy/
+!deploy/gateway_production_server.py
+!deploy/vm/
+!deploy/vm/server.py
+!deploy/vm/requirements.txt
