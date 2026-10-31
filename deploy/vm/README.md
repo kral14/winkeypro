@@ -1,5 +1,19 @@
 # WinKey — şəxsi Linux VM-də Docker
 
+## Dockerfile seçən deploy panelləri
+
+Build növü `Dockerfile`, Dockerfile yolu `Dockerfile`, build context `.` olsun.
+Entrypoint və Command override xanalarını BOŞ saxlayın; image-in öz CMD-si var.
+Paneldə `PORT=8080` və secret kimi `WINKEY_ADMIN_SECRET` (ən azı 32 təsadüfi simvol) təyin edin.
+Açar yaratmaq üçün öz terminalınızda `python3 -c 'import secrets; print(secrets.token_hex(32))'` işlədin.
+Panelin container/internal portu da 8080 olmalıdır. Health URL `/healthz` (HTTP 200).
+Daimi volume-u `/data` yoluna bağlayın, UID 10001 üçün yazma icazəsi verin.
+Host bind directory istifadə edilirsə onu əvvəl UID/GID 10001:10001 sahibi edin.
+Image-dəki VOLUME təkbaşına redeploy zamanı eyni bazanın bağlanmasına zəmanət deyil;
+paneldə sabit named volume və ya host path mütləq seçilməlidir.
+Panelin reverse proxy-si/domain ayarı HTTPS verməlidir; tək Dockerfile Caddy-ni işə salmır.
+Admin URL `/admin`; burada yuxarıda saxladığınız WINKEY_ADMIN_SECRET ilə daxil olun.
+
 Bu paket mövcud Python gateway-in mobil və admin səhifələrini yerləşdirir.
 Sites/Cloudflare hesabı tələb etmir. Sites-dəki React dashboard bu konteynerə daxil deyil.
 Windows helper/service VM-də deyil, idarə olunan Windows kompüterində işləyir.

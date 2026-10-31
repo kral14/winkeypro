@@ -51,13 +51,19 @@ class VMHandler(GatewayHandler):
 
 
 def main():
-    key = Path("/run/secrets/admin_key").read_text(encoding="ascii").strip()
+    key = os.environ.get("WINKEY_ADMIN_SECRET", "").strip()
+    if not key:
+        secret_file = Path("/run/secrets/admin_key")
+        key = secret_file.read_text(encoding="ascii").strip() if secret_file.is_file() else ""
     if len(key) < 32:
-        raise RuntimeError("Admin açarı hazır deyil; configure.py icra edin.")
+        raise RuntimeError("WINKEY_ADMIN_SECRET minimum 32 simvol olmalıdır; ya da Docker secret/configure.py istifadə edin.")
     os.environ["WINKEY_ADMIN_SECRET"] = key
-    VMHandler.db = VMDatabase("/data/winkey.db")
-    server = HTTPServer((os.environ.get("GATEWAY_HOST", "0.0.0.0"), 8788), VMHandler)
-    print("[VM] Gateway hazırdır; PIN və giriş açarları loga yazılmır.", flush=True)
+    port = int(os.environ.get("PORT", "8788"))
+    if not 1 <= port <= 65535:
+        raise RuntimeError("PORT 1..65535 aralığında olmalıdır.")
+    VMHandler.db = VMDatabase(os.environ.get("WINKEY_DB_PATH", "/data/winkey.db"))
+    server = HTTPServer((os.environ.get("GATEWAY_HOST", "0.0.0.0"), port), VMHandler)
+    print(f"[VM] Gateway hazırdır: port={port}; PIN və giriş açarları loga yazılmır.", flush=True)
     server.serve_forever()
 
 
