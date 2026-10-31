@@ -16,7 +16,10 @@ SetCompressor /SOLID lzma
 RequestExecutionLevel admin
 
 ; Cixis fayli ve susmaya gore qurasdirma yeri
-OutFile "..\dist\WinKeySetup.exe"
+!ifndef OUTPUT_FILE
+!define OUTPUT_FILE "..\dist\WinKeySetup.exe"
+!endif
+OutFile "${OUTPUT_FILE}"
 InstallDir "$PROGRAMFILES64\WinKey Pro"
 InstallDirRegKey HKLM "${PRODUCT_DIR_REGKEY}" ""
 ShowInstDetails show

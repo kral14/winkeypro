@@ -416,8 +416,17 @@ function Set-WinKeyProtectedTreeAcl {
     & icacls.exe "$TargetDataDir" /inheritance:r /grant:r "SYSTEM:(OI)(CI)F" "Administrators:(OI)(CI)F" "Users:(OI)(CI)RX"
     if ($LASTEXITCODE -ne 0) { Invoke-Rollback "icacls DataDir uğursuz oldu: $LASTEXITCODE" }
 
-    & icacls.exe "$vDir" /inheritance:r /grant:r "SYSTEM:(OI)(CI)F" "Administrators:(OI)(CI)F" "Users:(OI)(CI)RX" /t /c
+    & icacls.exe "$vDir" /inheritance:r /grant:r "*S-1-5-18:(OI)(CI)F" "*S-1-5-32-544:(OI)(CI)F" "*S-1-5-32-545:(OI)(CI)RX"
     if ($LASTEXITCODE -ne 0) { Invoke-Rollback "icacls versionsDir uğursuz oldu: $LASTEXITCODE" }
+    Get-ChildItem -LiteralPath $vDir -Recurse -Force | ForEach-Object {
+        Assert-NotReparsePoint $_.FullName
+        if ($_.PSIsContainer) {
+            & icacls.exe $_.FullName /inheritance:r /grant:r '*S-1-5-18:(OI)(CI)F' '*S-1-5-32-544:(OI)(CI)F' '*S-1-5-32-545:(OI)(CI)RX' | Out-Null
+        } else {
+            & icacls.exe $_.FullName /inheritance:r /grant:r '*S-1-5-18:F' '*S-1-5-32-544:F' '*S-1-5-32-545:RX' | Out-Null
+        }
+        if ($LASTEXITCODE -ne 0) { Invoke-Rollback "E_VERSION_ENTRY_ACL: $($_.Name)" }
+    }
 
     if (Test-Path $jPath) {
         & icacls.exe "$jPath" /inheritance:r /grant:r "SYSTEM:F" "Administrators:F" "Users:R"
@@ -560,8 +569,14 @@ Get-ChildItem -LiteralPath $slotADir -Recurse -Force | ForEach-Object {
         Invoke-Rollback "E_REPARSE_POINT_DETECTED: Slot A contains a reparse point"
     }
 }
-& icacls.exe "$slotADir" /inheritance:r /grant:r "*S-1-5-18:(OI)(CI)F" "*S-1-5-32-544:(OI)(CI)F" /t /c | Out-Null
+& icacls.exe "$slotADir" /inheritance:r /grant:r "*S-1-5-18:(OI)(CI)F" "*S-1-5-32-544:(OI)(CI)F" | Out-Null
 if ($LASTEXITCODE -ne 0) { Invoke-Rollback "E_SLOT_REPAIR_ACL: Slot A protected permissions could not be restored" }
+# Protected files do not inherit directory-only (OI)(CI) ACEs. Repair their
+# explicit file rights as well, including files left with an empty DACL.
+Get-ChildItem -LiteralPath $slotADir -Recurse -File -Force | ForEach-Object {
+    & icacls.exe $_.FullName /inheritance:r /grant:r "*S-1-5-18:F" "*S-1-5-32-544:F" "*S-1-5-32-545:RX" | Out-Null
+    if ($LASTEXITCODE -ne 0) { Invoke-Rollback "E_SLOT_FILE_REPAIR_ACL: $($_.Name)" }
+}
 
 # Initial Signed Slot A Provisioning (Fresh Install Boot Preflight zəmanəti)
 try {
