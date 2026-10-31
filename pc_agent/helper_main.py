@@ -240,12 +240,22 @@ def main():
     parser = argparse.ArgumentParser(description="WinKey Native Session & Input Helper")
     parser.add_argument("--check", action="store_true", help="PE smoke check")
     parser.add_argument("--check-focus-resource", action="store_true", help="Verify bundled focus script without running it")
+    parser.add_argument("--check-input-abi", action="store_true", help="Validate ctypes input conversion without calling SendInput")
     parser.add_argument("--mode", choices=["lock", "curtain", "unlock", "status"], default="status")
     parser.add_argument("--session", type=int, default=None, help="Target interactive session ID")
     parser.add_argument("--ipc-pipe", type=str, default="", help="Ephemeral secure named pipe for credential")
     parser.add_argument("--expected-server-pid", type=int, default=0, help="Expected Service PID for peer validation")
     parser.add_argument("--mock-adapter", type=str, default="", help="Mock adapter mode for MODEL_UNIT negative security testing")
     args = parser.parse_args()
+
+    if args.check_input_abi:
+        assert ipc_input_worker.INPUT is unlock_engine.INPUT
+        pointer = unlock_engine.user32.SendInput.argtypes[1]
+        pointer.from_param((ipc_input_worker.INPUT * 4)())
+        pointer.from_param(ipc_input_worker._build_key_events(0x08))
+        pointer.from_param(ipc_input_worker._build_char_events('0'))
+        print('INPUT_ABI_OK: no SendInput call executed')
+        sys.exit(0)
 
     if args.check_focus_resource:
         from pathlib import Path

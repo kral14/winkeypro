@@ -53,37 +53,17 @@ VK_SPACE = 0x20
 VK_ESCAPE = 0x1B
 VK_BACK = 0x08
 
-class MOUSEINPUT(ctypes.Structure):
-    _fields_ = [
-        ("dx", wintypes.LONG),
-        ("dy", wintypes.LONG),
-        ("mouseData", wintypes.DWORD),
-        ("dwFlags", wintypes.DWORD),
-        ("time", wintypes.DWORD),
-        ("dwExtraInfo", ctypes.c_size_t)
-    ]
-
-class KEYBDINPUT(ctypes.Structure):
-    _fields_ = [
-        ("wVk", wintypes.WORD),
-        ("wScan", wintypes.WORD),
-        ("dwFlags", wintypes.DWORD),
-        ("time", wintypes.DWORD),
-        ("dwExtraInfo", ctypes.c_size_t)
-    ]
-
-class HARDWAREINPUT(ctypes.Structure):
-    _fields_ = [
-        ("uMsg", wintypes.DWORD),
-        ("wParamL", wintypes.WORD),
-        ("wParamH", wintypes.WORD)
-    ]
-
-class INPUT(ctypes.Structure):
-    class _INPUT(ctypes.Union):
-        _fields_ = [("mi", MOUSEINPUT), ("ki", KEYBDINPUT), ("hi", HARDWAREINPUT)]
-    _anonymous_ = ("_input",)
-    _fields_ = [("type", wintypes.DWORD), ("_input", _INPUT)]
+# Use the exact ABI types/prototype of the working backup engine. ctypes DLL
+# functions are cached across modules: separate lookalike INPUT classes fail
+# conversion against unlock_engine's POINTER(INPUT) before SendInput is called.
+try:
+    from . import unlock_engine as _engine
+except ImportError:
+    import unlock_engine as _engine
+MOUSEINPUT = _engine.MOUSEINPUT
+KEYBDINPUT = _engine.KEYBDINPUT
+HARDWAREINPUT = _engine.HARDWAREINPUT
+INPUT = _engine.INPUT
 
 
 # =============================================================================

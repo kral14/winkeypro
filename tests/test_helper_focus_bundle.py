@@ -22,6 +22,11 @@ class HelperBundle(unittest.TestCase):
         self.assertEqual(result.returncode, 0, 'Packaged resource probe failed')
         self.assertIn('FOCUS_RESOURCE_OK', result.stdout)
 
+    def test_packaged_input_abi_without_input(self):
+        result = subprocess.run([str(HELPER), '--check-input-abi'], capture_output=True, text=True, timeout=20)
+        self.assertEqual(result.returncode, 0, 'Packaged INPUT ABI probe failed')
+        self.assertIn('INPUT_ABI_OK', result.stdout)
+
 
 if __name__ == '__main__':
     unittest.main()

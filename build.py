@@ -87,6 +87,7 @@ def step_compile_rust():
         "Session helper ve fokus resursunun paketlenmesi"
     )
     run_cmd([HELPER_EXE, "--check-focus-resource"], "Paketlenmis fokus resursunun yoxlanisi (input yoxdur)")
+    run_cmd([HELPER_EXE, "--check-input-abi"], "Paketlenmis INPUT ABI yoxlanisi (input yoxdur)")
 
     # 1.2 Tauri Desktop
     run_cmd(
