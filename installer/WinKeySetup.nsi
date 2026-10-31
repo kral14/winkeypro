@@ -88,6 +88,17 @@ LangString MUI_TEXT_INSTALLING_SUBTITLE ${LANG_ENGLISH} "WinKey Pro komputeriniz
 ; Esas Qurasdirma Bolmesi
 ; ==============================================================================
 Section "MainSection" SEC01
+    ; Stop the installed service BEFORE extracting executable files.
+    InitPluginsDir
+    File /oname=$PLUGINSDIR\prepare_upgrade.ps1 "..\scripts\prepare_upgrade.ps1"
+    DetailPrint "Movcud WinKey xidmeti ve prosesleri dayandirilir..."
+    nsExec::ExecToLog '"$WINDIR\Sysnative\WindowsPowerShell\v1.0\powershell.exe" -NoProfile -ExecutionPolicy Bypass -WindowStyle Hidden -File "$PLUGINSDIR\prepare_upgrade.ps1" -InstallDir "$INSTDIR"'
+    Pop $0
+    ${If} $0 != 0
+        MessageBox MB_ICONSTOP|MB_OK "WinKey xidmeti dayandirilmadi. Fayllar deyisdirilmedi. Detallar bolmesini yoxlayin." /SD IDOK
+        SetErrorLevel 1
+        Abort
+    ${EndIf}
     SetOutPath "$INSTDIR"
     SetOverwrite on
 
@@ -107,7 +118,7 @@ Section "MainSection" SEC01
     DetailPrint "Tehlukesizlik icazeleri ve sistem xidmeti konfiqurasiya edilir..."
     
     ; service_installer.ps1 vasitesile tam tehlukesiz qurasdirma icra edilir (konsol penceresi gizledilir)
-    nsExec::ExecToLog '"$SYSDIR\WindowsPowerShell\v1.0\powershell.exe" -NoProfile -ExecutionPolicy Bypass -WindowStyle Hidden -File "$INSTDIR\service_installer.ps1" -SourceDir "$INSTDIR" -InstallDir "$INSTDIR" -Repair'
+    nsExec::ExecToLog '"$WINDIR\Sysnative\WindowsPowerShell\v1.0\powershell.exe" -NoProfile -ExecutionPolicy Bypass -WindowStyle Hidden -File "$INSTDIR\service_installer.ps1" -SourceDir "$INSTDIR" -InstallDir "$INSTDIR" -Repair'
     Pop $0
     ${If} $0 != 0
         DetailPrint "XETA: Windows xidmeti qurasdirilmadi. Exit code: $0"
