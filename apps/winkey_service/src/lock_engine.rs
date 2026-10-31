@@ -829,18 +829,12 @@ pub fn execute_system_unlock(credential: Option<&str>, data_dir: &Path) -> Resul
         // REM-017: Peer PID və Session Identity Təsdiqi
         let mut client_pid = 0u32;
         let mut client_sess = 0u32;
-        win32::GetNamedPipeClientProcessId(pipe_guard.raw(), &mut client_pid);
-        win32::GetNamedPipeClientSessionId(pipe_guard.raw(), &mut client_sess);
-
-        if client_pid != child.pid {
-            // Forged helper detected!
-            win32::DisconnectNamedPipe(pipe_guard.raw());
-            win32_process::TerminateProcess(child.handle.raw(), 2);
-            return Err(format!(
-                "E_FORGED_HELPER_PID: Qoşulan müştəri PID {} != gözlənilən helper PID {}",
-                client_pid, child.pid
-            ));
+        if win32::GetNamedPipeClientProcessId(pipe_guard.raw(), &mut client_pid) == 0
+            || win32::GetNamedPipeClientSessionId(pipe_guard.raw(), &mut client_sess) == 0 {
+            return Err("E_PIPE_PEER_IDENTITY_QUERY".into());
         }
+        let _runtime_peer = crate::helper_peer::verify(&child, client_pid, &helper_exe, active_session)?;
+        crate::diagnostics::stage(data_dir, "HELPER_PEER_VERIFIED", &format!("bootstrap={} runtime={}", child.pid, client_pid));
 
         if client_sess != active_session {
             win32::DisconnectNamedPipe(pipe_guard.raw());
@@ -851,10 +845,8 @@ pub fn execute_system_unlock(credential: Option<&str>, data_dir: &Path) -> Resul
             ));
         }
 
-        // Impersonate client & verify SID
-        if win32::ImpersonateNamedPipeClient(pipe_guard.raw()) != 0 {
-            win32::RevertToSelf();
-        }
+        // The held runtime process handle was already checked for token SID,
+        // image, session, parent and creation time. No thread impersonation is needed.
 
         // 10. REM-017: Bounded Overlapped Write of Credential (2s Deadline)
         let cred_bytes = format!("{}\n", cred).into_bytes();

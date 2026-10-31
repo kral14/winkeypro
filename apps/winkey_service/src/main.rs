@@ -7,6 +7,7 @@ mod lock_engine;
 mod recovery_engine;
 mod storage;
 mod diagnostics;
+mod helper_peer;
 
 use std::ffi::c_void;
 use std::fs;
@@ -1078,6 +1079,12 @@ unsafe extern "system" fn service_main(_dw_num_services_args: u32, _lp_service_a
 
 fn main() {
     let args: Vec<String> = std::env::args().collect();
+    if args.iter().any(|arg| arg == "--probe-helper-peer") {
+        match helper_peer::probe_packaged_helper() {
+            Ok(()) => std::process::exit(0),
+            Err(error) => { eprintln!("{}", error); std::process::exit(1); }
+        }
+    }
 
     // REM-029: Child Worker Proses Entrypoint (Slot daxilində real worker icrası)
     if args.iter().any(|a| a == "--worker") {
