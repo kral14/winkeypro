@@ -1,0 +1,44 @@
+<!doctype html>
+<html lang="az">
+<head>
+<meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="referrer" content="no-referrer"><title>WinKey Pro — Dashboard</title>
+<style>
+*{box-sizing:border-box}body{margin:0;background:#0e1210;color:#e8eee9;font:16px system-ui,-apple-system,"Segoe UI",sans-serif}a{color:inherit;text-decoration:none}header{border-bottom:1px solid #29322b}.bar,main{max-width:1120px;margin:auto;padding:24px}.bar{display:flex;justify-content:space-between;align-items:center;gap:20px}.logo{font-size:23px;font-weight:750;color:#c9f477}.nav{display:flex;gap:22px;align-items:center}.muted,p{color:#9cab9f;line-height:1.7}.tag{font-size:12px;letter-spacing:2px;color:#c9f477;text-transform:uppercase}h1{font-size:clamp(32px,6vw,52px);letter-spacing:-2px;margin:12px 0}h2{margin:0 0 12px;font-size:21px}.hero{padding:48px 0 30px;max-width:750px}.cards{display:grid;grid-template-columns:repeat(3,1fr);gap:16px}.card{border:1px solid #2a352d;border-radius:18px;background:#171e19;padding:25px}.value{font-size:34px;font-weight:700;color:#c9f477;margin:12px 0}.label{font-size:14px;color:#9cab9f}.panels{display:grid;grid-template-columns:1.2fr 1fr;gap:16px;margin:24px 0}.button{display:inline-block;border-radius:9px;padding:12px 19px;background:#c9f477;color:#15200e;font-weight:650}.secondary{background:#26332a;color:#e8eee9}.notice{font-size:14px;margin-top:20px}footer{padding:18px 0 32px;border-top:1px solid #29322b;color:#8d9e92;font-size:13px}#health{font-size:13px;color:#a6b5aa}#feedback{min-height:24px;font-size:14px;color:#c9f477}@media(max-width:700px){.cards,.panels{grid-template-columns:1fr}.nav{gap:12px;font-size:14px}.bar,main{padding:20px}.hero{padding-top:24px}}
+</style></head>
+<body>
+<header><div class="bar"><a class="logo" href="/">WinKey Pro</a><nav class="nav"><a href="/" aria-current="page">Dashboard</a><a class="button secondary" href="/admin">Admin paneli ↗</a></nav></div></header>
+<main>
+<section class="hero"><div class="tag">İdarəetmə mərkəzi</div><h1>Kompüterlərin bir yerdə.</h1><p>WinKey bağlantısını yoxla, cihazları və hadisələri admin panelindən idarə et. Telefonla idarəetmə Windows tətbiqində yaradılan QR kodla açılır.</p><div id="health">Server yoxlanılır…</div></section>
+<section class="cards" aria-label="Sistem göstəriciləri">
+<article class="card"><div class="label">Qeydiyyatlı kompüterlər</div><div class="value" id="devices">—</div><div class="label">Admin girişi tələb olunur</div></article>
+<article class="card"><div class="label">Aktiv cihazlar</div><div class="value" id="active">—</div><div class="label">Qeydiyyat statusu ACTIVE olanlar</div></article>
+<article class="card"><div class="label">Son diaqnostik hadisələr</div><div class="value" id="events">—</div><div class="label">Son 100 qeyd üzrə</div></article>
+</section>
+<div id="feedback" role="status"></div>
+<section class="panels">
+<article class="card"><h2>Admin idarəetməsi</h2><p>Bütün kompüterlər, cihaz icazələri və diaqnostik loqlar. Məlumatlara baxmaq üçün şəxsi admin açarınla daxil ol.</p><a class="button" href="/admin">Admin panelinə keç ↗</a></article>
+<article class="card"><h2>Telefonu qoş</h2><p>Windows-da WinKey Pro-nu aç. Server ünvanını qeyd et, yeni QR yarat və telefondan oxut. Həmin telefon yalnız cütləşdiyi kompüteri idarə edir.</p><a class="button secondary" href="/mobile">Mobil idarəetmə ↗</a><p class="notice">Qoşulmaq üçün kompüterdən etibarlı QR kod lazımdır.</p></article>
+</section>
+<footer>Windows PIN-i kompüterdə saxlanılır. Dashboard şəxsi cihaz məlumatlarını giriş olmadan göstərmir.</footer>
+</main>
+<script>
+async function refresh(){
+ const health=document.getElementById('health');
+ try{const r=await fetch('/healthz',{cache:'no-store'});if(!r.ok)throw new Error();health.textContent='● Server əlçatandır';}catch{health.textContent='● Serverlə əlaqə qurulmadı';}
+ let key='';try{key=sessionStorage.getItem('winkey_admin_secret')||'';}catch{}
+ if(!key)return;
+ const headers={'X-Owner-Admin-Secret':key};
+ try{
+  const [d,t]=await Promise.all([fetch('/admin/devices',{headers,cache:'no-store'}),fetch('/admin/telemetry',{headers,cache:'no-store'})]);
+  if(!d.ok||!t.ok){document.getElementById('feedback').textContent='Admin girişini yenilə.';return;}
+  const devices=(await d.json()).devices||[];const events=(await t.json()).telemetry||[];
+  document.getElementById('devices').textContent=devices.length;
+  document.getElementById('active').textContent=devices.filter(x=>x.status==='ACTIVE').length;
+  document.getElementById('events').textContent=events.length;
+  document.querySelectorAll('.cards .card .label:last-child').forEach(x=>{if(x.textContent==='Admin girişi tələb olunur')x.textContent='Admin sessiyası təsdiqləndi';});
+ }catch{document.getElementById('feedback').textContent='Göstəricilər yüklənmədi.';}
+}
+refresh();setInterval(refresh,15000);
+</script>
+</body></html>

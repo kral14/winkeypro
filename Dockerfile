@@ -8,6 +8,7 @@ RUN pip install --no-cache-dir -r requirements.txt \
     && mkdir /data /updates && chown 10001:10001 /data
 COPY deploy/gateway_production_server.py /app/deploy/gateway_production_server.py
 COPY deploy/vm/server.py /app/server.py
+COPY deploy/vm/dashboard.html /app/dashboard.html
 USER 10001:10001
 EXPOSE 8788
 VOLUME ["/data"]

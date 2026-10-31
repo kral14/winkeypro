@@ -4,3 +4,4 @@
 !deploy/vm/
 !deploy/vm/server.py
 !deploy/vm/requirements.txt
+!deploy/vm/dashboard.html

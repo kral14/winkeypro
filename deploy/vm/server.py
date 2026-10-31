@@ -28,6 +28,15 @@ class VMHandler(GatewayHandler):
         self.connection.settimeout(15)
 
     def do_GET(self):
+        if urlsplit(self.path).path in ("/", "/dashboard") and not urlsplit(self.path).query:
+            html = Path(__file__).with_name("dashboard.html").read_bytes()
+            self.send_response(200)
+            self._set_security_headers("text/html; charset=utf-8")
+            self.send_header("Cache-Control", "no-store")
+            self.send_header("Content-Length", str(len(html)))
+            self.end_headers()
+            self.wfile.write(html)
+            return
         if urlsplit(self.path).path == "/healthz":
             try:
                 with self.db.get_conn() as connection:

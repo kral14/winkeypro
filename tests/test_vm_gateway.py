@@ -51,6 +51,8 @@ class VMContract(unittest.TestCase):
 
             try:
                 self.assertEqual(http("/healthz")[0], 200)
+                self.assertIn(b"Admin paneli", http("/")[1])
+                self.assertIn(b"Dashboard", http("/dashboard")[1])
                 self.assertEqual(http("/admin/devices")[0], 403)
                 self.assertIn(b"<html", http("/mobile")[1].lower())
                 device = "pc_vm_test"
