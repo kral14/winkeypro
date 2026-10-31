@@ -239,12 +239,22 @@ def read_ephemeral_credential_from_pipe(pipe_name: str, expected_server_pid: int
 def main():
     parser = argparse.ArgumentParser(description="WinKey Native Session & Input Helper")
     parser.add_argument("--check", action="store_true", help="PE smoke check")
+    parser.add_argument("--check-focus-resource", action="store_true", help="Verify bundled focus script without running it")
     parser.add_argument("--mode", choices=["lock", "curtain", "unlock", "status"], default="status")
     parser.add_argument("--session", type=int, default=None, help="Target interactive session ID")
     parser.add_argument("--ipc-pipe", type=str, default="", help="Ephemeral secure named pipe for credential")
     parser.add_argument("--expected-server-pid", type=int, default=0, help="Expected Service PID for peer validation")
     parser.add_argument("--mock-adapter", type=str, default="", help="Mock adapter mode for MODEL_UNIT negative security testing")
     args = parser.parse_args()
+
+    if args.check_focus_resource:
+        from pathlib import Path
+        script = Path(unlock_engine.__file__).with_name('focus_credential.ps1')
+        if not script.is_file() or script.stat().st_size == 0:
+            print('E_FOCUS_RESOURCE_MISSING')
+            sys.exit(7)
+        print('FOCUS_RESOURCE_OK')
+        sys.exit(0)
 
     if args.check:
         print("WINKEY_HELPER_PE_OK")
@@ -329,7 +339,9 @@ def main():
 
         try:
             print("[HELPER] Injecting credential on Winlogon desktop via hardware scan-codes...")
-            res = ipc_input_worker.inject_credentials_in_memory(credential, adapter=mock)
+            trace = Trace()
+            trace.append('HELPER_INPUT_START: credential contents omitted')
+            res = ipc_input_worker.inject_credentials_in_memory(credential, adapter=mock, logs=trace)
             # Memory zeroize / clear
             del credential
             if res.get("success") and res.get("status") in ("SUCCESS_UNLOCKED", "ALREADY_UNLOCKED"):
@@ -340,6 +352,8 @@ def main():
                 print(f"UNLOCK_FAILED: {status}")
                 sys.exit(3)
         except Exception as exc:
+            if 'trace' in locals():
+                trace.append('HELPER_INPUT_EXCEPTION: ' + type(exc).__name__)
             print(f"UNLOCK_EXCEPTION: {exc}")
             sys.exit(3)
 

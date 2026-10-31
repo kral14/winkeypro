@@ -359,6 +359,8 @@ def type_credential_char(ch):
 
 def focus_credential_field(logs):
     script = Path(__file__).with_name("focus_credential.ps1")
+    if not script.is_file():
+        raise RuntimeError("E_FOCUS_RESOURCE_MISSING: packaged focus script was not found")
     powershell = str(Path(os.environ.get("SystemRoot", r"C:\Windows")) / "System32/WindowsPowerShell/v1.0/powershell.exe")
     logs.append("FOCUS_VERIFY_START: UIAutomation; timeout=15s")
     started = time.monotonic()

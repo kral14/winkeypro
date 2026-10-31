@@ -78,6 +78,16 @@ def step_compile_rust():
         "WinKey Service & Session Helper kompilyasiyası"
     )
 
+    # Rebuild the packaged helper from current sources and include focus resources.
+    run_cmd(
+        [sys.executable, "-m", "PyInstaller", "--noconfirm", "--clean",
+         "--distpath", os.path.dirname(HELPER_EXE),
+         "--workpath", os.path.join(ROOT_DIR, "build", "helper"),
+         os.path.join(ROOT_DIR, "winkey_helper.spec")],
+        "Session helper ve fokus resursunun paketlenmesi"
+    )
+    run_cmd([HELPER_EXE, "--check-focus-resource"], "Paketlenmis fokus resursunun yoxlanisi (input yoxdur)")
+
     # 1.2 Tauri Desktop
     run_cmd(
         ["cargo", "build", "--release", "--manifest-path", DESKTOP_CARGO],

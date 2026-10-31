@@ -1119,6 +1119,7 @@ fn main() {
             get_app_data_dir()
         };
 
+        std::env::set_var("WINKEY_DATA_DIR", &data_dir);
         println!("[WORKER_START] WinKey Pro Native Worker aktivdir. Marker: {} PID: {}", version_marker, std::process::id());
 
         let stop_signal = Arc::new(AtomicBool::new(true));
