@@ -177,6 +177,7 @@ async function loadStatus() {
       if (document.getElementById('lblPcName')) document.getElementById('lblPcName').textContent = s.computer_name;
       if (document.getElementById('txtPcName')) document.getElementById('txtPcName').value = s.computer_name;
       if (s.cloud_gateway_origin) configuredCloudOrigin = s.cloud_gateway_origin;
+      if (window.applyConnectionMode) window.applyConnectionMode(s.connection_mode === 'wifi' ? 'wifi' : 'cloud');
       if (document.getElementById('txtGatewayOrigin')) {
         document.getElementById('txtGatewayOrigin').value = configuredCloudOrigin;
       }
@@ -264,7 +265,7 @@ function initButtons() {
     }, 1000);
   }
 
-  let activeMode = 'wifi';
+  let activeMode = 'cloud';
 
   function updateModeUI(mode) {
     activeMode = mode;
@@ -310,6 +311,9 @@ function initButtons() {
       }
     }
   }
+
+  window.applyConnectionMode = updateModeUI;
+  updateModeUI(activeMode);
 
   async function refreshQrForCurrentMode() {
     try {

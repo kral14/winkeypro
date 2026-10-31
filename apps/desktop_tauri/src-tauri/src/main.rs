@@ -372,6 +372,7 @@ pub struct DeviceStatusDto {
     pub version: String,
     pub gateway_origin: String,
     pub cloud_gateway_origin: String,
+    pub connection_mode: String,
 }
 
 #[derive(Serialize, Deserialize, Clone, Debug)]
@@ -706,11 +707,13 @@ fn get_device_status() -> Result<DeviceStatusDto, String> {
     let mut gateway_origin = std::env::var("WINKEY_GATEWAY_ORIGIN")
         .unwrap_or_else(|_| "http://127.0.0.1:8788".to_string());
     let mut cloud_gateway_origin = gateway_config::CLOUD_ORIGIN.to_string();
+    let mut connection_mode = "cloud".to_string();
 
     if cfg_file.exists() {
         if let Ok(raw) = fs::read_to_string(&cfg_file) {
             if let Ok(json) = serde_json::from_str::<serde_json::Value>(&raw) {
                 cloud_gateway_origin = gateway_config::cloud_origin(json.get("cloud_gateway_origin").and_then(|v| v.as_str()));
+                connection_mode = json.get("connection_mode").and_then(|v| v.as_str()).unwrap_or("cloud").to_string();
                 if let Some(gw) = json.get("gateway_origin").and_then(|v| v.as_str()) {
                     if !gw.trim().is_empty() {
                         gateway_origin = gw.trim().trim_end_matches('/').to_string();
@@ -737,6 +740,7 @@ fn get_device_status() -> Result<DeviceStatusDto, String> {
         version: "0.1.0".to_string(),
         gateway_origin,
         cloud_gateway_origin,
+        connection_mode,
     })
 }
 
@@ -888,13 +892,13 @@ fn generate_qr_pairing(mode: Option<String>) -> Result<PairingPayloadDto, String
     })?;
 
     let challenge_hex = String::new();
+    let is_local_mode = matches!(mode.as_deref(), Some("wifi") | Some("local"));
     let encrypted = dpapi_protect(secret.as_bytes())?;
     fs::write(&endpoint_secret_file, &encrypted).map_err(|_| "E_SECRET_SAVE")?;
-    fs::write(&secret_file, &encrypted).map_err(|_| "E_SECRET_SAVE")?;
+    if !is_local_mode { fs::write(&secret_file, &encrypted).map_err(|_| "E_SECRET_SAVE")?; }
     cfg_val["device_id"] = serde_json::json!(device_id);
     cfg_val["computer_name"] = serde_json::json!(computer_name);
-    cfg_val["gateway_origin"] = serde_json::json!(origin);
-    cfg_val["server_confirmed"] = serde_json::json!(true);
+    gateway_config::record_registration(&mut cfg_val, &origin, is_local_mode);
     if let Some(obj) = cfg_val.as_object_mut() { obj.remove("device_secret"); }
     fs::write(&cfg_file, cfg_val.to_string()).map_err(|e| format!("E_CONFIG_SAVE: {}", e))?;
 
@@ -911,9 +915,11 @@ fn generate_qr_pairing(mode: Option<String>) -> Result<PairingPayloadDto, String
     let pd_pair = std::path::PathBuf::from("C:\\ProgramData\\WinKey\\active_pair.json");
     let _ = fs::write(&pd_pair, pair_challenge_dto.to_string());
 
-    match provision_device_to_service_ipc(&device_id, &secret) {
-        Ok(_) => eprintln!("[PAIRING] trusted service provisioning OK"),
-        Err(_) => eprintln!("[PAIRING] E_SERVICE_PROVISION_FAILED: QR may pair, but PC commands require the installed service"),
+    if !is_local_mode {
+        match provision_device_to_service_ipc(&device_id, &secret) {
+            Ok(_) => eprintln!("[PAIRING] trusted service provisioning OK"),
+            Err(_) => eprintln!("[PAIRING] E_SERVICE_PROVISION_FAILED: QR may pair, but PC commands require the installed service"),
+        }
     }
     // Dual-Mode Mobil URL generasiyası (Lokal Wi-Fi LAN IP vs Bulud HTTPS)
     let pairing_url = if origin.contains("127.0.0.1") || origin.contains("localhost") {

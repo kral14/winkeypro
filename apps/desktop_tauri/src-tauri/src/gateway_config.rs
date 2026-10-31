@@ -18,6 +18,15 @@ pub fn cloud_origin(saved: Option<&str>) -> String {
         .unwrap_or_else(|| CLOUD_ORIGIN.to_string())
 }
 
+pub fn record_registration(cfg: &mut serde_json::Value, origin: &str, local: bool) {
+    cfg["connection_mode"] = serde_json::json!(if local { "wifi" } else { "cloud" });
+    if !local {
+        cfg["gateway_origin"] = serde_json::json!(origin);
+        cfg["cloud_gateway_origin"] = serde_json::json!(origin);
+        cfg["server_confirmed"] = serde_json::json!(true);
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -29,5 +38,18 @@ mod tests {
         assert!(normalize("http://user:password@example.com").is_err());
         assert!(normalize("http://example.com/admin").is_err());
         assert!(normalize("file:///secret").is_err());
+    }
+    #[test]
+    fn wifi_pairing_does_not_replace_cloud_registration() {
+        let mut cfg = serde_json::json!({});
+        record_registration(&mut cfg, CLOUD_ORIGIN, false);
+        record_registration(&mut cfg, "http://127.0.0.1:8788", true);
+        assert_eq!(cfg["gateway_origin"], CLOUD_ORIGIN);
+        assert_eq!(cfg["cloud_gateway_origin"], CLOUD_ORIGIN);
+        assert_eq!(cfg["server_confirmed"], true);
+        assert_eq!(cfg["connection_mode"], "wifi");
+        record_registration(&mut cfg, "https://new.example", false);
+        assert_eq!(cfg["gateway_origin"], "https://new.example");
+        assert_eq!(cfg["connection_mode"], "cloud");
     }
 }
