@@ -552,6 +552,17 @@ $slotBDir = Join-Path $versionsDir "slot_b"
 if (-not (Test-Path $slotADir)) { New-Item -ItemType Directory -Path $slotADir -Force | Out-Null }
 if (-not (Test-Path $slotBDir)) { New-Item -ItemType Directory -Path $slotBDir -Force | Out-Null }
 
+# Upgrade repair: existing signed slot files may have protected explicit ACLs.
+# Restore only SYSTEM/Admin write access BEFORE copying; never grant Users write.
+Assert-NotReparsePoint $slotADir
+Get-ChildItem -LiteralPath $slotADir -Recurse -Force | ForEach-Object {
+    if ($_.Attributes -band [System.IO.FileAttributes]::ReparsePoint) {
+        Invoke-Rollback "E_REPARSE_POINT_DETECTED: Slot A contains a reparse point"
+    }
+}
+& icacls.exe "$slotADir" /inheritance:r /grant:r "*S-1-5-18:(OI)(CI)F" "*S-1-5-32-544:(OI)(CI)F" /t /c | Out-Null
+if ($LASTEXITCODE -ne 0) { Invoke-Rollback "E_SLOT_REPAIR_ACL: Slot A protected permissions could not be restored" }
+
 # Initial Signed Slot A Provisioning (Fresh Install Boot Preflight zəmanəti)
 try {
     Copy-Item -Path $svcSrc -Destination (Join-Path $slotADir "winkey_service.exe") -Force
@@ -604,7 +615,7 @@ try {
   "last_checkpoint": "INITIALIZED"
 }
 "@
-        [System.IO.File]::WriteAllText($journalPath, $initialJournal, [System.Text.Encoding]::UTF8)
+        [System.IO.File]::WriteAllText($journalPath, $initialJournal, [System.Text.UTF8Encoding]::new($false))
     }
     Write-Host "[PASS] Signed Slot A baseline və update_journal.json inisializasiya edildi." -ForegroundColor Green
 } catch {
@@ -613,7 +624,7 @@ try {
 
 # Enrolled owner SID faylı yazılır
 $ownerSidFile = Join-Path $DataDir "owner.sid"
-[System.IO.File]::WriteAllText($ownerSidFile, $OwnerSid.Trim(), [System.Text.Encoding]::UTF8)
+[System.IO.File]::WriteAllText($ownerSidFile, $OwnerSid.Trim(), [System.Text.UTF8Encoding]::new($false))
 
 # REM-030/P0 Təhlükəsizlik Sərhədi: SYSTEM-Protected vs User-Writable Trees və Upgrade Repair Purge
 Write-Host "[ACTION] SYSTEM-Only Qorunan Ağac və İstifadəçi Yazıla Bilən Qovluqlar ayrılır (Upgrade Explicit ACE Purge)..." -ForegroundColor Cyan
@@ -631,12 +642,15 @@ $binPathCmd = "`"$installedBin`" --run-service"
 Write-Host "[INFO] SCM Entrypoint: Native Service Binary ($binPathCmd)" -ForegroundColor Green
 
 if (-not $existingSvc) {
-    & sc.exe create $serviceName binPath= "$binPathCmd" start= auto DisplayName= "$displayName"
-    if ($LASTEXITCODE -ne 0) {
-        Invoke-Rollback "'sc.exe create' uğursuz oldu! Exit kodu: $LASTEXITCODE"
-    }
+    try {
+        New-Service -Name $serviceName -BinaryPathName $binPathCmd -StartupType Automatic -DisplayName $displayName -ErrorAction Stop | Out-Null
+    } catch { Invoke-Rollback "E_SERVICE_CREATE: $_" }
 } else {
-    & sc.exe config $serviceName binPath= "$binPathCmd" start= auto DisplayName= "$displayName"
+    try {
+        $serviceObject = Get-CimInstance Win32_Service -Filter "Name='$serviceName'"
+        $change = Invoke-CimMethod -InputObject $serviceObject -MethodName Change -Arguments @{PathName=$binPathCmd; StartMode='Automatic'; DisplayName=$displayName}
+        if ($change.ReturnValue -ne 0) { Invoke-Rollback "E_SERVICE_CONFIG: $($change.ReturnValue)" }
+    } catch { Invoke-Rollback "E_SERVICE_CONFIG: $_" }
 }
 
 & sc.exe description $serviceName "$description" 2>$null | Out-Null

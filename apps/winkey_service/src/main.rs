@@ -333,7 +333,7 @@ fn resolve_enrolled_owner_sid(data_dir: &std::path::Path) -> Option<String> {
     // 1. data_dir/owner.sid faylından
     let sid_file = data_dir.join("owner.sid");
     if let Ok(content) = fs::read_to_string(&sid_file) {
-        let trimmed = content.trim();
+        let trimmed = content.trim_start_matches('\u{feff}').trim();
         if trimmed.starts_with("S-1-5-21-") {
             return Some(trimmed.to_string());
         }

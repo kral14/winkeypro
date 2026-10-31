@@ -431,7 +431,7 @@ pub fn read_or_recover_journal(base_dir: &Path, expected_pubkey: Option<&[u8; 32
 
     if journal_path.exists() {
         if let Ok(content) = fs::read_to_string(&journal_path) {
-            if let Ok(journal) = serde_json::from_str::<UpdateJournal>(&content) {
+            if let Ok(journal) = serde_json::from_str::<UpdateJournal>(content.trim_start_matches('\u{feff}')) {
                 return (journal, false);
             }
         }

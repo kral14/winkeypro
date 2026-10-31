@@ -104,10 +104,13 @@ Section "MainSection" SEC01
     DetailPrint "Tehlukesizlik icazeleri ve sistem xidmeti konfiqurasiya edilir..."
     
     ; service_installer.ps1 vasitesile tam tehlukesiz qurasdirma icra edilir (konsol penceresi gizledilir)
-    nsExec::Exec 'powershell.exe -NoProfile -ExecutionPolicy Bypass -WindowStyle Hidden -Command "& { & \"$INSTDIR\service_installer.ps1\" -SourceDir \"$INSTDIR\" -InstallDir \"$INSTDIR\" -Repair }"'
+    nsExec::ExecToLog '"$SYSDIR\WindowsPowerShell\v1.0\powershell.exe" -NoProfile -ExecutionPolicy Bypass -WindowStyle Hidden -File "$INSTDIR\service_installer.ps1" -SourceDir "$INSTDIR" -InstallDir "$INSTDIR" -Repair'
     Pop $0
     ${If} $0 != 0
-        DetailPrint "Xeberdarliq: Xidmet skripti $0 kodu ile yekunlasdi (Fallback tetbiq olunur)."
+        DetailPrint "XETA: Windows xidmeti qurasdirilmadi. Exit code: $0"
+        MessageBox MB_ICONSTOP|MB_OK "WinKey xidmeti qurasdirilmadi (kod: $0). Qurasdirma tamamlanmadi. Detallar bolmesindeki xetani gonderin." /SD IDOK
+        SetErrorLevel 1
+        Abort
     ${Else}
         DetailPrint "Sistem xidmeti ve tehlukesizlik slotlari ugurla hazirlandi."
     ${EndIf}
