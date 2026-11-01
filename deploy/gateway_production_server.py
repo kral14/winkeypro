@@ -121,6 +121,9 @@ class ProductionDatabase:
                     received_at DOUBLE PRECISION NOT NULL
                 )
             """)
+            # Upgrade existing valid pairings; never resurrect expired tokens.
+            # expires_at=0 explicitly means paired until revoked.
+            conn.execute("UPDATE mobile_sessions SET expires_at = 0 WHERE expires_at > ?", (time.time(),))
             conn.commit()
 
 class GatewayHandler(BaseHTTPRequestHandler):
@@ -618,7 +621,7 @@ class GatewayHandler(BaseHTTPRequestHandler):
                 return
 
             with self.db.get_conn() as conn:
-                sess = conn.execute("SELECT device_id FROM mobile_sessions WHERE session_token = ? AND expires_at > ?", (token, time.time())).fetchone()
+                sess = conn.execute("SELECT device_id FROM mobile_sessions WHERE session_token = ? AND (expires_at = 0 OR expires_at > ?)", (token, time.time())).fetchone()
                 if not sess:
                     self._send_json(401, {"error": "E_INVALID_SESSION"})
                     return
@@ -649,7 +652,7 @@ class GatewayHandler(BaseHTTPRequestHandler):
                     return
 
                 with self.db.get_conn() as conn:
-                    sess = conn.execute("SELECT device_id FROM mobile_sessions WHERE session_token = ? AND expires_at > ?", (token, time.time())).fetchone()
+                    sess = conn.execute("SELECT device_id FROM mobile_sessions WHERE session_token = ? AND (expires_at = 0 OR expires_at > ?)", (token, time.time())).fetchone()
                     if not sess:
                         self._send_json(401, {"error": "E_INVALID_SESSION"})
                         return
@@ -891,7 +894,7 @@ class GatewayHandler(BaseHTTPRequestHandler):
                 session_token = "sess_" + secrets.token_hex(24)
                 conn.execute(
                     "INSERT INTO mobile_sessions (session_token, device_id, created_at, expires_at) VALUES (?, ?, ?, ?)",
-                    (session_token, device_id, time.time(), time.time() + 86400)
+                    (session_token, device_id, time.time(), 0)
                 )
                 conn.commit()
 
@@ -899,7 +902,8 @@ class GatewayHandler(BaseHTTPRequestHandler):
                 "success": True,
                 "session_token": session_token,
                 "device_id": device_id,
-                "expires_in": 86400
+                "expires_in": None,
+                "persistent": True
             })
             return
 
@@ -957,7 +961,7 @@ class GatewayHandler(BaseHTTPRequestHandler):
                     return
 
             with self.db.get_conn() as conn:
-                sess = conn.execute("SELECT device_id FROM mobile_sessions WHERE session_token = ? AND expires_at > ?", (token, time.time())).fetchone()
+                sess = conn.execute("SELECT device_id FROM mobile_sessions WHERE session_token = ? AND (expires_at = 0 OR expires_at > ?)", (token, time.time())).fetchone()
                 if not sess:
                     self._send_json(401, {"error": "E_INVALID_SESSION"})
                     return

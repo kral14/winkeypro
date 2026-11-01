@@ -15,6 +15,12 @@ Köhnə bazanı qoruyun; boş yeni bazada PC qeydiyyatı və telefon QR cütlə�
 yenidən tələb olunur. Windows PIN-i kompüterdə qalır və bazaya göndərilmir.
 Redeploy zamanı eyni DATABASE_URL saxlanmalıdır; xarici baza ayrıca qalır.
 
+Telefon cütləşməsi avtomatik vaxt bitməsi olmadan saxlanır (`expires_at=0`).
+Telefonun Bağlantını Kəs düyməsi və admin cihaz ləğvi tokeni serverdə silir.
+Yenilənmə zamanı hələ qüvvədə olan köhnə 24 saatlıq sessiyalar daimi edilir;
+artıq vaxtı bitmiş tokenlər avtomatik bərpa edilmir. Brauzer yaddaşı silinərsə
+və ya başqa brauzer/telefon işlədilərsə yeni QR tələb olunur.
+
 ## Dockerfile seçən deploy panelləri
 
 Build növü `Dockerfile`, Dockerfile yolu `Dockerfile`, build context `.` olsun.
