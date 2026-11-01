@@ -129,6 +129,10 @@ class ProductionDatabase:
 class GatewayHandler(BaseHTTPRequestHandler):
     db: ProductionDatabase = None
 
+    def handle_one_request(self):
+        self.request_started = time.monotonic()
+        super().handle_one_request()
+
     def log_message(self, format, *args):
         # Do not print raw request URLs: QR secrets can be in the query.
         pass
@@ -158,9 +162,10 @@ class GatewayHandler(BaseHTTPRequestHandler):
             return {}
 
     def _send_json(self, status: int, data: Dict[str, Any]):
+        duration_ms = round((time.monotonic() - getattr(self, 'request_started', time.monotonic())) * 1000)
         print(f"[GATEWAY] {self.command if hasattr(self, 'command') else 'REQUEST'} "
               f"{urlparse(self.path).path} HTTP={status} "
-              f"code={data.get('error', 'OK')}", flush=True)
+              f"code={data.get('error', 'OK')} duration_ms={duration_ms} ts_ms={round(time.time() * 1000)}", flush=True)
         if status >= 400:
             self._record_incident(urlparse(self.path).path, data.get('error', f'HTTP_{status}'))
         body = json.dumps(data).encode("utf-8")
@@ -279,12 +284,41 @@ class GatewayHandler(BaseHTTPRequestHandler):
         const devIdEl = document.getElementById('dev-id');
         const badgeEl = document.getElementById('status-badge');
         const statusBox = document.getElementById('action-status');
+        let commandBusy = false;
+        let statusBusy = false;
+        let pendingCommand = null;
+        try { pendingCommand = JSON.parse(localStorage.getItem('winkey_pending_command') || 'null'); } catch(e) {}
+        if (pendingCommand && (pendingCommand.device !== targetDevice ||
+            !/^[0-9a-f]{32}$/.test(pendingCommand.requestId) ||
+            !['lock', 'unlock'].includes(pendingCommand.action))) pendingCommand = null;
+        const pause = ms => new Promise(resolve => setTimeout(resolve, ms));
+        function savePending(value) {
+            pendingCommand = value;
+            if (value) localStorage.setItem('winkey_pending_command', JSON.stringify(value));
+            else localStorage.removeItem('winkey_pending_command');
+        }
+        async function request(url, options = {}, timeoutMs = 4000) {
+            const controller = new AbortController();
+            const timer = setTimeout(() => controller.abort(), timeoutMs);
+            const start = performance.now();
+            try {
+                const response = await fetch(url, {...options, signal: controller.signal, cache: 'no-store'});
+                const data = await response.json();
+                return {ok: response.ok, status: response.status, json: async () => data,
+                        elapsedMs: Math.round(performance.now() - start)};
+            } finally { clearTimeout(timer); }
+        }
+        function setBusy(value) {
+            commandBusy = value;
+            document.getElementById('btn-unlock').disabled = value;
+            document.getElementById('btn-lock').disabled = value;
+        }
 
         async function init() {
             if (pairCode) {
                 statusBox.innerHTML = '<span class="spinner"></span>QR cütləşmə kodu göndərilir...';
                 try {
-                    const r = await fetch('/pair', {
+                    const r = await request('/pair', {
                         method: 'POST',
                         headers: {'Content-Type': 'application/json'},
                         body: JSON.stringify({pair_code: pairCode})
@@ -295,6 +329,7 @@ class GatewayHandler(BaseHTTPRequestHandler):
                         targetDevice = res.device_id;
                         localStorage.setItem('winkey_token', authToken);
                         localStorage.setItem('winkey_dev_id', targetDevice);
+                        savePending(null);
                         if (window.history.replaceState) {
                             window.history.replaceState({}, document.title, window.location.pathname);
                         }
@@ -310,13 +345,15 @@ class GatewayHandler(BaseHTTPRequestHandler):
                 devIdEl.textContent = 'Cihaz ID: ' + targetDevice;
                 pollStatus();
                 setInterval(pollStatus, 3000);
+                if (pendingCommand) sendCommand(pendingCommand.action);
             }
         }
 
         async function pollStatus() {
-            if (!authToken || !targetDevice) return;
+            if (!authToken || !targetDevice || commandBusy || statusBusy || document.hidden) return;
+            statusBusy = true;
             try {
-                const r = await fetch('/devices/' + encodeURIComponent(targetDevice) + '/status', {
+                const r = await request('/devices/' + encodeURIComponent(targetDevice) + '/status', {
                     headers: {'Authorization': 'Bearer ' + authToken}
                 });
                 if (r.ok) {
@@ -328,66 +365,81 @@ class GatewayHandler(BaseHTTPRequestHandler):
                     badgeEl.textContent = 'İcazəsiz';
                     badgeEl.className = 'badge badge-offline';
                 }
-            } catch(e) {}
+            } catch(e) {} finally { statusBusy = false; }
         }
 
         async function sendCommand(action) {
-            if (!authToken || !targetDevice) return;
+            if (!authToken || !targetDevice || commandBusy) return;
+            if (!pendingCommand) {
+                const bytes = crypto.getRandomValues(new Uint8Array(16));
+                savePending({device: targetDevice, action,
+                    requestId: Array.from(bytes, b => b.toString(16).padStart(2, '0')).join('')});
+            }
+            action = pendingCommand.action;
+            setBusy(true);
+            const sendStarted = performance.now();
             statusBox.innerHTML = '<span class="spinner"></span>Əmr göndərilir (' + action + ')...';
             try {
-                const r = await fetch('/devices/' + encodeURIComponent(targetDevice) + '/command', {
+                let r;
+                for (let retry = 0; retry < 2; retry++) {
+                    try { r = await request('/devices/' + encodeURIComponent(targetDevice) + '/command', {
                     method: 'POST',
                     headers: {'Content-Type': 'application/json', 'Authorization': 'Bearer ' + authToken},
-                    body: JSON.stringify({action: action})
-                });
+                    body: JSON.stringify({action: action, request_id: pendingCommand.requestId})
+                    }); break; }
+                    catch(e) { if (retry === 1) throw e; }
+                }
                 const res = await r.json();
                 if (r.ok && res.command_id) {
-                    statusBox.innerHTML = '<span class="spinner"></span>Əmr növbəyə alındı (' + action + '). PC-nin faktiki icrası gözlənilir...';
-                    pollCommandResult(res.command_id, action);
+                    const sentMs = Math.round(performance.now() - sendStarted);
+                    statusBox.textContent = 'Əmr serverə çatdı (' + sentMs + ' ms). PC-nin icrası gözlənilir...';
+                    await pollCommandResult(res.command_id, action, sentMs, sendStarted);
                 } else {
+                    if (r.status < 500) savePending(null);
                     statusBox.textContent = 'Xəta: ' + (res.message || res.error);
                 }
             } catch(e) {
-                statusBox.textContent = 'Şəbəkə xətası: ' + e;
-            }
+                statusBox.textContent = 'Server cavabı alınmadı. Əmr qəbul edilmiş ola bilər. Yenidən basanda eyni əmrin vəziyyəti yoxlanacaq.';
+            } finally { setBusy(false); pollStatus(); }
         }
 
-        async function pollCommandResult(cmdId, action) {
-            let attempts = 0;
-            const maxAttempts = 10;
-            const timer = setInterval(async () => {
-                attempts++;
+        async function pollCommandResult(cmdId, action, sentMs = 0, started = performance.now()) {
+            const deadline = performance.now() + 20000;
+            while (performance.now() < deadline) {
                 try {
-                    const r = await fetch('/commands/' + encodeURIComponent(cmdId), {
+                    const r = await request('/commands/' + encodeURIComponent(cmdId), {
                         headers: {'Authorization': 'Bearer ' + authToken}
-                    });
+                    }, Math.min(3000, Math.max(1, deadline - performance.now())));
+                    if (r.status === 401 || r.status === 403) {
+                        savePending(null);
+                        statusBox.textContent = 'Telefon bağlantısı ləğv edilib və ya giriş icazəsi yoxdur.';
+                        return;
+                    }
                     if (r.ok) {
                         const cmd = await r.json();
                         if (cmd.status === 'executed' || cmd.status === 'completed') {
-                            clearInterval(timer);
-                            statusBox.textContent = 'İcra tamamlandı (' + action + '): ' + (cmd.result || 'Uğurlu');
+                            savePending(null);
+                            statusBox.textContent = 'İcra tamamlandı (' + action + '): ' + (cmd.result || 'Uğurlu') +
+                                ' | Göndəriş: ' + sentMs + ' ms; ümumi: ' + Math.round(performance.now() - started) + ' ms';
                             pollStatus();
                             return;
                         } else if (cmd.status === 'failed') {
-                            clearInterval(timer);
+                            savePending(null);
                             statusBox.textContent = 'İcra uğursuz oldu: ' + (cmd.result || 'Xəta');
                             return;
                         }
                     }
                 } catch(e) {}
 
-                if (attempts >= maxAttempts) {
-                    clearInterval(timer);
-                    statusBox.textContent = 'PC hələ cavab vermədi (Taymaut). Cihaz offline ola bilər.';
-                    pollStatus();
-                }
-            }, 1000);
+                await pause(250);
+            }
+            statusBox.textContent = 'Nəticə hələ təsdiqlənməyib. Yenidən basanda eyni əmr yoxlanacaq; əlavə əmr yaradılmayacaq.';
         }
 
         async function revokeDevice() {
             if (authToken) {
                 try {
-                    await fetch('/mobile/revoke', {
+                    await request('/mobile/revoke', {
                         method: 'POST',
                         headers: {'Authorization': 'Bearer ' + authToken}
                     });
@@ -981,12 +1033,22 @@ class GatewayHandler(BaseHTTPRequestHandler):
                     self._send_json(400, {"error": "E_INVALID_ACTION"})
                     return
 
-                cmd_id = "cmd_" + secrets.token_hex(12)
+                request_id = data.get('request_id')
+                if request_id is not None and (not isinstance(request_id, str) or len(request_id) != 32 or any(c not in '0123456789abcdef' for c in request_id)):
+                    self._send_json(400, {'error': 'E_INVALID_REQUEST_ID'})
+                    return
+                # Stable across a lost HTTP response/retry; bound to this session.
+                cmd_id = 'cmd_' + (hashlib.sha256((token + ':' + request_id).encode()).hexdigest()[:24]
+                                  if request_id else secrets.token_hex(12))
                 conn.execute(
-                    "INSERT INTO commands (command_id, device_id, action, status, created_at) VALUES (?, ?, ?, 'pending', ?)",
+                    "INSERT INTO commands (command_id, device_id, action, status, created_at) VALUES (?, ?, ?, 'pending', ?) ON CONFLICT (command_id) DO NOTHING",
                     (cmd_id, req_device_id, action, time.time())
                 )
+                existing = conn.execute('SELECT device_id, action FROM commands WHERE command_id = ?', (cmd_id,)).fetchone()
                 conn.commit()
+                if existing['device_id'] != req_device_id or existing['action'] != action:
+                    self._send_json(409, {'error': 'E_REQUEST_ID_CONFLICT'})
+                    return
 
             self._send_json(200, {"success": True, "command_id": cmd_id, "action": action, "status": "queued"})
             print(f"[COMMAND_QUEUED] device={req_device_id} action={action} id={cmd_id}", flush=True)
@@ -1022,12 +1084,12 @@ class GatewayHandler(BaseHTTPRequestHandler):
                     (time.time(), 1 if locked else 0, 1 if pin_ready else 0, device_id)
                 )
                 cmd = conn.execute(
-                    "SELECT command_id, action FROM commands WHERE device_id = ? AND status = 'pending' ORDER BY created_at ASC LIMIT 1",
+                    "SELECT command_id, action, created_at FROM commands WHERE device_id = ? AND status = 'pending' ORDER BY created_at ASC LIMIT 1",
                     (device_id,)
                 ).fetchone()
 
                 if cmd:
-                    print(f"[COMMAND_DELIVERED] device={device_id} action={cmd['action']} id={cmd['command_id']}", flush=True)
+                    print(f"[COMMAND_DELIVERED] device={device_id} action={cmd['action']} id={cmd['command_id']} queued_ms={round((time.time() - cmd['created_at']) * 1000)}", flush=True)
                     conn.execute("UPDATE commands SET status = 'delivered' WHERE command_id = ?", (cmd["command_id"],))
                     conn.commit()
                     self._send_json(200, {"command": {"id": cmd["command_id"], "action": cmd["action"]}})

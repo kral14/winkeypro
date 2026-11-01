@@ -1,5 +1,6 @@
 """Actual HTTP contract for the VM adapter; never invokes Windows input."""
 import json
+from concurrent.futures import ThreadPoolExecutor
 import os
 from pathlib import Path
 import secrets
@@ -80,13 +81,21 @@ class VMContract(unittest.TestCase):
                 with patch('deploy.gateway_production_server.time.time', return_value=time.time() + 10 * 365 * 86400):
                     self.assertEqual(http('/devices/' + device + '/status', token=mobile)[0], 200)
                 self.assertNotEqual(http("/pair", {"pair_code": pairing["pair_code"]})[0], 200)
-                status, command = http("/commands", {"device_id": device, "action": "mock"}, mobile)
+                payload = {"device_id": device, "action": "mock", "request_id": 'a' * 32}
+                status, command = http("/commands", payload, mobile)
                 self.assertEqual(status, 200)
+                self.assertEqual(http('/commands', payload, mobile)[1]['command_id'], command['command_id'])
+                with ThreadPoolExecutor(max_workers=4) as pool:
+                    repeats = list(pool.map(lambda _: http('/commands', payload, mobile), range(4)))
+                self.assertTrue(all(r[0] == 200 and r[1]['command_id'] == command['command_id'] for r in repeats))
+                self.assertEqual(http('/commands', {**payload, 'action': 'lock'}, mobile)[0], 409)
                 status, poll = http("/agent/poll", {"device_id": device}, agent)
                 self.assertEqual(status, 200)
                 self.assertEqual(poll["command"]["id"], command["command_id"])
                 self.assertEqual(http("/agent/result", {"device_id": device, "command_id": command["command_id"], "success": True, "status": "MOCK_ONLY"}, agent)[0], 200)
                 self.assertEqual(http("/commands/" + command["command_id"], token=mobile)[1]["status"], "completed")
+                self.assertEqual(http('/commands', payload, mobile)[1]['command_id'], command['command_id'])
+                self.assertIsNone(http('/agent/poll', {'device_id': device}, agent)[1]['command'])
                 self.assertEqual(len(http("/admin/devices", admin=True)[1]["devices"]), 1)
                 event = {'event_id': 'test_event', 'device_id': device,
                          'component': 'test', 'stage': 'before_restart'}
