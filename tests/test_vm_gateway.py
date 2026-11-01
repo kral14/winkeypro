@@ -96,6 +96,18 @@ class VMContract(unittest.TestCase):
                 self.assertEqual(http("/commands/" + command["command_id"], token=mobile)[1]["status"], "completed")
                 self.assertEqual(http('/commands', payload, mobile)[1]['command_id'], command['command_id'])
                 self.assertIsNone(http('/agent/poll', {'device_id': device}, agent)[1]['command'])
+                def intent(action, digit):
+                    return http('/commands', {'device_id': device, 'action': action, 'request_id': digit * 32}, mobile)[1]['command_id']
+                old = intent('lock', 'b')
+                latest = intent('unlock', 'c')
+                self.assertEqual(http('/commands/' + old, token=mobile)[1]['status'], 'superseded')
+                self.assertEqual(http('/agent/poll', {'device_id': device}, agent)[1]['command']['id'], latest)
+                waiting = intent('lock', 'd')
+                final = intent('unlock', 'e')
+                self.assertEqual(http('/commands/' + latest, token=mobile)[1]['status'], 'delivered')
+                self.assertEqual(http('/commands/' + waiting, token=mobile)[1]['status'], 'superseded')
+                self.assertEqual(intent('lock', 'b'), old)  # delayed retry must not replace newer work
+                self.assertEqual(http('/agent/poll', {'device_id': device}, agent)[1]['command']['id'], final)
                 self.assertEqual(len(http("/admin/devices", admin=True)[1]["devices"]), 1)
                 event = {'event_id': 'test_event', 'device_id': device,
                          'component': 'test', 'stage': 'before_restart'}

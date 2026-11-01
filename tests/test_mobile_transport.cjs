@@ -37,13 +37,13 @@ const response = data => ({ok: true, status: 200, json: async () => data});
     }
     return response({status: 'completed', result: 'MOCK_ONLY'});
   };
-  await Promise.all([a.run("sendCommand('lock')"), a.run("sendCommand('unlock')")]);
+  await a.run("sendCommand('lock')");
   assert.equal(posts.length, 2);
   assert.equal(posts[0].request_id, posts[1].request_id);
   assert(posts.every(p => p.action === 'lock'));
   assert.equal(a.storage.has('winkey_pending_command'), false);
-  assert.equal(a.elements.get('btn-lock').disabled, false);
-  console.log('PASS lost response retries same ID; repeated tap suppressed; busy state released');
+  assert.equal(a.run('commandBusy'), false);
+  console.log('PASS lost response retries same ID; busy state released');
 
   const b = context();
   b.ctx.fetch = async (url, options) => ({ok:true, status:200,
@@ -72,9 +72,9 @@ const response = data => ({ok: true, status: 200, json: async () => data});
     return response({status:'completed'});
   };
   await d.run("sendCommand('unlock')");
-  assert.equal(resumed[0].request_id, pending.requestId);
-  assert.equal(resumed[0].action, 'lock');
-  console.log('PASS unknown outcome retained and resolved before accepting a different command');
+  assert.notEqual(resumed[0].request_id, pending.requestId);
+  assert.equal(resumed[0].action, 'unlock');
+  console.log('PASS explicit latest intent replaces an unresolved old command');
 
   const e = context();
   let inflight = 0, maxInflight = 0, polls = 0;
@@ -89,4 +89,24 @@ const response = data => ({ok: true, status: 200, json: async () => data});
   assert.equal(polls, 3);
   assert.equal(maxInflight, 1);
   console.log('PASS command result polling is serial');
+
+  const f = context(), latestPosts = [];
+  let release;
+  f.ctx.fetch = async (url, options) => {
+    if (options.method === 'POST') {
+      latestPosts.push(JSON.parse(options.body));
+      if (latestPosts.length === 1) await new Promise(resolve => {release = resolve;});
+      return response({command_id:'latest'});
+    }
+    return response({status:'completed'});
+  };
+  const first = f.run("sendCommand('lock')");
+  await f.run("sendCommand('unlock')");
+  await f.run("sendCommand('lock')");
+  await f.run("sendCommand('unlock')");
+  release();
+  await first;
+  assert.deepEqual(latestPosts.map(p => p.action), ['lock','unlock']);
+  assert.notEqual(latestPosts[0].request_id, latestPosts[1].request_id);
+  console.log('PASS rapid taps coalesce into last intent; busy state never drops it');
 })().catch(error => {console.error(error); process.exitCode = 1;});

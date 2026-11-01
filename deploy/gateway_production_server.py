@@ -285,6 +285,7 @@ class GatewayHandler(BaseHTTPRequestHandler):
         const badgeEl = document.getElementById('status-badge');
         const statusBox = document.getElementById('action-status');
         let commandBusy = false;
+        let desiredAction = null;
         let statusBusy = false;
         let pendingCommand = null;
         try { pendingCommand = JSON.parse(localStorage.getItem('winkey_pending_command') || 'null'); } catch(e) {}
@@ -310,8 +311,7 @@ class GatewayHandler(BaseHTTPRequestHandler):
         }
         function setBusy(value) {
             commandBusy = value;
-            document.getElementById('btn-unlock').disabled = value;
-            document.getElementById('btn-lock').disabled = value;
+            // Keep accepting taps: the last desired state replaces waiting work.
         }
 
         async function init() {
@@ -345,7 +345,7 @@ class GatewayHandler(BaseHTTPRequestHandler):
                 devIdEl.textContent = 'Cihaz ID: ' + targetDevice;
                 pollStatus();
                 setInterval(pollStatus, 3000);
-                if (pendingCommand) sendCommand(pendingCommand.action);
+                if (pendingCommand) sendCommand(pendingCommand.action, true);
             }
         }
 
@@ -368,8 +368,15 @@ class GatewayHandler(BaseHTTPRequestHandler):
             } catch(e) {} finally { statusBusy = false; }
         }
 
-        async function sendCommand(action) {
-            if (!authToken || !targetDevice || commandBusy) return;
+        async function sendCommand(action, resume = false) {
+            if (!authToken || !targetDevice) return;
+            if (commandBusy) {
+                desiredAction = action;
+                statusBox.textContent = 'Son istək saxlanıldı (' + action + '). Göndərilir...';
+                return;
+            }
+            // An explicit tap is a new intent; transport retries alone reuse IDs.
+            if (!resume) savePending(null);
             if (!pendingCommand) {
                 const bytes = crypto.getRandomValues(new Uint8Array(16));
                 savePending({device: targetDevice, action,
@@ -390,6 +397,7 @@ class GatewayHandler(BaseHTTPRequestHandler):
                     catch(e) { if (retry === 1) throw e; }
                 }
                 const res = await r.json();
+                if (desiredAction !== null) return;
                 if (r.ok && res.command_id) {
                     const sentMs = Math.round(performance.now() - sendStarted);
                     statusBox.textContent = 'Əmr serverə çatdı (' + sentMs + ' ms). PC-nin icrası gözlənilir...';
@@ -399,17 +407,26 @@ class GatewayHandler(BaseHTTPRequestHandler):
                     statusBox.textContent = 'Xəta: ' + (res.message || res.error);
                 }
             } catch(e) {
-                statusBox.textContent = 'Server cavabı alınmadı. Əmr qəbul edilmiş ola bilər. Yenidən basanda eyni əmrin vəziyyəti yoxlanacaq.';
-            } finally { setBusy(false); pollStatus(); }
+                statusBox.textContent = 'Server cavabı alınmadı. Əvvəlki əmr qəbul edilmiş ola bilər. Yeni basış son istəyi göndərəcək.';
+            } finally {
+                setBusy(false);
+                if (desiredAction !== null) {
+                    const next = desiredAction;
+                    desiredAction = null;
+                    await sendCommand(next);
+                } else pollStatus();
+            }
         }
 
         async function pollCommandResult(cmdId, action, sentMs = 0, started = performance.now()) {
             const deadline = performance.now() + 20000;
             while (performance.now() < deadline) {
+                if (desiredAction !== null) return;
                 try {
                     const r = await request('/commands/' + encodeURIComponent(cmdId), {
                         headers: {'Authorization': 'Bearer ' + authToken}
                     }, Math.min(3000, Math.max(1, deadline - performance.now())));
+                    if (desiredAction !== null) return;
                     if (r.status === 401 || r.status === 403) {
                         savePending(null);
                         statusBox.textContent = 'Telefon bağlantısı ləğv edilib və ya giriş icazəsi yoxdur.';
@@ -417,6 +434,11 @@ class GatewayHandler(BaseHTTPRequestHandler):
                     }
                     if (r.ok) {
                         const cmd = await r.json();
+                        if (cmd.status === 'superseded') {
+                            savePending(null);
+                            statusBox.textContent = 'Əvvəlki əmr son istəklə əvəz edilib.';
+                            return;
+                        }
                         if (cmd.status === 'executed' || cmd.status === 'completed') {
                             savePending(null);
                             statusBox.textContent = 'İcra tamamlandı (' + action + '): ' + (cmd.result || 'Uğurlu') +
@@ -433,7 +455,7 @@ class GatewayHandler(BaseHTTPRequestHandler):
 
                 await pause(250);
             }
-            statusBox.textContent = 'Nəticə hələ təsdiqlənməyib. Yenidən basanda eyni əmr yoxlanacaq; əlavə əmr yaradılmayacaq.';
+            statusBox.textContent = 'Əvvəlki nəticə təsdiqlənməyib. Yeni basış son istəyi göndərəcək.';
         }
 
         async function revokeDevice() {
@@ -1040,10 +1062,15 @@ class GatewayHandler(BaseHTTPRequestHandler):
                 # Stable across a lost HTTP response/retry; bound to this session.
                 cmd_id = 'cmd_' + (hashlib.sha256((token + ':' + request_id).encode()).hexdigest()[:24]
                                   if request_id else secrets.token_hex(12))
-                conn.execute(
+                # Serialize enqueue/delivery for this device across HTTP workers.
+                conn.execute('UPDATE devices SET status = status WHERE device_id = ?', (req_device_id,))
+                inserted = conn.execute(
                     "INSERT INTO commands (command_id, device_id, action, status, created_at) VALUES (?, ?, ?, 'pending', ?) ON CONFLICT (command_id) DO NOTHING",
                     (cmd_id, req_device_id, action, time.time())
                 )
+                if inserted.rowcount == 1 and action in ('lock', 'unlock'):
+                    conn.execute("UPDATE commands SET status = 'superseded', completed_at = ?, result_status = 'SUPERSEDED_BY_LATEST' WHERE device_id = ? AND status = 'pending' AND command_id <> ? AND action IN ('lock', 'unlock')",
+                                 (time.time(), req_device_id, cmd_id))
                 existing = conn.execute('SELECT device_id, action FROM commands WHERE command_id = ?', (cmd_id,)).fetchone()
                 conn.commit()
                 if existing['device_id'] != req_device_id or existing['action'] != action:
