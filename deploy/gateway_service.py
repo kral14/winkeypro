@@ -471,7 +471,7 @@ class GatewayService:
             return 403, {"error": "E_ADMIN_UNAUTHORIZED", "message": "Admin icazəsi tələb olunur"}
 
         with self.db.get_conn() as conn:
-            rows = conn.execute("SELECT device_id, computer_name, status, created_at, last_seen_at, locked, pin_ready FROM devices ORDER BY created_at DESC").fetchall()
+            rows = conn.execute("SELECT d.device_id, d.computer_name, d.status, d.created_at, d.last_seen_at, d.locked, d.pin_ready, v.worker_version, v.reported_at AS version_reported_at FROM devices d LEFT JOIN device_versions v ON v.device_id=d.device_id ORDER BY d.created_at DESC").fetchall()
             return 200, {"devices": [dict(r) for r in rows]}
 
     def admin_get_telemetry(self, admin_sec: Optional[str]) -> Tuple[int, Dict[str, Any]]:

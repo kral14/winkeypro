@@ -151,10 +151,34 @@ class UpdateTest(WebSocketBoundaryTest):
             async with app.router.lifespan_context(app):
                 self.assertEqual(self.repository.current()['release_id'],release_id)
 
+    async def check_admin_reports_real_worker_and_latest_versions(self):
+        self.assertEqual(self.publish(self.package())[0],200)
+        device,secret,_=self._setup_device('version_report')
+        ws=await self.auth_agent(device,secret)
+        def devices():
+            request=urllib.request.Request(self.http_origin+'/admin/devices',headers={'X-Owner-Admin-Secret':self.admin_secret})
+            with urllib.request.urlopen(request,timeout=3) as response:return json.load(response)['devices']
+        try:
+            await ws.send(json.dumps({'type':'state','locked':False,'pin_ready':False,'worker_version':'0.1.2'}))
+            async with asyncio.timeout(3):
+                while True:
+                    rows=await asyncio.to_thread(devices)
+                    row=next(r for r in rows if r['device_id']==device)
+                    if row.get('worker_version')=='0.1.2':break
+                    await asyncio.sleep(.05)
+            self.assertEqual(row['latest_version'],'0.2.0')
+            self.assertIsNotNone(row['version_reported_at'])
+            # A legacy heartbeat must not erase the last actual reported version.
+            await ws.send(json.dumps({'type':'state','locked':False}))
+            await asyncio.sleep(.1)
+            self.assertEqual(next(r for r in devices() if r['device_id']==device)['worker_version'],'0.1.2')
+        finally:await ws.close()
+
 
 if __name__=='__main__':
     names=['check_publish_push_and_immutable_download','check_offline_agent_receives_latest_on_reconnect',
            'check_bad_package_and_downgrade_preserve_current','check_native_mock_receives_update_hint',
-           'check_native_rejects_wrong_signer_before_payload_download','check_vm_start_imports_git_bundled_release']
+           'check_native_rejects_wrong_signer_before_payload_download','check_vm_start_imports_git_bundled_release',
+           'check_admin_reports_real_worker_and_latest_versions']
     result=unittest.TextTestRunner(verbosity=2).run(unittest.TestSuite(UpdateTest(n) for n in names))
     sys.exit(not result.wasSuccessful())

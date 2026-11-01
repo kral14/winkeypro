@@ -341,6 +341,19 @@
       <div class="panel-title">
         <span>Windows Kompüter Statusu</span>
       </div>
+      <div class="form-group" style="padding:16px;border:1px solid var(--line);border-radius:12px;">
+        <label>Versiya və yenilənmə</label>
+        <div class="grid">
+          <div><div class="card-label">Proqram versiyası</div><strong id="lblDesktopVersion">—</strong></div>
+          <div><div class="card-label">Xidmət versiyası</div><strong id="lblWorkerVersion">—</strong></div>
+          <div><div class="card-label">Serverdə son versiya</div><strong id="lblLatestVersion">Yoxlanmayıb</strong></div>
+        </div>
+        <div class="input-row" style="margin-top:12px;align-items:center;">
+          <button class="btn-secondary" id="btnCheckUpdate">Yenilənməni yoxla</button>
+          <span id="lblUpdateMessage" role="status" aria-live="polite">Yenilənmə vəziyyəti yoxlanmayıb.</span>
+        </div>
+        <div class="card-label" id="lblUpdateChecked" style="margin-top:8px;"></div>
+      </div>
       <div class="grid">
         <div class="card">
           <div class="card-label">Kompüter Adı</div>

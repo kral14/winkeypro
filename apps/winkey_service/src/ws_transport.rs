@@ -25,6 +25,16 @@ static OUTBOX_MUTEX: Mutex<()> = Mutex::new(());
 const MAX_DEDUP_LOG_ENTRIES: usize = 1000;
 const MAX_QUEUE_CAPACITY: usize = 32;
 
+pub fn worker_release_version() -> String {
+    static VERSION: std::sync::OnceLock<String> = std::sync::OnceLock::new();
+    VERSION.get_or_init(|| std::env::current_exe().ok()
+        .and_then(|p|p.parent().map(|p|p.join("manifest.json")))
+        .and_then(|p|fs::read(p).ok())
+        .and_then(|raw|serde_json::from_slice::<serde_json::Value>(&raw).ok())
+        .and_then(|v|v.get("version").and_then(|v|v.as_str()).map(String::from))
+        .unwrap_or_else(||env!("CARGO_PKG_VERSION").to_string())).clone()
+}
+
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq)]
 pub struct DurableResult {
     pub command_id: String,
@@ -1042,6 +1052,7 @@ pub fn run_gateway_transport_loop(
                         last_heartbeat = Instant::now();
                         let state_frame = serde_json::json!({
                             "type": "state",
+                            "worker_version": worker_release_version(),
                             "locked": current_locked,
                             "pin_ready": storage::credential_ready(&data_dir)
                         });

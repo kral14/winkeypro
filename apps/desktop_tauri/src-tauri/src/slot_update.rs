@@ -2,6 +2,32 @@
 use std::{fs,path::{Path,PathBuf}};
 use sha2::{Digest,Sha256};
 
+pub fn verified_release_version(data: &serde_json::Value) -> Result<String,String> {
+    let raw=data.get("manifest_raw").and_then(|v|v.as_str()).ok_or("E_UPDATE_MANIFEST")?;
+    let signature=data.get("manifest_sig_hex").and_then(|v|v.as_str()).ok_or("E_UPDATE_SIGNATURE")?;
+    if signature.len()!=128 {return Err("E_UPDATE_SIGNATURE".into());}
+    let mut signature_bytes=[0u8;64];
+    for (i,b) in signature_bytes.iter_mut().enumerate() {
+        *b=u8::from_str_radix(&signature[i*2..i*2+2],16).map_err(|_|"E_UPDATE_SIGNATURE")?;
+    }
+    let pin="4c7fa3c7a37b79b840e939741138f0748087ae0f06fa94e728557ec2a558fc54";
+    let mut key=[0u8;32];
+    for (i,b) in key.iter_mut().enumerate() {*b=u8::from_str_radix(&pin[i*2..i*2+2],16).map_err(|_|"E_UPDATE_KEY")?;}
+    ed25519_dalek::VerifyingKey::from_bytes(&key).map_err(|_|"E_UPDATE_KEY")?
+        .verify_strict(raw.as_bytes(),&ed25519_dalek::Signature::from_bytes(&signature_bytes))
+        .map_err(|_|"E_UPDATE_SIGNATURE")?;
+    let manifest:serde_json::Value=serde_json::from_str(raw).map_err(|_|"E_UPDATE_MANIFEST")?;
+    let version=manifest.get("version").and_then(|v|v.as_str()).ok_or("E_UPDATE_VERSION")?;
+    version_tuple(version)?;
+    Ok(version.to_string())
+}
+
+pub fn version_tuple(version:&str)->Result<Vec<u64>,String> {
+    let values=version.split('.').map(|p|p.parse::<u64>().map_err(|_|"E_UPDATE_VERSION".to_string())).collect::<Result<Vec<_>,_>>()?;
+    if values.len()!=3 {return Err("E_UPDATE_VERSION".into());}
+    Ok(values)
+}
+
 pub fn active_desktop(base: &Path) -> Option<PathBuf> {
     active_desktop_with_key(base, "4c7fa3c7a37b79b840e939741138f0748087ae0f06fa94e728557ec2a558fc54")
 }

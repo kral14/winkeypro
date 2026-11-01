@@ -167,6 +167,10 @@ def build_asgi_app(service: GatewayService, dashboard_html_path: Optional[str] =
         start = time.monotonic()
         admin_sec = request.headers.get("x-owner-admin-secret")
         status, data = await asyncio.to_thread(service.admin_get_devices, admin_sec)
+        if status == 200:
+            release = await asyncio.to_thread(repository.current)
+            for device in data.get('devices',[]):
+                device['latest_version'] = release['version'] if release else None
         return _json_resp(status, data, start)
 
     async def handle_admin_telemetry(request: Request) -> Response:
@@ -657,6 +661,10 @@ def build_asgi_app(service: GatewayService, dashboard_html_path: Optional[str] =
                     if m_type == "state" or m_type == "heartbeat":
                         locked = bool(msg.get("locked", False))
                         pin_ready = bool(msg.get("pin_ready", False))
+                        import re
+                        worker_version = msg.get('worker_version')
+                        if not isinstance(worker_version,str) or not re.fullmatch(r'\d+\.\d+\.\d+',worker_version):
+                            worker_version = None
 
                         def _update_state():
                             with service.db.get_conn() as conn:
@@ -664,6 +672,9 @@ def build_asgi_app(service: GatewayService, dashboard_html_path: Optional[str] =
                                     "UPDATE devices SET last_seen_at = ?, locked = ?, pin_ready = ? WHERE device_id = ?",
                                     (time.time(), 1 if locked else 0, 1 if pin_ready else 0, did)
                                 )
+                                if worker_version:
+                                    conn.execute("INSERT INTO device_versions (device_id,worker_version,reported_at) VALUES (?,?,?) ON CONFLICT(device_id) DO UPDATE SET worker_version=excluded.worker_version,reported_at=excluded.reported_at",
+                                        (did,worker_version,time.time()))
                                 conn.commit()
 
                         await asyncio.to_thread(_update_state)

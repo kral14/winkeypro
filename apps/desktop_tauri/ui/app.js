@@ -174,6 +174,8 @@ async function loadStatus() {
   try {
     const s = await callNative('get_device_status');
     if (s) {
+      const versionLabel = document.getElementById('lblDesktopVersion');
+      if (versionLabel) versionLabel.textContent = isTauri ? 'v' + s.version : 'Önizləmə';
       if (document.getElementById('lblPcName')) document.getElementById('lblPcName').textContent = s.computer_name;
       if (document.getElementById('txtPcName')) document.getElementById('txtPcName').value = s.computer_name;
       if (s.cloud_gateway_origin) configuredCloudOrigin = s.cloud_gateway_origin;
@@ -451,10 +453,50 @@ function initButtons() {
 }
 
 // Səhifə yüklənəndə hər şeyi işə sal
+async function loadUpdateStatus() {
+  const button = document.getElementById('btnCheckUpdate');
+  const message = document.getElementById('lblUpdateMessage');
+  if (!button || !message || button.disabled) return;
+  if (!isTauri) { message.textContent = 'Önizləmə rejimi: real yenilənmə yoxlanmır.'; return; }
+  button.disabled = true;
+  message.textContent = 'Serverdəki imzalı buraxılış yoxlanır…';
+  try {
+    const status = await callNative('get_update_status', { checkServer: true });
+    document.getElementById('lblDesktopVersion').textContent = status.channel === 'dev' ? 'Dev build (setup deyil)' : 'v' + status.desktop_version;
+    document.getElementById('lblWorkerVersion').textContent = status.worker_version ? 'v' + status.worker_version : 'Bildirilməyib';
+    document.getElementById('lblLatestVersion').textContent = status.latest_version ? 'v' + status.latest_version : 'Məlum deyil';
+    const messages = {
+      up_to_date: '✓ Ən son versiya quraşdırılıb.',
+      ahead: 'Yerli versiya serverdəki buraxılışdan yenidir; downgrade edilmir.',
+      dev: 'Dev build işləyir. Quraşdırılmış versiya kimi müqayisə edilmir və xidmət yenilənməsi başladılmır.',
+      service_unknown: 'Proqram versiyası yoxlandı, amma xidmət versiyası təsdiqlənmədi.',
+      requested: 'Yeni versiya var. Xidmətə yenilənmə sorğusu göndərildi; əməliyyat bitəndə tətbiq ediləcək.',
+      service_unavailable: 'Yeni versiya var, amma xidmət sorğunu qəbul etmədi. Xidmətin vəziyyətini yoxlayın.',
+      no_release: 'Serverdə yenilənmə paketi yayımlanmayıb.',
+      unreachable: 'Serverə qoşulmaq alınmadı. Son versiya təsdiqlənmədi.'
+    };
+    const phases = {
+      PROBATION: 'Yeni xidmət versiyası sağlamlıq yoxlamasındadır; tamamlanması gözlənilir.',
+      STAGING: 'Yeni paket hazırlanır; yenilənmə hələ tamamlanmayıb.',
+      PENDING_ACTIVATION: 'Yeni paket hazırdır; təhlükəsiz keçid gözlənilir.',
+      ROLLED_BACK: 'Xidmət əvvəlki işləyən versiyaya qayıdıb. Yenilənmə loqlarını yoxlayın.'
+    };
+    message.textContent = phases[status.phase] || messages[status.status] || 'Yenilənmə vəziyyəti məlum deyil.';
+  } catch (error) {
+    document.getElementById('lblLatestVersion').textContent = 'Yoxlama alınmadı';
+    message.textContent = 'Yenilənmə yoxlanmadı: ' + String(error);
+  } finally {
+    button.disabled = false;
+    document.getElementById('lblUpdateChecked').textContent = 'Son yoxlama cəhdi: ' + new Date().toLocaleTimeString('az-AZ');
+  }
+}
+
 function initApp() {
   initTabs();
   initButtons();
   loadStatus();
+  document.getElementById('btnCheckUpdate')?.addEventListener('click', loadUpdateStatus);
+  loadUpdateStatus();
   const envBadge = document.getElementById('envBadge');
   if (envBadge && !isTauri) {
     envBadge.textContent = 'ÖNİZLƏMƏ REJİMİ';

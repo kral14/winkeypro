@@ -72,6 +72,11 @@ class ProductionDatabase:
                     used INTEGER DEFAULT 0
                 )
             """)
+            conn.execute("""CREATE TABLE IF NOT EXISTS device_versions (
+                device_id TEXT PRIMARY KEY,
+                worker_version TEXT NOT NULL,
+                reported_at DOUBLE PRECISION NOT NULL
+            )""")
             conn.execute("""
                 CREATE TABLE IF NOT EXISTS pairing_requests (
                     pair_code TEXT PRIMARY KEY,
@@ -776,13 +781,15 @@ def get_admin_html() -> str:
                 document.getElementById('devices-container').innerHTML = '<div style="color:#8e9e95;">Heç bir cihaz qeydiyyatdan keçməyib.</div>';
                 return;
             }
-            let html = '<table><tr><th>Cihaz ID</th><th>Ad</th><th>Status</th><th>Kilid</th><th>PIN</th><th>Son Görülmə</th><th>Əməliyyat</th></tr>';
+            let html = '<table><tr><th>Cihaz ID</th><th>Ad</th><th>Status</th><th>Xidmət versiyası</th><th>Serverdə son versiya</th><th>Kilid</th><th>PIN</th><th>Son Görülmə</th><th>Əməliyyat</th></tr>';
             for (const d of list) {
                 const stClass = d.status === 'ACTIVE' ? 'status-active' : 'status-revoked';
                 html += `<tr>
                     <td><code>${escapeHtml(d.device_id.substring(0, 16))}...</code></td>
                     <td><strong>${escapeHtml(d.computer_name)}</strong></td>
                     <td><span class="status-pill ${stClass}">${escapeHtml(d.status)}</span></td>
+                    <td>${d.worker_version ? 'v' + escapeHtml(d.worker_version) : 'Bildirilməyib'}</td>
+                    <td>${d.latest_version ? 'v' + escapeHtml(d.latest_version) : 'Paket yoxdur'}</td>
                     <td>${d.locked ? '🔒 Bəli' : '🔓 Xeyr'}</td>
                     <td>${d.pin_ready ? '✅ Hazır' : '⏳ Yoxdur'}</td>
                     <td>${new Date(d.last_seen_at * 1000).toLocaleTimeString()}</td>

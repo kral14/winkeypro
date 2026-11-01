@@ -1029,6 +1029,53 @@ fn query_service_ipc_status() -> Result<String, String> {
     send_service_control_command("STATUS")
 }
 
+#[tauri::command]
+async fn get_update_status(check_server: bool) -> Result<serde_json::Value,String> {
+    tauri::async_runtime::spawn_blocking(move || {
+        let desktop=slot_update::current_version();
+        let packaged=std::env::current_exe().ok().and_then(|p|p.parent().map(|p|p.join("manifest.json").is_file())).unwrap_or(false);
+        let mut result=serde_json::json!({"desktop_version":desktop,"channel":if packaged {"installed"} else {"dev"},"latest_version":null,"status":"not_checked"});
+        if let Ok(raw)=send_service_control_command("UPDATE_STATUS") {
+            if let Ok(value)=serde_json::from_str::<serde_json::Value>(&raw) {
+                result["worker_version"]=value.get("worker_version").cloned().unwrap_or(serde_json::Value::Null);
+                result["phase"]=value.get("phase").cloned().unwrap_or(serde_json::Value::Null);
+            }
+        }
+        if !check_server {return Ok(result);}
+        let config=fs::read(get_app_data_dir().join("config.json")).ok()
+            .and_then(|raw|serde_json::from_slice::<serde_json::Value>(&raw).ok()).unwrap_or_default();
+        let origin=gateway_config::cloud_origin(config.get("cloud_gateway_origin").or_else(||config.get("gateway_origin")).and_then(|v|v.as_str()));
+        let response=ureq::get(&format!("{}/updates/latest",origin)).timeout(std::time::Duration::from_secs(5)).call();
+        match response {
+            Ok(response) => {
+                let metadata:serde_json::Value=response.into_json().map_err(|_|"E_UPDATE_RESPONSE".to_string())?;
+                let latest=slot_update::verified_release_version(&metadata)?;
+                let remote=slot_update::version_tuple(&latest)?;
+                let local=slot_update::version_tuple(&desktop)?;
+                let worker=result.get("worker_version").and_then(|v|v.as_str()).and_then(|v|slot_update::version_tuple(v).ok());
+                let newer=remote>local || worker.as_ref().map(|v|remote>*v).unwrap_or(false);
+                result["latest_version"]=serde_json::json!(latest);
+                if !packaged {
+                    result["status"]=serde_json::json!("dev");
+                } else if newer {
+                    let reply=send_service_control_command("CHECK_UPDATE");
+                    let accepted=reply.as_ref().ok().and_then(|v|serde_json::from_str::<serde_json::Value>(v).ok())==Some(serde_json::json!("Ack"));
+                    result["status"]=serde_json::json!(if accepted {"requested"} else {"service_unavailable"});
+                } else if worker.is_none() {
+                    result["status"]=serde_json::json!("service_unknown");
+                } else if local>remote || worker.as_ref().map(|v|*v>remote).unwrap_or(false) {
+                    result["status"]=serde_json::json!("ahead");
+                } else {
+                    result["status"]=serde_json::json!("up_to_date");
+                }
+            }
+            Err(ureq::Error::Status(404,_)) => result["status"]=serde_json::json!("no_release"),
+            Err(_) => result["status"]=serde_json::json!("unreachable"),
+        }
+        Ok(result)
+    }).await.map_err(|_|"E_UPDATE_CHECK_TASK".to_string())?
+}
+
 /// REM-014: Yerli PC-nin Ed25519 Kriptoqrafik İmzası ilə Təsdiq Funksiyası
 pub fn approve_device_on_server(origin: &str, device_id: &str) -> Result<serde_json::Value, String> {
     let (signing_key, _verifying_key) = get_or_create_device_keypair()?;
@@ -1339,6 +1386,7 @@ fn main() {
             get_support_diagnostics,
             toggle_remote_service_control,
             query_service_ipc_status,
+            get_update_status,
         ])
         .setup(move |app| {
             let update_handle=app.handle().clone();

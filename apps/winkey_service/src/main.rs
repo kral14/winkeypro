@@ -509,6 +509,17 @@ fn run_ipc_worker_loop(stop_signal: Arc<AtomicBool>, is_mock: bool, data_dir: Pa
                             serde_json::to_string(&IpcResponse::Ack).unwrap()
                         } else if req_str.trim() == "CREDENTIAL_READY" {
                             serde_json::json!({"credential_ready": storage::credential_ready(&data_dir)}).to_string()
+                        } else if req_str.trim() == "CHECK_UPDATE" {
+                            match fs::write(data_dir.join("update_requested"), b"manual") {
+                                Ok(_) => serde_json::to_string(&IpcResponse::Ack).unwrap(),
+                                Err(_) => serde_json::json!({"error":"E_UPDATE_REQUEST_WRITE"}).to_string(),
+                            }
+                        } else if req_str.trim() == "UPDATE_STATUS" {
+                            let journal=fs::read(data_dir.join("update_journal.json")).ok()
+                                .and_then(|raw|serde_json::from_slice::<serde_json::Value>(&raw).ok());
+                            serde_json::json!({"worker_version":ws_transport::worker_release_version(),
+                                "active_version":journal.as_ref().and_then(|j|j.get("active_version")),
+                                "phase":journal.as_ref().and_then(|j|j.get("state"))}).to_string()
                         } else if req_str.contains("STATUS") {
                             serde_json::to_string(&IpcResponse::Status {
                                 service: "WinKeyService".to_string(),
