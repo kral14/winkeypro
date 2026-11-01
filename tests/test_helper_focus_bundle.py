@@ -11,6 +11,10 @@ HELPER = ROOT / 'apps/winkey_service/target/release/winkey_helper.exe'
 @unittest.skipUnless(sys.platform == 'win32' and HELPER.is_file(), 'Build Windows helper first')
 class HelperBundle(unittest.TestCase):
     def test_bundled_script_matches_source(self):
+        resource = HELPER.parent / 'helper_runtime/focus_credential.ps1'
+        if resource.is_file():
+            self.assertEqual(resource.read_bytes(), (ROOT / 'pc_agent/focus_credential.ps1').read_bytes())
+            return
         from PyInstaller.archive.readers import CArchiveReader
         archive = CArchiveReader(str(HELPER))
         entries = [name for name in archive.toc if name.endswith('focus_credential.ps1')]

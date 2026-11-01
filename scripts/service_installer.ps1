@@ -503,6 +503,11 @@ try {
         Copy-Item -Path $svcSrc -Destination $destSvc -Force
     }
     $destHlp = Join-Path $InstallDir "winkey_helper.exe"
+    $runtimeSrc = Join-Path $SourceDir "helper_runtime"
+    $runtimeDest = Join-Path $InstallDir "helper_runtime"
+    if ((Test-Path $runtimeSrc) -and ([System.IO.Path]::GetFullPath($runtimeSrc) -ne [System.IO.Path]::GetFullPath($runtimeDest))) {
+        Copy-Item -LiteralPath $runtimeSrc -Destination $runtimeDest -Recurse -Force
+    }
     if (-not (Test-Path $destHlp) -or ([System.IO.Path]::GetFullPath($hlpSrc) -ne [System.IO.Path]::GetFullPath($destHlp))) {
         Copy-Item -Path $hlpSrc -Destination $destHlp -Force
     }
@@ -582,6 +587,9 @@ Get-ChildItem -LiteralPath $slotADir -Recurse -File -Force | ForEach-Object {
 try {
     Copy-Item -Path $svcSrc -Destination (Join-Path $slotADir "winkey_service.exe") -Force
     Copy-Item -Path $hlpSrc -Destination (Join-Path $slotADir "winkey_helper.exe") -Force
+    if (Test-Path (Join-Path $SourceDir "helper_runtime")) {
+        Copy-Item -LiteralPath (Join-Path $SourceDir "helper_runtime") -Destination $slotADir -Recurse -Force
+    }
 
     # Pre-signed Manifest və Signature kopyalanması (Zero-Python runtime zəmanəti)
     $srcManifest = Join-Path $SourceDir "manifest.json"

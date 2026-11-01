@@ -311,6 +311,32 @@ pub fn validate_helper_binary(path: &std::path::Path) -> bool {
         return false;
     }
 
+    // Onedir dependencies are executable code too. Validate the entire signed
+    // slot, and require every runtime file to be covered by its signed manifest.
+    let runtime = parent.join("helper_runtime");
+    if runtime.exists() {
+        let validation = crate::recovery_engine::validate_slot(parent, Some(&pubkey_bytes));
+        if !validation.is_valid { return false; }
+        fn covered(dir: &Path, root: &Path, files: &[serde_json::Value]) -> bool {
+            let Ok(entries) = std::fs::read_dir(dir) else { return false; };
+            for entry in entries {
+                let Ok(entry) = entry else { return false; };
+                let Ok(meta) = std::fs::symlink_metadata(entry.path()) else { return false; };
+                if meta.file_type().is_symlink() { return false; }
+                if meta.is_dir() {
+                    if !covered(&entry.path(), root, files) { return false; }
+                } else {
+                    let path = entry.path();
+                    let Ok(relative) = path.strip_prefix(root) else { return false; };
+                    let name = relative.to_string_lossy().replace('\\', "/");
+                    if !files.iter().any(|f| f.get("path").and_then(|p| p.as_str()) == Some(name.as_str())) { return false; }
+                }
+            }
+            true
+        }
+        if !covered(&runtime, parent, files) { return false; }
+    }
+
     println!("[HELPER_VALID] Helper binarı və imzalı paketi tam təsdiqləndi: {:?}", path);
     true
 }

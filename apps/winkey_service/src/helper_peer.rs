@@ -44,9 +44,14 @@ pub fn find_child(parent: u32, expected_image: &Path) -> Option<u32> {
 
 // Read-only identity probe: helper waits on a random pipe that is NEVER created.
 // No credential is supplied and no Windows input path can be reached.
-pub fn probe_packaged_helper() -> Result<(), String> {
+pub fn probe_packaged_helper(explicit_path: Option<&Path>) -> Result<(), String> {
     use std::time::{Instant, Duration};
-    let helper = crate::lock_engine::find_helper_exe().ok_or("E_HELPER_UNAVAILABLE")?;
+    let helper = if let Some(path) = explicit_path {
+        if !crate::lock_engine::validate_helper_binary(path) { return Err("E_HELPER_UNAVAILABLE".into()); }
+        path.canonicalize().map_err(|_| "E_HELPER_UNAVAILABLE")?
+    } else {
+        crate::lock_engine::find_helper_exe().ok_or("E_HELPER_UNAVAILABLE")?
+    };
     let mut session = 0;
     unsafe { crate::lock_engine::win32_process::ProcessIdToSessionId(std::process::id(), &mut session); }
     let pipe = format!("WinKey_NoPipe_{}", uuid::Uuid::new_v4().simple());
@@ -55,13 +60,15 @@ pub fn probe_packaged_helper() -> Result<(), String> {
           "--expected-server-pid", &std::process::id().to_string()], "default", session, None)?;
     let start = Instant::now();
     let result = (|| {
-        let runtime = loop {
+        let runtime = if helper.parent().map(|p| p.join("helper_runtime").is_dir()).unwrap_or(false) {
+            child.pid
+        } else { loop {
             if let Some(pid) = find_child(child.pid, &helper) { break pid; }
             if start.elapsed() > Duration::from_secs(4) { return Err("E_PROBE_RUNTIME_NOT_FOUND".into()); }
             std::thread::sleep(Duration::from_millis(20));
-        };
+        }};
         let guard = verify(&child, runtime, &helper, session)?;
-        println!("PASS packaged onefile runtime identity: bootstrap={} runtime={}", child.pid, runtime);
+        println!("PASS packaged helper identity: bootstrap={} runtime={}", child.pid, runtime);
         assert!(verify(&child, std::process::id(), &helper, session).is_err());
         assert!(verify(&child, runtime, &std::env::current_exe().unwrap(), session).is_err());
         assert!(verify(&child, runtime, &helper, session.wrapping_add(1)).is_err());

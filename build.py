@@ -17,6 +17,8 @@ import json
 import time
 import hashlib
 import subprocess
+import shutil
+from pathlib import Path
 from cryptography.hazmat.primitives.asymmetric import ed25519
 
 if hasattr(sys.stdout, 'reconfigure'):
@@ -78,16 +80,7 @@ def step_compile_rust():
         "WinKey Service & Session Helper kompilyasiyası"
     )
 
-    # Rebuild the packaged helper from current sources and include focus resources.
-    run_cmd(
-        [sys.executable, "-m", "PyInstaller", "--noconfirm", "--clean",
-         "--distpath", os.path.dirname(HELPER_EXE),
-         "--workpath", os.path.join(ROOT_DIR, "build", "helper"),
-         os.path.join(ROOT_DIR, "winkey_helper.spec")],
-        "Session helper ve fokus resursunun paketlenmesi"
-    )
-    run_cmd([HELPER_EXE, "--check-focus-resource"], "Paketlenmis fokus resursunun yoxlanisi (input yoxdur)")
-    run_cmd([HELPER_EXE, "--check-input-abi"], "Paketlenmis INPUT ABI yoxlanisi (input yoxdur)")
+    step_build_helper()
 
     # 1.2 Tauri Desktop
     run_cmd(
@@ -95,13 +88,28 @@ def step_compile_rust():
         "WinKey Desktop (Tauri GUI) kompilyasiyası"
     )
 
-    # Yoxlama
     for exe in [SERVICE_EXE, HELPER_EXE, DESKTOP_EXE]:
-        if not os.path.exists(exe):
-            print(f"❌ XƏTA: Gözlənilən binar fayl yaranmadı: {exe}")
-            sys.exit(1)
-        sz = os.path.getsize(exe)
-        print(f"  ✓ {os.path.basename(exe):<25} ({sz:>10} bayt)")
+        if not os.path.isfile(exe):
+            raise RuntimeError(f"Missing build artifact: {exe}")
+
+
+def step_build_helper():
+    # Onedir: runtime is installed once, never extracted per unlock operation.
+    run_cmd(
+        [sys.executable, "-m", "PyInstaller", "--noconfirm", "--clean",
+         "--distpath", os.path.dirname(HELPER_EXE),
+         "--workpath", os.path.join(ROOT_DIR, "build", "helper"),
+         os.path.join(ROOT_DIR, "winkey_helper.spec")],
+        "Session helper ve fokus resursunun paketlenmesi"
+    )
+    output = Path(HELPER_EXE).parent / 'winkey_helper'
+    runtime = Path(HELPER_EXE).parent / 'helper_runtime'
+    if runtime.exists():
+        shutil.rmtree(runtime)
+    shutil.copytree(output / 'helper_runtime', runtime)
+    shutil.copy2(output / 'winkey_helper.exe', HELPER_EXE)
+    run_cmd([HELPER_EXE, "--check-focus-resource"], "Paketlenmis fokus resursunun yoxlanisi (input yoxdur)")
+    run_cmd([HELPER_EXE, "--check-input-abi"], "Paketlenmis INPUT ABI yoxlanisi (input yoxdur)")
 
 def step_sign_manifest():
     print("\n" + "="*60)
@@ -122,6 +130,13 @@ def step_sign_manifest():
             {"path": "winkey_helper.exe", "sha256": hlp_sha, "size": hlp_sz}
         ]
     }
+    runtime = Path(HELPER_EXE).parent / 'helper_runtime'
+    if runtime.is_dir():
+        for file in sorted(runtime.rglob('*')):
+            if file.is_file():
+                manifest_data['files'].append({
+                    'path': file.relative_to(runtime.parent).as_posix(),
+                    'sha256': sha256_file(file), 'size': file.stat().st_size})
 
     manifest_bytes = json.dumps(manifest_data, indent=2, sort_keys=True).encode("utf-8")
     manifest_path = os.path.join(PRE_SIGNED_DIR, "manifest.json")
