@@ -21,6 +21,14 @@ Yenilənmə zamanı hələ qüvvədə olan köhnə 24 saatlıq sessiyalar daimi 
 artıq vaxtı bitmiş tokenlər avtomatik bərpa edilmir. Brauzer yaddaşı silinərsə
 və ya başqa brauzer/telefon işlədilərsə yeni QR tələb olunur.
 
+Mobil diaqnostika `/mobile/telemetry` üzərindən həmin telefonun sessiyası ilə
+admin xronologiyasına göndərilir. Basış, göndəriş/server/ümumi müddət, timeout,
+şəbəkə və ekranın status/xəta kodları əlaqə ID-si ilə görünür. Məxfi dəyərlər,
+raw URL, stack və sərbəst ekran mətni göndərilmir. Offline qeydlərin son 200-ü
+telefonda saxlanır; bağlantı və sessiya işləyəndə ACK ilə təkrar göndərilir.
+Telemetriya əmr göndərilməsinə üstün gəlmir. Telefon və admin səhifəsini deploy-dan
+sonra yeniləyin. Şəbəkəsiz və ya ləğv edilmiş sessiya ilə canlı göndəriş mümkün deyil.
+
 ## Dockerfile seçən deploy panelləri
 
 Build növü `Dockerfile`, Dockerfile yolu `Dockerfile`, build context `.` olsun.

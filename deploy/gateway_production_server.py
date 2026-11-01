@@ -297,6 +297,8 @@ class GatewayHandler(BaseHTTPRequestHandler):
         let commandBusy = false;
         let desiredAction = null;
         let desiredSince = 0;
+        let desiredRequestId = null;
+        let diagnosticRequestId = '', diagnosticAction = null;
         let resultController = null;
         let statusBusy = false;
         let pendingCommand = null;
@@ -304,6 +306,72 @@ class GatewayHandler(BaseHTTPRequestHandler):
         if (pendingCommand && (pendingCommand.device !== targetDevice ||
             !/^[0-9a-f]{32}$/.test(pendingCommand.requestId) ||
             !['lock', 'unlock'].includes(pendingCommand.action))) pendingCommand = null;
+        const hexId = () => Array.from(crypto.getRandomValues(new Uint8Array(16)), b => b.toString(16).padStart(2, '0')).join('');
+        let diagnostics = [];
+        let diagnosticsBusy = false, diagnosticsTimer = null;
+        try { const saved = JSON.parse(localStorage.getItem('winkey_diagnostics') || '[]'); if (Array.isArray(saved)) diagnostics = saved.slice(-200); } catch(e) {}
+        function persistDiagnostics() {
+            try { localStorage.setItem('winkey_diagnostics', JSON.stringify(diagnostics)); } catch(e) {}
+        }
+        function scheduleDiagnostics(delay = 2000) {
+            if (diagnosticsTimer) clearTimeout(diagnosticsTimer);
+            diagnosticsTimer = setTimeout(() => { diagnosticsTimer = null; flushDiagnostics(); }, delay);
+        }
+        function mobileEvent(stage, code, duration = null, action = null, requestId = '', error = false) {
+            diagnostics.push({id: hexId(), device: targetDevice, stage, code,
+                duration_ms: duration === null ? null : Math.min(600000, Math.max(0, Math.round(duration))),
+                action, request_id: requestId || '', error, local_time: Date.now() / 1000});
+            diagnostics = diagnostics.slice(-200);
+            persistDiagnostics();
+            scheduleDiagnostics();
+        }
+        async function flushDiagnostics() {
+            if (!authToken || !targetDevice || diagnosticsBusy) return;
+            if (commandBusy) { scheduleDiagnostics(); return; }
+            const batch = diagnostics.filter(e => e.device === targetDevice).slice(0, 20);
+            if (!batch.length) return;
+            diagnosticsBusy = true;
+            const control = new AbortController();
+            const timer = setTimeout(() => control.abort(), 3000);
+            try {
+                // Do not instrument this fetch: diagnostics must never log themselves.
+                const response = await fetch('/mobile/telemetry', {method: 'POST', cache: 'no-store',
+                    signal: control.signal, headers: {'Content-Type': 'application/json', 'Authorization': 'Bearer ' + authToken},
+                    body: JSON.stringify({device_id: targetDevice, events: batch})});
+                if (response.ok) {
+                    const data = await response.json();
+                    const sent = new Set(Array.isArray(data.accepted) ? data.accepted : []);
+                    diagnostics = diagnostics.filter(e => !sent.has(e.id));
+                    persistDiagnostics();
+                }
+            } catch(e) {} finally {
+                clearTimeout(timer); diagnosticsBusy = false;
+                if (diagnostics.some(e => e.device === targetDevice)) scheduleDiagnostics(10000);
+            }
+        }
+        function displayDiagnostic(text) {
+            const rules = [
+                ['Əvvəlki nəticə', 'UI_RESULT_UNCONFIRMED'], ['Nəticə hələ', 'UI_RESULT_UNCONFIRMED'],
+                ['Server cavabı alınmadı', 'UI_NETWORK_UNKNOWN'], ['Telefon bağlantısı', 'UI_AUTH_ERROR'],
+                ['İcra uğursuz', 'UI_RESULT_FAILED'], ['Cütləşmə xətası', 'UI_PAIR_FAILED'],
+                ['Şəbəkə xətası', 'UI_NETWORK_ERROR'], ['Xəta:', 'UI_RESPONSE_ERROR'],
+                ['Əmr serverə çatdı', 'UI_SERVER_ACCEPTED'], ['İcra tamamlandı', 'UI_RESULT_OK'],
+                ['Son istək', 'UI_LATEST_PENDING'], ['Əmr göndərilir', 'UI_SENDING'],
+                ['Əvvəlki əmr', 'UI_SUPERSEDED']];
+            const rule = rules.find(([prefix]) => text.startsWith(prefix));
+            const code = (text.match(/E_[A-Z0-9_]+/) || [])[0];
+            if (rule || code) mobileEvent('display', code || rule[1], null,
+                desiredAction || diagnosticAction, desiredAction ? '' : diagnosticRequestId,
+                Boolean(code || (rule && /ERROR|FAILED|UNKNOWN|UNCONFIRMED/.test(rule[1]))));
+        }
+        if (typeof MutationObserver !== 'undefined') {
+            new MutationObserver(() => displayDiagnostic(statusBox.textContent || '')).observe(statusBox, {childList: true, subtree: true, characterData: true});
+        }
+        if (window.addEventListener) {
+            window.addEventListener('online', () => flushDiagnostics());
+            window.addEventListener('error', () => mobileEvent('runtime', 'JS_RUNTIME_ERROR', null, null, '', true));
+            window.addEventListener('unhandledrejection', () => mobileEvent('runtime', 'JS_UNHANDLED_REJECTION', null, null, '', true));
+        }
         const pause = ms => new Promise(resolve => setTimeout(resolve, ms));
         function savePending(value) {
             pendingCommand = value;
@@ -320,12 +388,23 @@ class GatewayHandler(BaseHTTPRequestHandler):
             }
             const timer = setTimeout(() => controller.abort(), timeoutMs);
             const start = performance.now();
+            const isCommand = options.method === 'POST' && url.endsWith('/command');
+            const commandMeta = isCommand ? JSON.parse(options.body) : null;
             try {
                 const response = await fetch(url, {...options, signal: controller.signal, cache: 'no-store'});
                 const data = await response.json();
+                if (isCommand) {
+                    mobileEvent('request', 'HTTP_' + response.status, performance.now() - start, commandMeta.action, commandMeta.request_id, !response.ok);
+                    const serverMs = response.headers ? response.headers.get('X-App-Duration-Ms') : null;
+                    if (serverMs !== null) mobileEvent('server', 'SERVER_PROCESSING', Number(serverMs), commandMeta.action, commandMeta.request_id);
+                }
                 return {ok: response.ok, status: response.status, json: async () => data,
                         elapsedMs: Math.round(performance.now() - start),
                         serverMs: response.headers ? Number(response.headers.get('X-App-Duration-Ms')) : null};
+            } catch(e) {
+                if (isCommand) mobileEvent('request', controller.signal.aborted ? 'REQUEST_TIMEOUT' : 'NETWORK_ERROR',
+                    performance.now() - start, commandMeta.action, commandMeta.request_id, true);
+                throw e;
             } finally {
                 clearTimeout(timer);
                 if (upstream) upstream.removeEventListener('abort', abort);
@@ -368,6 +447,7 @@ class GatewayHandler(BaseHTTPRequestHandler):
                 pollStatus();
                 setInterval(pollStatus, 3000);
                 if (pendingCommand) sendCommand(pendingCommand.action, true);
+                scheduleDiagnostics();
             }
         }
 
@@ -390,11 +470,16 @@ class GatewayHandler(BaseHTTPRequestHandler):
             } catch(e) {} finally { statusBusy = false; }
         }
 
-        async function sendCommand(action, resume = false, tappedAt = performance.now()) {
+        async function sendCommand(action, resume = false, tappedAt = performance.now(), requestId = null) {
             if (!authToken || !targetDevice) return;
+            if (!resume && !requestId) {
+                requestId = hexId();
+                mobileEvent('tap', 'COMMAND_TAP', 0, action, requestId);
+            }
             if (commandBusy) {
                 desiredAction = action;
                 desiredSince = tappedAt;
+                desiredRequestId = requestId;
                 if (resultController) resultController.abort();
                 statusBox.textContent = 'Son istək saxlanıldı (' + action + '). Göndərilir...';
                 return;
@@ -402,11 +487,12 @@ class GatewayHandler(BaseHTTPRequestHandler):
             // An explicit tap is a new intent; transport retries alone reuse IDs.
             if (!resume) savePending(null);
             if (!pendingCommand) {
-                const bytes = crypto.getRandomValues(new Uint8Array(16));
                 savePending({device: targetDevice, action,
-                    requestId: Array.from(bytes, b => b.toString(16).padStart(2, '0')).join('')});
+                    requestId: requestId || hexId()});
             }
             action = pendingCommand.action;
+            diagnosticRequestId = pendingCommand.requestId;
+            diagnosticAction = action;
             setBusy(true);
             const sendStarted = tappedAt;
             statusBox.innerHTML = '<span class="spinner"></span>Əmr göndərilir (' + action + ')...';
@@ -437,8 +523,9 @@ class GatewayHandler(BaseHTTPRequestHandler):
                 if (desiredAction !== null) {
                     const next = desiredAction;
                     const nextSince = desiredSince;
+                    const nextId = desiredRequestId;
                     desiredAction = null;
-                    await sendCommand(next, false, nextSince);
+                    await sendCommand(next, false, nextSince, nextId);
                 } else pollStatus();
             }
         }
@@ -467,12 +554,14 @@ class GatewayHandler(BaseHTTPRequestHandler):
                             return;
                         }
                         if (cmd.status === 'executed' || cmd.status === 'completed') {
+                            mobileEvent('total', 'COMMAND_COMPLETED', performance.now() - started, action, pendingCommand ? pendingCommand.requestId : '');
                             savePending(null);
                             statusBox.textContent = 'İcra tamamlandı (' + action + '): ' + (cmd.result || 'Uğurlu') +
                                 ' | Göndəriş: ' + sentMs + ' ms; server: ' + serverMs + ' ms; ümumi: ' + Math.round(performance.now() - started) + ' ms';
                             pollStatus();
                             return;
                         } else if (cmd.status === 'failed') {
+                            mobileEvent('total', 'COMMAND_FAILED', performance.now() - started, action, pendingCommand ? pendingCommand.requestId : '', true);
                             savePending(null);
                             statusBox.textContent = 'İcra uğursuz oldu: ' + (cmd.result || 'Xəta');
                             return;
@@ -484,6 +573,7 @@ class GatewayHandler(BaseHTTPRequestHandler):
                 await pause(250);
             }
             statusBox.textContent = 'Əvvəlki nəticə təsdiqlənməyib. Yeni basış son istəyi göndərəcək.';
+            mobileEvent('total', 'RESULT_UNCONFIRMED', performance.now() - started, action, pendingCommand ? pendingCommand.requestId : '', true);
         }
 
         async function revokeDevice() {
@@ -651,15 +741,30 @@ class GatewayHandler(BaseHTTPRequestHandler):
                 document.getElementById('telemetry-container').innerHTML = '<div style="color:#8e9e95;">Hadisə qeydə alınmayıb.</div>';
                 return;
             }
-            let html = '<table><tr><th>Vaxt</th><th>Komponent</th><th>Mərhələ</th><th>Hadisə</th><th>Dərəcə</th><th>Xəta Kodu</th></tr>';
-            for (const ev of events.slice(0, 25)) {
+            const mobileLabels = {
+                COMMAND_TAP: 'Telefonda düyməyə basıldı', HTTP_200: 'Əmr serverə çatdı',
+                SERVER_PROCESSING: 'Server daxilində emal', COMMAND_COMPLETED: 'İcra təsdiqləndi',
+                COMMAND_FAILED: 'PC əmri uğursuz tamamladı', RESULT_UNCONFIRMED: 'Nəticə hələ təsdiqlənməyib',
+                REQUEST_TIMEOUT: 'Telefon sorğusunun vaxtı bitdi', NETWORK_ERROR: 'Telefon şəbəkə xətası',
+                UI_RESULT_UNCONFIRMED: 'Ekran: Əvvəlki nəticə təsdiqlənməyib', UI_NETWORK_UNKNOWN: 'Ekran: Server cavabı alınmadı',
+                UI_AUTH_ERROR: 'Ekran: Telefon bağlantısı ləğv edilib / icazə yoxdur', UI_RESULT_FAILED: 'Ekran: İcra uğursuz oldu',
+                UI_PAIR_FAILED: 'Ekran: Cütləşmə xətası', UI_NETWORK_ERROR: 'Ekran: Şəbəkə xətası',
+                UI_RESPONSE_ERROR: 'Ekran: Server xəta qaytardı', UI_SERVER_ACCEPTED: 'Ekran: Əmr serverə çatdı',
+                UI_RESULT_OK: 'Ekran: İcra tamamlandı', UI_LATEST_PENDING: 'Ekran: Son istək saxlanıldı',
+                UI_SENDING: 'Ekran: Əmr göndərilir', UI_SUPERSEDED: 'Ekran: Əvvəlki əmr son istəklə əvəz edilib',
+                JS_RUNTIME_ERROR: 'Telefon JavaScript xətası', JS_UNHANDLED_REJECTION: 'Telefon promise xətası'
+            };
+            let html = '<table><tr><th>Vaxt</th><th>Cihaz</th><th>Komponent</th><th>Mərhələ / Əlaqə ID</th><th>Hadisə</th><th>Müddət</th><th>Dərəcə</th><th>Xəta / Telefon ekranı</th></tr>';
+            for (const ev of events.slice(0, 100)) {
                 html += `<tr>
-                    <td>${new Date(ev.received_at * 1000).toLocaleTimeString()}</td>
+                    <td>${new Date((ev.component === 'mobile' ? ev.local_time : ev.received_at) * 1000).toLocaleTimeString()}</td>
+                    <td>${escapeHtml(ev.device_id || '—')}</td>
                     <td>${escapeHtml(ev.component)}</td>
-                    <td>${escapeHtml(ev.stage)}</td>
+                    <td>${escapeHtml(ev.stage)}<br>${escapeHtml(ev.install_run_id || '')}</td>
                     <td>${escapeHtml(ev.event_type)}</td>
+                    <td>${ev.duration_ms == null ? '—' : escapeHtml(ev.duration_ms) + ' ms'}</td>
                     <td><strong>${escapeHtml(ev.severity)}</strong></td>
-                    <td>${escapeHtml(ev.error_code || '—')}</td>
+                    <td>${escapeHtml(mobileLabels[ev.error_code] || ev.error_code || '—')}</td>
                 </tr>`;
             }
             html += '</table>';
@@ -829,6 +934,42 @@ class GatewayHandler(BaseHTTPRequestHandler):
         url = urlparse(self.path)
         path = url.path.rstrip("/")
         data = self._read_json()
+
+        if path == '/mobile/telemetry':
+            token = self._get_bearer_token()
+            device_id = data.get('device_id')
+            events = data.get('events')
+            if not isinstance(events, list) or not 1 <= len(events) <= 20:
+                self._send_json(400, {'error': 'E_INVALID_MOBILE_EVENTS'})
+                return
+            with self.db.get_conn() as conn:
+                session = conn.execute("SELECT device_id FROM mobile_sessions WHERE session_token = ? AND (expires_at = 0 OR expires_at > ?)", (token, time.time())).fetchone()
+                if not session or session['device_id'] != device_id:
+                    self._send_json(401, {'error': 'E_INVALID_SESSION'})
+                    return
+                accepted = []
+                for event in events:
+                    if not isinstance(event, dict): continue
+                    event_id = event.get('id', '')
+                    code = event.get('code', '')
+                    stage = event.get('stage')
+                    duration = event.get('duration_ms')
+                    correlation = event.get('request_id', '')
+                    if not isinstance(event_id, str) or len(event_id) != 32 or any(c not in '0123456789abcdef' for c in event_id): continue
+                    if stage not in ('tap', 'request', 'server', 'total', 'display', 'runtime'): continue
+                    if not isinstance(code, str) or not 1 <= len(code) <= 80 or any(c not in 'ABCDEFGHIJKLMNOPQRSTUVWXYZ_0123456789' for c in code): continue
+                    if duration is not None and (type(duration) is not int or not 0 <= duration <= 600000): continue
+                    if not isinstance(correlation, str) or (correlation and (len(correlation) != 32 or any(c not in '0123456789abcdef' for c in correlation))): continue
+                    local_time = event.get('local_time')
+                    if type(local_time) not in (int, float) or not 0 <= local_time <= 4102444800: continue
+                    action = event.get('action') if event.get('action') in ('lock', 'unlock') else 'phone'
+                    conn.execute("INSERT INTO telemetry_events (event_id, install_run_id, device_id, component, version, stage, event_type, severity, error_code, duration_ms, local_time, received_at) VALUES (?, ?, ?, 'mobile', 'web-1', ?, ?, ?, ?, ?, ?, ?) ON CONFLICT (event_id) DO NOTHING",
+                                 ('mob_' + event_id, correlation or None, device_id, stage, action,
+                                  'ERROR' if event.get('error') is True else 'INFO', code, duration, local_time, time.time()))
+                    accepted.append(event_id)
+                conn.commit()
+            self._send_json(200, {'accepted': accepted})
+            return
 
         # 1. Challenge yaradılması (/agent/challenge)
         if path == "/agent/challenge":

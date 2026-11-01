@@ -78,6 +78,14 @@ class VMContract(unittest.TestCase):
                 mobile = session["session_token"]
                 self.assertTrue(session['persistent'])
                 self.assertIsNone(session['expires_in'])
+                phone_event = {'id': 'f' * 32, 'stage': 'request', 'code': 'HTTP_200',
+                               'duration_ms': 123, 'local_time': time.time(), 'action': 'lock', 'request_id': 'a' * 32}
+                phone_batch = {'device_id': device, 'events': [phone_event]}
+                self.assertEqual(http('/mobile/telemetry', phone_batch)[0], 401)
+                self.assertEqual(http('/mobile/telemetry', {**phone_batch, 'device_id': 'another_pc'}, mobile)[0], 401)
+                for _ in range(2):
+                    self.assertEqual(http('/mobile/telemetry', phone_batch, mobile)[1]['accepted'], ['f' * 32])
+                self.assertEqual(http('/mobile/telemetry', {'device_id': device, 'events': [{**phone_event, 'id': '0' * 32, 'duration_ms': -1}]}, mobile)[1]['accepted'], [])
                 with patch('deploy.gateway_production_server.time.time', return_value=time.time() + 10 * 365 * 86400):
                     self.assertEqual(http('/devices/' + device + '/status', token=mobile)[0], 200)
                 self.assertNotEqual(http("/pair", {"pair_code": pairing["pair_code"]})[0], 200)
@@ -127,6 +135,10 @@ class VMContract(unittest.TestCase):
                 self.assertEqual(http("/agent/poll", {"device_id": device}, agent)[0], 200)
                 self.assertEqual(http("/commands/" + command["command_id"], token=mobile)[1]["status"], "completed")
                 events = http('/admin/telemetry', admin=True)[1]['telemetry']
+                phone_rows = [e for e in events if e['event_id'] == 'mob_' + 'f' * 32]
+                self.assertEqual(len(phone_rows), 1)
+                self.assertEqual(phone_rows[0]['duration_ms'], 123)
+                self.assertEqual(phone_rows[0]['component'], 'mobile')
                 self.assertEqual([e['stage'] for e in events if e['event_id'] == 'test_event'], ['updated_event'])
                 self.assertEqual(http('/devices/' + device + '/status', token='legacy_active_test')[0], 200)
                 self.assertEqual(http('/devices/' + device + '/status', token='legacy_expired_test')[0], 401)

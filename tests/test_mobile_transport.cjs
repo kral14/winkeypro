@@ -12,7 +12,7 @@ function context() {
   const storage = new Map(), elements = new Map();
   const ctx = vm.createContext({URLSearchParams, AbortController, Uint8Array,
     crypto: webcrypto, performance, console,
-    setTimeout: (f, ms) => setTimeout(f, Math.min(ms, 10)), clearTimeout,
+    setTimeout: (f, ms) => (ms === 2000 || ms === 10000) ? 0 : setTimeout(f, Math.min(ms, 10)), clearTimeout,
     setInterval: () => { throw Error('Unexpected overlapping interval'); },
     window: {location: {search: '', pathname: '/mobile'}},
     document: {hidden: false, getElementById: id => {
@@ -131,4 +131,28 @@ const response = data => ({ok: true, status: 200, json: async () => data});
   assert.equal(aborted, true);
   assert.deepEqual(immediate, ['lock', 'unlock']);
   console.log('PASS new tap aborts stalled result GET and immediately submits latest intent');
+
+  const h = context();
+  h.run("mobileEvent('request', 'REQUEST_TIMEOUT', 4001, 'unlock', 'a'.repeat(32), true)");
+  h.run("displayDiagnostic('Xəta: E_TEST_ERROR token=private-test-value-should-not-be-stored')");
+  const stored = h.storage.get('winkey_diagnostics');
+  assert.equal(JSON.parse(stored).length, 2);
+  assert(!stored.includes('private-test-value-should-not-be-stored'));
+  assert(!stored.includes('test-token'));
+  let diagCalls = 0;
+  h.ctx.fetch = async () => {diagCalls++; throw Error('offline');};
+  h.run('commandBusy = true');
+  await h.run('flushDiagnostics()');
+  assert.equal(diagCalls, 0);
+  h.run('commandBusy = false');
+  await h.run('flushDiagnostics()');
+  assert.equal(JSON.parse(h.storage.get('winkey_diagnostics')).length, 2);
+  h.ctx.fetch = async (url, options) => {
+    assert.equal(url, '/mobile/telemetry');
+    const body = JSON.parse(options.body);
+    return response({accepted: body.events.map(e => e.id)});
+  };
+  await h.run('flushDiagnostics()');
+  assert.equal(JSON.parse(h.storage.get('winkey_diagnostics')).length, 0);
+  console.log('PASS diagnostics persist offline, omit secrets, yield to commands, clear only after server ACK');
 })().catch(error => {console.error(error); process.exitCode = 1;});
