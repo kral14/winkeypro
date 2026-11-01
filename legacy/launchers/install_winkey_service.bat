@@ -7,7 +7,7 @@ if %errorLevel% neq 0 (
     exit /b
 )
 
-cd /d "%~dp0pc_agent"
+cd /d "%~dp0..\..\pc_agent"
 echo =============================================================
 echo   WINKEY // Windows SYSTEM Xidmeti Kimi Qurasdirma
 echo =============================================================
@@ -24,7 +24,7 @@ for /f "delims=" %%i in ('where python.exe') do set "PYTHON_PATH=%%i" & goto :fo
 :found_python
 
 echo Python yolu: %PYTHON_PATH%
-schtasks /create /tn "WinKeyService" /tr "\"%PYTHON_PATH%\" \"%~dp0pc_agent\server.py\"" /sc onstart /ru "NT AUTHORITY\SYSTEM" /rl HIGHEST /f
+schtasks /create /tn "WinKeyService" /tr "\"%PYTHON_PATH%\" \"%~dp0..\..\pc_agent\server.py\"" /sc onstart /ru "NT AUTHORITY\SYSTEM" /rl HIGHEST /f
 
 echo [4] Xidmet ise salinir...
 schtasks /run /tn "WinKeyService"

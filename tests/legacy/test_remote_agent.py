@@ -1,7 +1,9 @@
 import unittest, tempfile, time
 from pathlib import Path
 from unittest.mock import patch
-from remote_agent import app
+import sys
+sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
+from legacy.remote_agent import app
 
 class RemoteAgentTests(unittest.TestCase):
  def test_consumed_command_cannot_run_twice(self):

@@ -1,11 +1,13 @@
 # -*- mode: python ; coding: utf-8 -*-
+from pathlib import Path
+ROOT = Path(SPECPATH).parent
 
 
 a = Analysis(
-    ['pc_agent\\helper_main.py'],
-    pathex=['pc_agent'],
+    [str(ROOT / 'pc_agent' / 'helper_main.py')],
+    pathex=[str(ROOT / 'pc_agent')],
     binaries=[],
-    datas=[('pc_agent/focus_credential.ps1', '.')],
+    datas=[(str(ROOT / 'pc_agent' / 'focus_credential.ps1'), '.')],
     hiddenimports=['ipc_input_worker', 'unlock_engine'],
     hookspath=[],
     hooksconfig={},

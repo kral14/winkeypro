@@ -33,7 +33,7 @@ REQUIRED_PAYLOAD_FILES = [
     os.path.join(ROOT_DIR, "deploy", "pre_signed_slot_a", "manifest.sig"),
     os.path.join(ROOT_DIR, "scripts", "service_installer.ps1"),
     os.path.join(ROOT_DIR, "scripts", "service_uninstaller.ps1"),
-    os.path.join(ROOT_DIR, "TELIMAT.md"),
+    os.path.join(ROOT_DIR, "docs", "USER_GUIDE.md"),
     os.path.join(ROOT_DIR, "deploy", "migrations", "001_initial_schema.sql"),
     os.path.join(ROOT_DIR, "deploy", "keys", "prod_release_ed25519_pub.hex"),
 ]

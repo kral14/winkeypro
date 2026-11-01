@@ -5,8 +5,8 @@ import shutil
 
 ROOT = Path(__file__).resolve().parents[1]
 DEST = ROOT / ".github-publish"
-DIRECTORIES = [".github", "apps", "deploy", "installer", "pc_agent", "remote_agent", "scripts", "spike", "tests", "web_remote", "plan"]
-SKIP_DIRS = {".git", "node_modules", "target", "dist", "build", "__pycache__", "keys", "secrets", "backups", "reports", "diagnostic_logs", ".next", ".wrangler", ".vinext", ".sites-runtime", ".sites-checkout", ".openai", "release", "release2", "release3", "smoke-test", "smoke-final"}
+DIRECTORIES = [".github", "apps", "deploy", "installer", "pc_agent", "legacy", "experiments", "scripts", "tests", "docs", "plan"]
+SKIP_DIRS = {".git", "rustdesk", "node_modules", "target", "dist", "build", "__pycache__", "keys", "secrets", "backups", "reports", "diagnostic_logs", ".next", ".wrangler", ".vinext", ".sites-runtime", ".sites-checkout", ".openai", "release", "release2", "release3", "smoke-test", "smoke-final"}
 SUFFIXES = {".py", ".rs", ".ts", ".tsx", ".js", ".mjs", ".cjs", ".html", ".css", ".json", ".toml", ".lock", ".sql", ".md", ".ps1", ".bat", ".vbs", ".nsi", ".svg", ".png", ".ico", ".txt", ".yml", ".yaml", ".spec"}
 SKIP_FILES = {"config.json", "package-credential.json", "unlock_engine.before_fix.txt", "desktop_err.txt", "desktop_out.txt"}
 SPECIAL = {"Dockerfile", "Caddyfile", ".gitignore", ".dockerignore", ".npmrc"}
@@ -41,7 +41,7 @@ def main():
                 if not source.is_symlink():
                     copy_file(source)
     # Retain local frontend storage bindings, without another host's Site ID.
-    hosting = DEST / "web_remote/.openai/hosting.json"
+    hosting = DEST / "legacy/web_remote/.openai/hosting.json"
     hosting.parent.mkdir(parents=True, exist_ok=True)
     hosting.write_text(json.dumps({"d1": "DB", "r2": None}, indent=2) + "\n", encoding="utf-8")
     files = [p for p in DEST.rglob("*") if p.is_file()]

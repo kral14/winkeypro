@@ -87,7 +87,7 @@ if __name__ == "__main__":
     ensure_firewall(8888)
 
     # 4. pc_agent qovluğunu aktiv işçi qovluq təyin et
-    base_dir = Path(__file__).resolve().parent
+    base_dir = Path(__file__).resolve().parents[2]
     agent_dir = base_dir / "pc_agent"
     sys.path.insert(0, str(base_dir))
     sys.path.insert(0, str(agent_dir))

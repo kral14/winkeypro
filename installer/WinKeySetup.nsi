@@ -113,7 +113,7 @@ Section "MainSection" SEC01
     File "..\deploy\pre_signed_slot_a\manifest.sig"
     File "..\scripts\service_installer.ps1"
     File "..\scripts\service_uninstaller.ps1"
-    File "..\TELIMAT.md"
+    File /oname=TELIMAT.md "..\docs\USER_GUIDE.md"
     File "..\deploy\migrations\001_initial_schema.sql"
     File "..\deploy\keys\prod_release_ed25519_pub.hex"
 

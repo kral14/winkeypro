@@ -10,7 +10,7 @@ if %errorLevel% == 0 (
 )
 
 :run
-cd /d "%~dp0pc_agent"
+cd /d "%~dp0..\..\pc_agent"
 title WinKey Admin Serveri
 echo ===================================================
 echo     WINKEY // Administrator Rejiminde Server

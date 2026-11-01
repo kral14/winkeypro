@@ -10,9 +10,9 @@ param (
 
 $ErrorActionPreference = "Stop"
 
-$targetRoot = if ($PSScriptRoot) { $PSScriptRoot } else { (Get-Location).Path }
+$targetRoot = Join-Path $PSScriptRoot "..\.."
 $workspaceDir = (Resolve-Path $targetRoot).Path
-$webRemoteDir = Join-Path $workspaceDir "web_remote"
+$webRemoteDir = Join-Path $workspaceDir "legacy\web_remote"
 $desktopUrl = "http://127.0.0.1:$Port/desktop"
 $metaFile = Join-Path $workspaceDir ".preview_server.json"
 $logFile = Join-Path $workspaceDir ".preview_server.log"

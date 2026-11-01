@@ -24,7 +24,7 @@ import socket
 import urllib.request
 import subprocess
 
-ROOT_DIR = os.path.abspath(os.path.dirname(__file__))
+ROOT_DIR = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", ".."))
 DESKTOP_EXE = os.path.join(ROOT_DIR, "apps", "desktop_tauri", "src-tauri", "target", "release", "winkey_desktop.exe")
 GATEWAY_SCRIPT = os.path.join(ROOT_DIR, "deploy", "gateway_production_server.py")
 TEST_DB = os.path.join(ROOT_DIR, "winkey_test_integration.db")

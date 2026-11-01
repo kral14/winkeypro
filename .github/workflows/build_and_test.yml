@@ -26,13 +26,13 @@ jobs:
 
       - name: Rust Unit and Security Tests
         run: |
-          cargo test --manifest-path spike/winkey_spike/Cargo.toml
-          cargo run --manifest-path spike/winkey_spike/Cargo.toml
+          cargo test --manifest-path experiments/spike/winkey_spike/Cargo.toml
+          cargo run --manifest-path experiments/spike/winkey_spike/Cargo.toml
 
       - name: Build Web Remote Next.js / PWA
         run: |
-          npm --prefix web_remote install
-          npm --prefix web_remote run build
+          npm --prefix legacy/web_remote install
+          npm --prefix legacy/web_remote run build
 
       - name: Compile Tauri Native Desktop App
         run: |

@@ -103,7 +103,7 @@ def main():
         ("gateway_production_server.py", os.path.join(ROOT_DIR, "deploy", "gateway_production_server.py")),
         ("001_initial_schema.sql", os.path.join(ROOT_DIR, "deploy", "migrations", "001_initial_schema.sql")),
         ("prod_release_ed25519_pub.hex", PROD_PUB_HEX_PATH),
-        ("TELIMAT.md", os.path.join(ROOT_DIR, "TELIMAT.md")),
+        ("TELIMAT.md", os.path.join(ROOT_DIR, "docs", "USER_GUIDE.md")),
     ]
     
     os.makedirs(OUT_DIR, exist_ok=True)

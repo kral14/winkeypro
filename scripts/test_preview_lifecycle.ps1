@@ -11,8 +11,8 @@ Start-Transcript -Path $logPath -Force
 Write-Host "=========================================================="
 Write-Host " TEST 1: Syntactic Check on Launcher Scripts"
 Write-Host "=========================================================="
-$err1 = $null; [System.Management.Automation.Language.Parser]::ParseFile((Join-Path $workspaceDir "start_preview.ps1"), [ref]$null, [ref]$err1)
-$err2 = $null; [System.Management.Automation.Language.Parser]::ParseFile((Join-Path $workspaceDir "stop_preview.ps1"), [ref]$null, [ref]$err2)
+$err1 = $null; [System.Management.Automation.Language.Parser]::ParseFile((Join-Path $workspaceDir "scripts\preview\start_preview.ps1"), [ref]$null, [ref]$err1)
+$err2 = $null; [System.Management.Automation.Language.Parser]::ParseFile((Join-Path $workspaceDir "scripts\preview\stop_preview.ps1"), [ref]$null, [ref]$err2)
 
 Write-Host "start_preview.ps1 errors: $($err1.Count)"
 Write-Host "stop_preview.ps1 errors: $($err2.Count)"
@@ -30,7 +30,7 @@ $dummyListener.Start()
 Write-Host "[OK] Test listener started on port 5997."
 
 # Call stop_preview on port 5997
-$stopScript = Join-Path $workspaceDir "stop_preview.ps1"
+$stopScript = Join-Path $workspaceDir "scripts\preview\stop_preview.ps1"
 & powershell -NoProfile -ExecutionPolicy Bypass -File $stopScript -Port 5997
 
 $isStillAlive = $false
@@ -55,7 +55,7 @@ $fakeMeta = [ordered]@{
     pid = $PID
     creationTime = "2020-01-01T00:00:00.0000000Z" # Clearly mismatched past timestamp
     workspace = $workspaceDir
-    webRemoteDir = Join-Path $workspaceDir "web_remote"
+    webRemoteDir = Join-Path $workspaceDir "legacy\web_remote"
     port = 5173
 } | ConvertTo-Json -Compress
 
@@ -69,7 +69,7 @@ Write-Host "[PASS] Current process is still alive. Stale metadata / PID reuse wa
 Write-Host "`n=========================================================="
 Write-Host " TEST 4: Duplicate Start Prevention on Active Port"
 Write-Host "=========================================================="
-$startScript = Join-Path $workspaceDir "start_preview.ps1"
+$startScript = Join-Path $workspaceDir "scripts\preview\start_preview.ps1"
 $connBefore = Get-NetTCPConnection -LocalPort 5173 -State Listen -ErrorAction SilentlyContinue | Select-Object -First 1
 $pidBefore = if ($connBefore) { $connBefore.OwningProcess } else { 0 }
 

@@ -99,7 +99,7 @@ def step_build_helper():
         [sys.executable, "-m", "PyInstaller", "--noconfirm", "--clean",
          "--distpath", os.path.dirname(HELPER_EXE),
          "--workpath", os.path.join(ROOT_DIR, "build", "helper"),
-         os.path.join(ROOT_DIR, "winkey_helper.spec")],
+         os.path.join(ROOT_DIR, "installer", "winkey_helper.spec")],
         "Session helper ve fokus resursunun paketlenmesi"
     )
     output = Path(HELPER_EXE).parent / 'winkey_helper'

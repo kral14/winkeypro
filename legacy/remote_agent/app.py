@@ -322,5 +322,5 @@ def main():
 
 if __name__=='__main__':
     # Source launch and PyInstaller both resolve the existing engine package.
-    if not getattr(sys,'frozen',False):sys.path.insert(0,str(Path(__file__).resolve().parent.parent))
+    if not getattr(sys,'frozen',False):sys.path.insert(0,str(Path(__file__).resolve().parents[2]))
     main()

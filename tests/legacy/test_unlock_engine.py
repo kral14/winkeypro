@@ -1,5 +1,8 @@
 import ctypes
 import unittest
+import sys
+from pathlib import Path
+sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
 from unittest.mock import patch
 from pc_agent import unlock_engine as engine
 

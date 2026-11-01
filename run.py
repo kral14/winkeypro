@@ -59,7 +59,7 @@ if hasattr(sys.stderr, 'reconfigure'):
 
 ROOT_DIR = os.path.abspath(os.path.dirname(__file__))
 UI_DIR = os.path.join(ROOT_DIR, "apps", "desktop_tauri", "ui")
-DB_PATH = os.path.join(ROOT_DIR, "winkey_prod.db")
+DB_PATH = os.path.join(ROOT_DIR, ".dev-runtime", "data", "winkey_prod.db")
 GATEWAY_SCRIPT = os.path.join(ROOT_DIR, "deploy", "gateway_production_server.py")
 GATEWAY_PORT = 8788
 DEV_UI_PORT = 3000

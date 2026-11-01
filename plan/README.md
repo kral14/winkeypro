@@ -1,5 +1,8 @@
 # WinKey Pro — mərhələli iş planı
 
+**Cari iş (2026-11-01): `GEMINI_WEBSOCKET_BATCH.md`.** Aşağıdakı A mərhələsi
+qeydləri tarixidir. Cari quruluş üçün `docs/PROJECT_LAYOUT.md` oxuyun.
+
 Tarix: 2026-10-28, Asia/Baku. Aktiv mərhələ: A — məsləhət. Yeni məhsulun implementasiyası başlanmayıb.
 İcraçı: Gemini. Auditor və mərhələ qəbulçusu: Codex. Məhsul sahibi: istifadəçi.
 

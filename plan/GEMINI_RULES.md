@@ -1,5 +1,10 @@
 # Gemini icra müqaviləsi
 
+2026-11-01: aktiv batch `plan/GEMINI_WEBSOCKET_BATCH.md`-dir. Sahib bu fayldakı
+A–F paketlərini bir dəfəyə hazırlamağa icazə verib; köhnə stage qapıları bu işi
+dayandırmır. Aşağıdakı məxfilik, real sübut və son Codex audit qaydaları qalır.
+Əvvəlki batch təlimatları `plan/archive/tasks/` altındadır.
+
 1. Əvvəl README, STATUS.json, DECISIONS, ARCHITECTURE və aktiv stage faylını oxu.
 2. Yalnız aktiv/açılmış mərhələni icra et. A məsləhətdir: kod, installer/service, public paylaşım, secret və release dəyişmə.
 3. Sonrakı mərhələnin asılılığını hesabatda qeyd et; qəbul olmadan scope-u genişləndirmə.
