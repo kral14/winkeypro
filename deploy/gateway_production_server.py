@@ -128,10 +128,18 @@ class ProductionDatabase:
 
 class GatewayHandler(BaseHTTPRequestHandler):
     db: ProductionDatabase = None
+    protocol_version = 'HTTP/1.1'
+    disable_nagle_algorithm = True
 
-    def handle_one_request(self):
+    def setup(self):
+        super().setup()
+        self.connection.settimeout(15)
+
+    def parse_request(self):
+        parsed = super().parse_request()
+        # Exclude idle keep-alive time from request processing measurements.
         self.request_started = time.monotonic()
-        super().handle_one_request()
+        return parsed
 
     def log_message(self, format, *args):
         # Do not print raw request URLs: QR secrets can be in the query.
@@ -149,6 +157,7 @@ class GatewayHandler(BaseHTTPRequestHandler):
     def do_OPTIONS(self):
         self.send_response(204)
         self._set_security_headers()
+        self.send_header('Content-Length', '0')
         self.end_headers()
 
     def _read_json(self) -> Dict[str, Any]:
@@ -172,6 +181,7 @@ class GatewayHandler(BaseHTTPRequestHandler):
         self.send_response(status)
         self._set_security_headers("application/json")
         self.send_header("Content-Length", str(len(body)))
+        self.send_header('X-App-Duration-Ms', str(duration_ms))
         self.end_headers()
         self.wfile.write(body)
 
@@ -286,6 +296,8 @@ class GatewayHandler(BaseHTTPRequestHandler):
         const statusBox = document.getElementById('action-status');
         let commandBusy = false;
         let desiredAction = null;
+        let desiredSince = 0;
+        let resultController = null;
         let statusBusy = false;
         let pendingCommand = null;
         try { pendingCommand = JSON.parse(localStorage.getItem('winkey_pending_command') || 'null'); } catch(e) {}
@@ -300,14 +312,24 @@ class GatewayHandler(BaseHTTPRequestHandler):
         }
         async function request(url, options = {}, timeoutMs = 4000) {
             const controller = new AbortController();
+            const upstream = options.signal;
+            const abort = () => controller.abort();
+            if (upstream) {
+                if (upstream.aborted) abort();
+                else upstream.addEventListener('abort', abort, {once: true});
+            }
             const timer = setTimeout(() => controller.abort(), timeoutMs);
             const start = performance.now();
             try {
                 const response = await fetch(url, {...options, signal: controller.signal, cache: 'no-store'});
                 const data = await response.json();
                 return {ok: response.ok, status: response.status, json: async () => data,
-                        elapsedMs: Math.round(performance.now() - start)};
-            } finally { clearTimeout(timer); }
+                        elapsedMs: Math.round(performance.now() - start),
+                        serverMs: response.headers ? Number(response.headers.get('X-App-Duration-Ms')) : null};
+            } finally {
+                clearTimeout(timer);
+                if (upstream) upstream.removeEventListener('abort', abort);
+            }
         }
         function setBusy(value) {
             commandBusy = value;
@@ -368,10 +390,12 @@ class GatewayHandler(BaseHTTPRequestHandler):
             } catch(e) {} finally { statusBusy = false; }
         }
 
-        async function sendCommand(action, resume = false) {
+        async function sendCommand(action, resume = false, tappedAt = performance.now()) {
             if (!authToken || !targetDevice) return;
             if (commandBusy) {
                 desiredAction = action;
+                desiredSince = tappedAt;
+                if (resultController) resultController.abort();
                 statusBox.textContent = 'Son istək saxlanıldı (' + action + '). Göndərilir...';
                 return;
             }
@@ -384,7 +408,7 @@ class GatewayHandler(BaseHTTPRequestHandler):
             }
             action = pendingCommand.action;
             setBusy(true);
-            const sendStarted = performance.now();
+            const sendStarted = tappedAt;
             statusBox.innerHTML = '<span class="spinner"></span>Əmr göndərilir (' + action + ')...';
             try {
                 let r;
@@ -400,8 +424,8 @@ class GatewayHandler(BaseHTTPRequestHandler):
                 if (desiredAction !== null) return;
                 if (r.ok && res.command_id) {
                     const sentMs = Math.round(performance.now() - sendStarted);
-                    statusBox.textContent = 'Əmr serverə çatdı (' + sentMs + ' ms). PC-nin icrası gözlənilir...';
-                    await pollCommandResult(res.command_id, action, sentMs, sendStarted);
+                    statusBox.textContent = 'Əmr serverə çatdı (' + sentMs + ' ms; server: ' + r.serverMs + ' ms). PC-nin icrası gözlənilir...';
+                    await pollCommandResult(res.command_id, action, sentMs, sendStarted, r.serverMs);
                 } else {
                     if (r.status < 500) savePending(null);
                     statusBox.textContent = 'Xəta: ' + (res.message || res.error);
@@ -412,19 +436,22 @@ class GatewayHandler(BaseHTTPRequestHandler):
                 setBusy(false);
                 if (desiredAction !== null) {
                     const next = desiredAction;
+                    const nextSince = desiredSince;
                     desiredAction = null;
-                    await sendCommand(next);
+                    await sendCommand(next, false, nextSince);
                 } else pollStatus();
             }
         }
 
-        async function pollCommandResult(cmdId, action, sentMs = 0, started = performance.now()) {
+        async function pollCommandResult(cmdId, action, sentMs = 0, started = performance.now(), serverMs = null) {
             const deadline = performance.now() + 20000;
             while (performance.now() < deadline) {
                 if (desiredAction !== null) return;
                 try {
+                    resultController = new AbortController();
                     const r = await request('/commands/' + encodeURIComponent(cmdId), {
-                        headers: {'Authorization': 'Bearer ' + authToken}
+                        headers: {'Authorization': 'Bearer ' + authToken},
+                        signal: resultController.signal
                     }, Math.min(3000, Math.max(1, deadline - performance.now())));
                     if (desiredAction !== null) return;
                     if (r.status === 401 || r.status === 403) {
@@ -442,7 +469,7 @@ class GatewayHandler(BaseHTTPRequestHandler):
                         if (cmd.status === 'executed' || cmd.status === 'completed') {
                             savePending(null);
                             statusBox.textContent = 'İcra tamamlandı (' + action + '): ' + (cmd.result || 'Uğurlu') +
-                                ' | Göndəriş: ' + sentMs + ' ms; ümumi: ' + Math.round(performance.now() - started) + ' ms';
+                                ' | Göndəriş: ' + sentMs + ' ms; server: ' + serverMs + ' ms; ümumi: ' + Math.round(performance.now() - started) + ' ms';
                             pollStatus();
                             return;
                         } else if (cmd.status === 'failed') {
@@ -451,7 +478,8 @@ class GatewayHandler(BaseHTTPRequestHandler):
                             return;
                         }
                     }
-                } catch(e) {}
+                } catch(e) {} finally { resultController = null; }
+                if (desiredAction !== null) return;
 
                 await pause(250);
             }
@@ -475,6 +503,7 @@ class GatewayHandler(BaseHTTPRequestHandler):
     </script>
 </body>
 </html>"""
+            self.send_header('Content-Length', str(len(html.encode('utf-8'))))
             self.end_headers()
             self.wfile.write(html.encode("utf-8"))
             return
@@ -657,6 +686,7 @@ class GatewayHandler(BaseHTTPRequestHandler):
     </script>
 </body>
 </html>"""
+            self.send_header('Content-Length', str(len(admin_html.encode('utf-8'))))
             self.end_headers()
             self.wfile.write(admin_html.encode("utf-8"))
             return

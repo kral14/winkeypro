@@ -109,4 +109,26 @@ const response = data => ({ok: true, status: 200, json: async () => data});
   assert.deepEqual(latestPosts.map(p => p.action), ['lock','unlock']);
   assert.notEqual(latestPosts[0].request_id, latestPosts[1].request_id);
   console.log('PASS rapid taps coalesce into last intent; busy state never drops it');
+
+  const g = context(), immediate = [];
+  let resultStarted, aborted = false;
+  const waiting = new Promise(resolve => {resultStarted = resolve;});
+  g.ctx.fetch = async (url, options) => {
+    if (options.method === 'POST') {
+      immediate.push(JSON.parse(options.body).action);
+      return response({command_id:'abort-old-result'});
+    }
+    if (!url.startsWith('/commands/') || immediate.length > 1) return response({status:'completed'});
+    resultStarted();
+    return new Promise((resolve,reject) => options.signal.addEventListener('abort', () => {
+      aborted = true; reject(Error('superseded result request'));
+    }));
+  };
+  const old = g.run("sendCommand('lock')");
+  await waiting;
+  await g.run("sendCommand('unlock')");
+  await old;
+  assert.equal(aborted, true);
+  assert.deepEqual(immediate, ['lock', 'unlock']);
+  console.log('PASS new tap aborts stalled result GET and immediately submits latest intent');
 })().catch(error => {console.error(error); process.exitCode = 1;});

@@ -1,6 +1,7 @@
 """Real local HTTP concurrency; no PC actions and no production credentials."""
 from concurrent.futures import ThreadPoolExecutor
 import hashlib
+import http.client
 import json
 from pathlib import Path
 import secrets
@@ -41,6 +42,7 @@ class Concurrency(unittest.TestCase):
         if self.slow:
             # Complete the held request and drain its response before teardown.
             self.slow.sendall(self.remaining)
+            self.slow.shutdown(socket.SHUT_WR)
             while self.slow.recv(4096):
                 pass
             self.slow.close()
@@ -75,6 +77,26 @@ class Concurrency(unittest.TestCase):
         self.assertTrue(all(r['status'] == 'ONLINE' for r in results))
         self.assertLess(elapsed, 2)
         print(f'16 health requests with stalled headers: {elapsed * 1000:.1f} ms')
+
+    def test_http_connection_reused_with_complete_response_framing(self):
+        client = http.client.HTTPConnection(*self.server.server_address, timeout=2)
+        try:
+            original = None
+            for method, path in [('GET', '/mobile'), ('GET', '/admin'),
+                                 ('GET', '/healthz'), ('OPTIONS', '/commands'),
+                                 ('GET', '/healthz')]:
+                client.request(method, path)
+                response = client.getresponse()
+                body = response.read()
+                self.assertIn(response.status, [200, 204])
+                self.assertEqual(response.version, 11)
+                self.assertIsNotNone(client.sock)
+                if original is None:
+                    original = client.sock
+                self.assertIs(client.sock, original)
+                self.assertEqual(int(response.getheader('Content-Length')), len(body))
+        finally:
+            client.close()
 
     def test_partial_body_does_not_block_and_command_delivered_once(self):
         self.hold_client(b'POST /agent/poll HTTP/1.1\r\nHost: localhost\r\nContent-Length: 100\r\n\r\n{')
