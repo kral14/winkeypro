@@ -41,6 +41,8 @@ def main():
         print('PASS clean layout, signed dependencies, actual PID checks, corrupt runtime rejected')
         measurements = {}
         for name, exe in [('onefile', ROOT / 'build/helper_baseline/winkey_helper.exe'), ('onedir', helper)]:
+            if not exe.is_file():
+                continue  # Old baseline is local evidence, never a required artifact.
             samples = []
             for _ in range(7):
                 start = time.perf_counter()
