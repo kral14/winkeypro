@@ -315,7 +315,7 @@ def main():
             res = ipc_input_worker.dismiss_curtain_direct(adapter=mock, logs=trace)
             if res.get("success"):
                 print("CURTAIN_READY")
-                sys.exit(10)
+                sys.exit(11 if res.get('status') == 'ALREADY_UNLOCKED' else 10)
             else:
                 print(f"CURTAIN_ERROR: {res.get('status')}")
                 sys.exit(3)

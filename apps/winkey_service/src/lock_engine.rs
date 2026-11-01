@@ -666,6 +666,26 @@ pub fn wake_screen() {
 }
 
 /// REM-016, REM-017, REM-018, REM-019 & REM-020: Real Cross-Session Helper Launch & Local Credential IPC
+fn curtain_completion(wait: u32, exit: Option<u32>) -> Result<bool, String> {
+    if wait != win32::WAIT_OBJECT_0 { return Err("E_CURTAIN_WAIT_FAILED".into()); }
+    match exit {
+        Some(10) => Ok(false),
+        Some(11) => Ok(true),
+        Some(_) => Err("E_CURTAIN_NOT_READY".into()),
+        None => Err("E_CURTAIN_EXIT_QUERY_FAILED".into()),
+    }
+}
+
+#[test]
+fn curtain_completion_blocks_every_unconfirmed_exit() {
+    assert_eq!(curtain_completion(win32::WAIT_OBJECT_0, Some(10)), Ok(false));
+    assert_eq!(curtain_completion(win32::WAIT_OBJECT_0, Some(11)), Ok(true));
+    for code in [0, 3, 259] { assert!(curtain_completion(win32::WAIT_OBJECT_0, Some(code)).is_err()); }
+    assert!(curtain_completion(win32::WAIT_OBJECT_0, None).is_err());
+    assert!(curtain_completion(win32::WAIT_TIMEOUT, Some(10)).is_err());
+    assert!(curtain_completion(win32::WAIT_FAILED, Some(10)).is_err());
+}
+
 pub fn execute_system_unlock(credential: Option<&str>, data_dir: &Path) -> Result<String, String> {
     crate::diagnostics::stage(data_dir, "UNLOCK_START", "");
     // 1. Aktiv konsol sessiyası yoxlanılır
@@ -723,11 +743,24 @@ pub fn execute_system_unlock(credential: Option<&str>, data_dir: &Path) -> Resul
             unsafe {
                 let wait = win32::WaitForSingleObject(child.handle.raw(), 5000);
                 let mut exit = 259u32;
-                win32_process::GetExitCodeProcess(child.handle.raw(), &mut exit);
+                let queried = win32_process::GetExitCodeProcess(child.handle.raw(), &mut exit) != 0;
                 crate::diagnostics::stage(data_dir, "CURTAIN_EXIT", &format!("wait={} exit={} elapsed_ms={}", wait, exit, curtain_started.elapsed().as_millis()));
+                if wait != win32::WAIT_OBJECT_0 {
+                    win32_process::TerminateProcess(child.handle.raw(), 99);
+                    win32::WaitForSingleObject(child.handle.raw(), 1000);
+                }
+                match curtain_completion(wait, if queried { Some(exit) } else { None }) {
+                    Ok(true) => return Ok("SUCCESS_UNLOCKED".into()),
+                    Ok(false) => {},
+                    Err(error) => {
+                        crate::diagnostics::stage(data_dir, "CURTAIN_BLOCKED_CREDENTIAL", &error);
+                        return Err(error);
+                    }
+                }
             }
         } else {
             crate::diagnostics::stage(data_dir, "CURTAIN_SPAWN_FAILED", &format!("elapsed_ms={}", curtain_started.elapsed().as_millis()));
+            return Err("E_CURTAIN_SPAWN_FAILED".into());
         }
     }
 

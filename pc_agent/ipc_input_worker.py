@@ -127,6 +127,17 @@ class Win32Adapter:
     def sleep(self, seconds: float):
         time.sleep(seconds)
 
+    def click_curtain(self):
+        width, height = user32.GetSystemMetrics(0), user32.GetSystemMetrics(1)
+        if width <= 0 or height <= 0:
+            raise RuntimeError('CURTAIN_INVALID_SCREEN_SIZE')
+        if not user32.SetCursorPos(width // 2, height // 3):
+            raise RuntimeError('CURTAIN_CURSOR_FAILED')
+        events = (INPUT * 2)()
+        events[0].type = events[1].type = 0
+        events[0].mi.dwFlags, events[1].mi.dwFlags = 0x0002, 0x0004
+        return self.send_input(2, events, ctypes.sizeof(INPUT))
+
 
 class MockWin32Adapter:
     """
@@ -204,6 +215,9 @@ class MockWin32Adapter:
     def sleep(self, seconds: float):
         pass
 
+    def click_curtain(self):
+        return self.send_input(2, None, ctypes.sizeof(INPUT))
+
 
 # =============================================================================
 # HARDWARE SCAN-CODE GENERATION HELPERS
@@ -247,7 +261,7 @@ def dismiss_curtain_direct(adapter=None, logs: list = None) -> dict:
       2. If already on Winlogon -> returns immediately.
       3. Active desktop must be Default (clicks are never sent to UAC or unknown desktops).
       4. Verifies SendInput sent count == 2.
-      5. Bounded deadline (3.0s) polling: confirms transition to Winlogon.
+      5. At most two verified clicks, seven 200ms transition polls each.
     """
     if adapter is None:
         adapter = Win32Adapter()
@@ -259,51 +273,36 @@ def dismiss_curtain_direct(adapter=None, logs: list = None) -> dict:
     adapter.wake_screen()
     logs.append("CURTAIN_WAKE_DONE")
     
-    state = adapter.get_lock_state()
-    current_desktop = state.get("desktop", "").lower()
-    
-    if current_desktop == "winlogon":
-        logs.append("CURTAIN_READY: Active desktop is already Winlogon")
-        return {"success": True, "status": "CURTAIN_READY", "logs": logs}
+    def readiness(state):
+        desktop = state.get('desktop', '').lower()
+        wts = state.get('wts', {})
+        logs.append(f"CURTAIN_STATE: desktop={desktop}; confirmed={bool(wts.get('confirmed'))}; locked={bool(wts.get('locked'))}")
+        if wts.get('confirmed') and not wts.get('locked'):
+            return 'ALREADY_UNLOCKED'
+        if desktop == 'winlogon':
+            return 'CURTAIN_READY'
+        if desktop != 'default' or not wts.get('confirmed') or not wts.get('locked'):
+            raise RuntimeError('CURTAIN_ABORT: Locked Default desktop not verified')
+        return None
 
-    wts = state.get("wts", {})
-    if not wts.get("confirmed") or not wts.get("locked"):
-        raise RuntimeError("CURTAIN_ABORT: Session lock not confirmed; refusing to click")
-
-    if current_desktop != "default":
-        raise RuntimeError(f"CURTAIN_ABORT: Active desktop is '{current_desktop}'; expected 'Default' (Refusing to click UAC/Other)")
-
-    # Simulate mouse click on Default curtain
-    width = user32.GetSystemMetrics(0) if hasattr(user32, "GetSystemMetrics") else 1920
-    height = user32.GetSystemMetrics(1) if hasattr(user32, "GetSystemMetrics") else 1080
-    if width <= 0 or height <= 0:
-        width, height = 1920, 1080
-
-    x, y = width // 2, height // 3
-    user32.SetCursorPos(x, y)
-
-    events = (INPUT * 2)()
-    events[0].type = 0
-    events[0].mi.dwFlags = 0x0002 # MOUSEEVENTF_LEFTDOWN
-    events[1].type = 0
-    events[1].mi.dwFlags = 0x0004 # MOUSEEVENTF_LEFTUP
-
-    sent = adapter.send_input(2, events, ctypes.sizeof(INPUT))
-    logs.append(f"CURTAIN_CLICK: sent={sent}/2")
-    if sent != 2:
-        raise RuntimeError(f"CURTAIN_CLICK_FAILED: SendInput accepted {sent}/2 events")
-
-    # Bounded transition wait (15 polls of 0.2s = 3.0s deadline)
-    logs.append("CURTAIN_WAIT: Polling for transition to Winlogon desktop...")
-    for poll in range(15):
-        adapter.sleep(0.2)
-        after_state = adapter.get_lock_state()
-        after_desk = after_state.get("desktop", "").lower()
-        if after_desk == "winlogon":
-            logs.append(f"CURTAIN_READY: Default -> Winlogon transition confirmed at poll {poll + 1}")
-            return {"success": True, "status": "CURTAIN_READY", "logs": logs}
-
-    raise RuntimeError("CURTAIN_NOT_DISMISSED: Input desktop did not switch to Winlogon within 3.0s deadline")
+    # At most two guarded clicks. Re-check active desktop + WTS before retry.
+    # Normal path still returns on the first 200ms transition poll.
+    for attempt in range(2):
+        ready = readiness(adapter.get_lock_state())
+        if ready:
+            return {'success': True, 'status': ready, 'logs': logs}
+        sent = adapter.click_curtain()
+        logs.append(f'CURTAIN_CLICK: attempt={attempt + 1}; sent={sent}/2')
+        if sent != 2:
+            raise RuntimeError('CURTAIN_CLICK_FAILED: Partial input')
+        for poll in range(7):
+            adapter.sleep(0.2)
+            ready = readiness(adapter.get_lock_state())
+            if ready:
+                logs.append(f'CURTAIN_READY: attempt={attempt + 1}; poll={poll + 1}')
+                return {'success': True, 'status': ready, 'logs': logs}
+        logs.append(f'CURTAIN_RECHECK: attempt={attempt + 1}')
+    raise RuntimeError('CURTAIN_NOT_DISMISSED: Two guarded attempts exhausted')
 
 
 # =============================================================================
