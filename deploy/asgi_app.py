@@ -19,6 +19,7 @@ from typing import Dict, Any, Optional
 from starlette.applications import Starlette
 from starlette.requests import Request
 from starlette.responses import Response, JSONResponse, HTMLResponse
+from starlette.responses import FileResponse
 from starlette.routing import Route, WebSocketRoute
 from starlette.websockets import WebSocket, WebSocketDisconnect
 
@@ -31,6 +32,49 @@ from deploy.websocket_hub import (
 )
 
 def build_asgi_app(service: GatewayService, dashboard_html_path: Optional[str] = None) -> Starlette:
+    from deploy.update_repository import UpdateRepository, MAX_PACKAGE
+    repository = UpdateRepository()
+    publication_lock = asyncio.Lock()
+
+    async def broadcast_release(release):
+        if not release:
+            return
+        payload = {'type':'update_available', 'version':release['version'], 'release_id':release['release_id']}
+        for connections in list(hub._agents.values()):
+            for connection in list(connections):
+                if connection.is_active:
+                    connection.enqueue(payload)
+
+    async def handle_update_latest(request):
+        release = await asyncio.to_thread(repository.current)
+        if not release:
+            return JSONResponse({'error':'E_NO_UPDATES_AVAILABLE'},status_code=404)
+        return JSONResponse(release,headers={'Cache-Control':'no-store'})
+
+    async def handle_update_download(request):
+        path = await asyncio.to_thread(repository.download,request.path_params['release'],request.path_params['name'])
+        if not path:
+            return JSONResponse({'error':'E_UPDATE_FILE_NOT_FOUND'},status_code=404)
+        return FileResponse(path,media_type='application/octet-stream',headers={'Cache-Control':'public, max-age=31536000, immutable'})
+
+    async def handle_update_publish(request):
+        import hmac
+        token = _get_bearer(request)
+        if not token or not hmac.compare_digest(token,service.get_admin_secret()):
+            return JSONResponse({'error':'E_FORBIDDEN_ADMIN'},status_code=403)
+        body = bytearray()
+        async for chunk in request.stream():
+            if len(body)+len(chunk)>MAX_PACKAGE:
+                return JSONResponse({'error':'E_PACKAGE_TOO_LARGE'},status_code=413)
+            body.extend(chunk)
+        async with publication_lock:
+            try:
+                release = await asyncio.to_thread(repository.publish,bytes(body))
+            except Exception:
+                return JSONResponse({'error':'E_SIGNED_RELEASE_REJECTED'},status_code=400)
+        await broadcast_release(release)
+        print('[UPDATE_PUBLISHED] version='+release['version'],flush=True)
+        return JSONResponse({'published':True,'version':release['version'],'release_id':release['release_id']})
 
     def _security_headers(response: Response, duration_ms: int = 0) -> Response:
         response.headers["X-Content-Type-Options"] = "nosniff"
@@ -475,6 +519,9 @@ def build_asgi_app(service: GatewayService, dashboard_html_path: Optional[str] =
                     "device_id": device_id,
                     "server_time": time.time()
                 }))
+                release = await asyncio.to_thread(repository.current)
+                if release:
+                    client_conn.enqueue({'type':'update_available','version':release['version'],'release_id':release['release_id']})
 
                 # Mövcud gözləyən əmr varsa, atomik DB claim ilə agentə çatdırılır (R2-01)
                 claim_owner = f"ws:{device_id}:{secrets.token_hex(4)}"
@@ -726,6 +773,9 @@ def build_asgi_app(service: GatewayService, dashboard_html_path: Optional[str] =
 
     # Routes list
     routes = [
+        Route('/updates/latest',handle_update_latest,methods=['GET']),
+        Route('/updates/download/{release}/{name:path}',handle_update_download,methods=['GET']),
+        Route('/admin/updates/publish',handle_update_publish,methods=['POST']),
         # Health & Core Pages
         Route("/healthz", handle_healthz, methods=["GET"]),
         Route("/", handle_dashboard, methods=["GET"]),
@@ -776,8 +826,13 @@ def build_asgi_app(service: GatewayService, dashboard_html_path: Optional[str] =
     @asynccontextmanager
     async def lifespan(app):
         async def sweep():
+            last_release = None
             while True:
                 try:
+                    release = await asyncio.to_thread(repository.current)
+                    if release and release['release_id'] != last_release:
+                        last_release = release['release_id']
+                        await broadcast_release(release)
                     for row in await asyncio.to_thread(service.expire_uncertain_commands):
                         await hub.push_command_result(row['device_id'], row['command_id'], False,
                             'INDETERMINATE_DELIVERY_TIMEOUT', time.time())

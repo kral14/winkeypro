@@ -1057,6 +1057,24 @@ pub fn run_gateway_transport_loop(
                             last_activity = Instant::now();
                             if let Ok(msg) = serde_json::from_str::<serde_json::Value>(&txt) {
                                 match msg.get("type").and_then(|v| v.as_str()) {
+                                    Some("update_available") => {
+                                        let version = msg.get("version").and_then(|v| v.as_str()).unwrap_or("");
+                                        let release = msg.get("release_id").and_then(|v| v.as_str()).unwrap_or("");
+                                        let active = fs::read(data_dir.join("update_journal.json")).ok()
+                                            .and_then(|v| serde_json::from_slice::<serde_json::Value>(&v).ok())
+                                            .and_then(|v| v.get("active_version").and_then(|v| v.as_str()).map(String::from))
+                                            .unwrap_or_else(|| env!("CARGO_PKG_VERSION").to_string());
+                                        if release.len() == 64 && release.bytes().all(|c| c.is_ascii_hexdigit())
+                                            && crate::recovery_engine::compare_semver(version, &active) == std::cmp::Ordering::Greater {
+                                            // Notification is only a wake-up hint, never executable content.
+                                            // The SYSTEM host re-fetches from its configured origin and verifies signatures.
+                                            let temporary = data_dir.join("update_requested.tmp");
+                                            if fs::write(&temporary, release.as_bytes()).is_ok() {
+                                                let _ = atomic_replace_file(&temporary, &data_dir.join("update_requested"));
+                                                println!("[UPDATE_NOTICE] Yeni imzalı buraxılışın yoxlanması istəndi");
+                                            }
+                                        }
+                                    }
                                     Some("command") => {
                                         let cmd_id = msg
                                             .get("command_id")

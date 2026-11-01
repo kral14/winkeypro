@@ -605,6 +605,7 @@ pub fn evaluate_and_prepare_active_slot(
         }
     }
 
+    journal.active_version = slot_val.version.clone();
     journal.last_checkpoint = Some("BOOTING".to_string());
     save_journal_atomic(base_dir, &journal)?;
 

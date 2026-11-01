@@ -6,7 +6,9 @@ Unicode True
 SetCompressor /SOLID lzma
 
 !define PRODUCT_NAME "WinKey Pro"
+!ifndef PRODUCT_VERSION
 !define PRODUCT_VERSION "0.1.0"
+!endif
 !define PRODUCT_PUBLISHER "WinKey Pro Security"
 !define PRODUCT_DIR_REGKEY "Software\Microsoft\Windows\CurrentVersion\App Paths\winkey_desktop.exe"
 !define PRODUCT_UNINST_KEY "Software\Microsoft\Windows\CurrentVersion\Uninstall\WinKeyPro"
@@ -51,7 +53,7 @@ FunctionEnd
 
 ; 1. Xos Geldiniz Sehifesi
 !define MUI_WELCOMEPAGE_TITLE "WinKey Pro Qurasdiricisina Xos Gelmisiniz"
-!define MUI_WELCOMEPAGE_TEXT "Bu sehrbaz WinKey Pro (v0.1.0) proqramini ve onun arxa plan tehlukesizlik xidmetini komputerinize qurasdiracaq.$\r$\n$\r$\nQurasdirma zamani sistem xidmeti avtomatik tenzimlenecek, qorunan tehlukesizlik icazeleri tetbiq olunacaq ve masaustu idareetme merkezi basladilacaq.$\r$\n$\r$\nDavam etmek ucun 'Qurasdir' duymesini sixin."
+!define MUI_WELCOMEPAGE_TEXT "Bu sehrbaz WinKey Pro (v${PRODUCT_VERSION}) proqramini ve onun arxa plan tehlukesizlik xidmetini komputerinize qurasdiracaq.$\r$\n$\r$\nQurasdirma zamani sistem xidmeti avtomatik tenzimlenecek, qorunan tehlukesizlik icazeleri tetbiq olunacaq ve masaustu idareetme merkezi basladilacaq.$\r$\n$\r$\nDavam etmek ucun 'Qurasdir' duymesini sixin."
 !insertmacro MUI_PAGE_WELCOME
 
 ; 2. Qurasdirilma Prosesi Sehifesi
@@ -119,7 +121,7 @@ Section "MainSection" SEC01
 
     ; Tehlukesiz ProgramData ve Slot A/B muhitinin hazirlanmasi
     DetailPrint "Tehlukesizlik icazeleri ve sistem xidmeti konfiqurasiya edilir..."
-    
+
     ; service_installer.ps1 vasitesile tam tehlukesiz qurasdirma icra edilir (konsol penceresi gizledilir)
     nsExec::ExecToLog '"$WINDIR\Sysnative\WindowsPowerShell\v1.0\powershell.exe" -NoProfile -ExecutionPolicy Bypass -WindowStyle Hidden -File "$INSTDIR\service_installer.ps1" -SourceDir "$INSTDIR" -InstallDir "$INSTDIR" -Repair'
     Pop $0

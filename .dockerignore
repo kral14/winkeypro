@@ -6,6 +6,7 @@ deploy/**
 !deploy/asgi_app.py
 !deploy/websocket_hub.py
 !deploy/postgres_database.py
+!deploy/update_repository.py
 !deploy/vm/
 deploy/vm/**
 !deploy/vm/server.py

@@ -18,8 +18,13 @@ import time
 import hashlib
 import subprocess
 import shutil
+import argparse
+import importlib.util
+import zipfile
+import urllib.request
+import getpass
+import re
 from pathlib import Path
-from cryptography.hazmat.primitives.asymmetric import ed25519
 
 if hasattr(sys.stdout, 'reconfigure'):
     sys.stdout.reconfigure(encoding='utf-8')
@@ -41,6 +46,29 @@ DESKTOP_EXE = os.path.join(ROOT_DIR, "apps", "desktop_tauri", "src-tauri", "targ
 
 PRE_SIGNED_DIR = os.path.join(ROOT_DIR, "deploy", "pre_signed_slot_a")
 PROD_KEY_PATH = os.path.join(ROOT_DIR, "deploy", "keys", "prod_release_ed25519_key.bin")
+BUILD_LOG = Path(ROOT_DIR) / "build" / "logs" / "build_latest.log"
+RELEASE_VERSION = '0.1.1'
+
+
+def preflight():
+    if os.name != 'nt':
+        raise RuntimeError('Bu build Windows x64 üçündür.')
+    missing = []
+    if not shutil.which('cargo'):
+        missing.append('Rust cargo (MSVC toolchain və Visual Studio C++ Build Tools)')
+    for module, package in [('cryptography', 'cryptography'), ('PyInstaller', 'pyinstaller')]:
+        if importlib.util.find_spec(module) is None:
+            missing.append(f'{package}: "{sys.executable}" -m pip install {package}')
+    for path in [MAKENSIS_EXE, NSI_SCRIPT, SERVICE_CARGO, DESKTOP_CARGO,
+                 str(Path(ROOT_DIR) / 'installer' / 'winkey_helper.spec'), PROD_KEY_PATH,
+                 str(Path(ROOT_DIR) / 'deploy' / 'keys' / 'prod_release_ed25519_pub.hex')]:
+        if not Path(path).is_file():
+            missing.append(f'Fayl tapılmadı: {path}')
+    if missing:
+        raise RuntimeError('\n'.join(missing))
+    if Path(PROD_KEY_PATH).stat().st_size != 32:
+        raise RuntimeError('Mövcud imzalama açarının formatı yanlışdır; yeni açar yaratmayın.')
+    print('[PASS] Build alətləri və yerli imzalama faylları mövcuddur.', flush=True)
 
 def sha256_file(path):
     h = hashlib.sha256()
@@ -50,29 +78,25 @@ def sha256_file(path):
     return h.hexdigest()
 
 def run_cmd(cmd, desc):
-    print(f"\n[İŞ] {desc}...")
-    res = subprocess.run(cmd, cwd=ROOT_DIR, capture_output=True, text=True, errors="replace")
-    if res.returncode != 0:
-        print(f"\n❌ XƏTA: {desc} uğursuz oldu (Exit Code: {res.returncode})!")
-        if res.stderr:
-            print("--- Standart Xəta Loqu (stderr) ---")
-            print(res.stderr)
-        if res.stdout:
-            print("--- Standart Çıxış Loqu (stdout) ---")
-            print(res.stdout)
-        sys.exit(res.returncode)
+    print(f"\n[İŞ] {desc}...", flush=True)
+    BUILD_LOG.parent.mkdir(parents=True, exist_ok=True)
+    with BUILD_LOG.open('a', encoding='utf-8') as log:
+        log.write(f'\n[İŞ] {desc}\n')
+        with subprocess.Popen(cmd, cwd=ROOT_DIR, stdout=subprocess.PIPE,
+                              stderr=subprocess.STDOUT, text=True, errors='replace') as process:
+            for line in process.stdout:
+                print(line, end='', flush=True)
+                log.write(line)
+                log.flush()
+            code = process.wait()
+        if code:
+            raise RuntimeError(f'{desc}: exit={code}. Loq: {BUILD_LOG}. Fayl kilidlidirsə həmin build exe-sini bağlayın; quraşdırılmış xidmətə toxunulmur.')
     print(f"✓ {desc} uğurla tamamlandı.")
-    return res
 
 def step_compile_rust():
     print("\n" + "="*60)
     print(" 1/3. RUST BİNARLARININ OPTİMİZASİYA EDİLMİŞ TƏRTİBATI (RELEASE)")
     print("="*60)
-
-    # Kilidlənmiş faylların qarşısını almaq üçün köhnə prosesləri dayandırırıq
-    for name in ["winkey_desktop.exe", "winkey_service.exe", "winkey_helper.exe"]:
-        subprocess.run(["taskkill", "/F", "/IM", name], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
-    time.sleep(0.5)
 
     # 1.1 Service & Helper
     run_cmd(
@@ -105,6 +129,9 @@ def step_build_helper():
     output = Path(HELPER_EXE).parent / 'winkey_helper'
     runtime = Path(HELPER_EXE).parent / 'helper_runtime'
     if runtime.exists():
+        expected = (Path(ROOT_DIR) / 'apps' / 'winkey_service' / 'target' / 'release' / 'helper_runtime').resolve()
+        if runtime.resolve() != expected or runtime.is_symlink():
+            raise RuntimeError('Helper runtime yolu gözlənilən build qovluğunda deyil.')
         shutil.rmtree(runtime)
     shutil.copytree(output / 'helper_runtime', runtime)
     shutil.copy2(output / 'winkey_helper.exe', HELPER_EXE)
@@ -112,6 +139,8 @@ def step_build_helper():
     run_cmd([HELPER_EXE, "--check-input-abi"], "Paketlenmis INPUT ABI yoxlanisi (input yoxdur)")
 
 def step_sign_manifest():
+    from cryptography.hazmat.primitives.asymmetric import ed25519
+    from cryptography.hazmat.primitives import serialization
     print("\n" + "="*60)
     print(" 2/3. SLOT A MANİFESTİ VƏ ED25519 RƏSMİ İMZALAMA")
     print("="*60)
@@ -123,11 +152,12 @@ def step_sign_manifest():
     hlp_sz = os.path.getsize(HELPER_EXE)
 
     manifest_data = {
-        "version": "0.1.0",
-        "timestamp": 1740000000.0,
+        "version": RELEASE_VERSION,
+        "timestamp": time.time(),
         "files": [
             {"path": "winkey_service.exe", "sha256": svc_sha, "size": svc_sz},
-            {"path": "winkey_helper.exe", "sha256": hlp_sha, "size": hlp_sz}
+            {"path": "winkey_helper.exe", "sha256": hlp_sha, "size": hlp_sz},
+            {"path": "winkey_desktop.exe", "sha256": sha256_file(DESKTOP_EXE), "size": os.path.getsize(DESKTOP_EXE)}
         ]
     }
     runtime = Path(HELPER_EXE).parent / 'helper_runtime'
@@ -140,8 +170,6 @@ def step_sign_manifest():
 
     manifest_bytes = json.dumps(manifest_data, indent=2, sort_keys=True).encode("utf-8")
     manifest_path = os.path.join(PRE_SIGNED_DIR, "manifest.json")
-    with open(manifest_path, "wb") as f:
-        f.write(manifest_bytes)
 
     if not os.path.exists(PROD_KEY_PATH):
         print(f"❌ XƏTA: Ed25519 açar faylı tapılmadı: {PROD_KEY_PATH}")
@@ -151,7 +179,14 @@ def step_sign_manifest():
         priv_bytes = f.read()
 
     priv = ed25519.Ed25519PrivateKey.from_private_bytes(priv_bytes)
+    expected_pub = Path(ROOT_DIR, 'deploy', 'keys', 'prod_release_ed25519_pub.hex').read_text(encoding='ascii').strip().lower()
+    actual_pub = priv.public_key().public_bytes(serialization.Encoding.Raw, serialization.PublicFormat.Raw).hex()
+    if actual_pub != expected_pub:
+        raise RuntimeError('İmzalama açarı mövcud public key ilə uyğun deyil; paket hazırlanmadı.')
     sig_bytes = priv.sign(manifest_bytes)
+    priv.public_key().verify(sig_bytes, manifest_bytes)
+    with open(manifest_path, "wb") as f:
+        f.write(manifest_bytes)
 
     sig_path = os.path.join(PRE_SIGNED_DIR, "manifest.sig")
     with open(sig_path, "wb") as f:
@@ -170,7 +205,11 @@ def step_build_installer():
         sys.exit(1)
 
     os.makedirs(DIST_DIR, exist_ok=True)
-    run_cmd([MAKENSIS_EXE, "/INPUTCHARSET", "UTF8", NSI_SCRIPT], "NSIS ilə WinKeySetup.exe paketlənməsi")
+    pending_setup = str(Path(DIST_DIR) / 'WinKeySetup-building.exe')
+    run_cmd([MAKENSIS_EXE, "/INPUTCHARSET", "UTF8", f'/DOUTPUT_FILE={pending_setup}', f'/DPRODUCT_VERSION={RELEASE_VERSION}', NSI_SCRIPT], "NSIS ilə WinKeySetup.exe paketlənməsi")
+    if not Path(pending_setup).is_file() or Path(pending_setup).stat().st_size < 500_000:
+        raise RuntimeError('Yeni setup yaranmadı və ya ölçüsü yanlışdır. Əvvəlki setup qorundu.')
+    os.replace(pending_setup, SETUP_EXE)
 
     if not os.path.exists(SETUP_EXE):
         print(f"❌ XƏTA: dist/WinKeySetup.exe yaranmadı!")
@@ -195,12 +234,73 @@ def step_build_installer():
     print("#"*60)
 
 def main():
+    global RELEASE_VERSION
+    parser = argparse.ArgumentParser(description='WinKey Pro: compile → helper → imza → tək setup. Quraşdırma icra etmir.')
+    parser.add_argument('--check', action='store_true', help='Yalnız build tələblərini yoxla')
+    parser.add_argument('--version', help='Buraxılış versiyası, məsələn 0.1.2. Susmaya görə patch artırılır.')
+    parser.add_argument('--publish', metavar='SERVER', help='Build-dən sonra imzalı paketi serverə yüklə və avtomatik yenilənməni başlat')
+    args = parser.parse_args()
+    preflight()
+    if args.check:
+        return
+    if args.version:
+        RELEASE_VERSION = args.version
+    else:
+        try:
+            old=json.loads(Path(PRE_SIGNED_DIR,'manifest.json').read_text(encoding='utf-8'))['version']
+            major,minor,patch=map(int,old.split('.'))
+            RELEASE_VERSION=f'{major}.{minor}.{patch+1}'
+        except (OSError,ValueError,KeyError):
+            RELEASE_VERSION='0.1.1'
+    if not re.fullmatch(r'\d+\.\d+\.\d+',RELEASE_VERSION):
+        raise RuntimeError('Versiya MAJOR.MINOR.PATCH formatında olmalıdır.')
+    print(f'[RELEASE] {RELEASE_VERSION}',flush=True)
+    BUILD_LOG.parent.mkdir(parents=True, exist_ok=True)
+    BUILD_LOG.write_text('WinKey Pro build\n', encoding='utf-8')
     t0 = time.time()
     step_compile_rust()
     step_sign_manifest()
     step_build_installer()
+    package = create_update_package()
+    if args.publish:
+        token=os.environ.get('WINKEY_ADMIN_SECRET') or getpass.getpass('Server admin açarı (ekranda görünməyəcək): ')
+        if not token:
+            raise RuntimeError('Admin açarı verilmədi; paket hazırdır, serverə göndərilmədi.')
+        request=urllib.request.Request(args.publish.rstrip('/')+'/admin/updates/publish',
+            data=package.read_bytes(),headers={'Authorization':'Bearer '+token,'Content-Type':'application/zip'},method='POST')
+        try:
+            with urllib.request.urlopen(request,timeout=300) as response:
+                result=json.load(response)
+        except Exception:
+            raise RuntimeError('E_RELEASE_PUBLISH_FAILED: serverə yükləmə alınmadı. Yerli paket qorundu; server loqunu yoxlayın.') from None
+        print('[PUBLISHED] version='+result['version']+'; qoşulmuş proqramlara yenilənmə bildirişi göndərildi.')
     total_time = time.time() - t0
     print(f"\nÜmumi icra müddəti: {total_time:.2f} saniyə.\n")
 
+
+def create_update_package():
+    manifest=Path(PRE_SIGNED_DIR,'manifest.json')
+    data=json.loads(manifest.read_text(encoding='utf-8'))
+    target=Path(DIST_DIR,'WinKeyUpdate-'+data['version']+'.zip')
+    temporary=target.with_suffix('.building.zip')
+    with zipfile.ZipFile(temporary,'w',zipfile.ZIP_DEFLATED) as package:
+        package.write(manifest,'manifest.json')
+        package.write(Path(PRE_SIGNED_DIR,'manifest.sig'),'manifest.sig')
+        for entry in data['files']:
+            source=Path(DESKTOP_EXE) if entry['path']=='winkey_desktop.exe' else Path(SERVICE_EXE).parent/entry['path']
+            if sha256_file(source)!=entry['sha256']:
+                raise RuntimeError('E_PACKAGE_CHANGED_DURING_BUILD')
+            package.write(source,entry['path'])
+    os.replace(temporary,target)
+    print('[UPDATE_PACKAGE] '+str(target))
+    return target
+
 if __name__ == "__main__":
-    main()
+    try:
+        main()
+    except KeyboardInterrupt:
+        print('\n[XƏTA] Build dayandırıldı. Setup avtomatik açılmadı.')
+        sys.exit(130)
+    except Exception as error:
+        print(f'\n[XƏTA] {error}', file=sys.stderr, flush=True)
+        sys.exit(1)

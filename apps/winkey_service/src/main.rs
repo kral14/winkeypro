@@ -12,6 +12,7 @@ mod ws_transport;
 
 use std::ffi::c_void;
 use std::fs;
+use std::io::Read;
 use std::path::PathBuf;
 use std::ptr::null_mut;
 use std::sync::atomic::{AtomicBool, AtomicU32, Ordering};
@@ -618,6 +619,14 @@ fn run_ipc_worker_loop(stop_signal: Arc<AtomicBool>, is_mock: bool, data_dir: Pa
 }
 
 // Gateway Polling və Real Command Execution Handler
+fn update_input_idle(data_dir: &std::path::Path) -> bool {
+    match fs::read(data_dir.join("outbox").join("in_flight.json")) {
+        Ok(raw) => serde_json::from_slice::<Vec<serde_json::Value>>(&raw).map(|v|v.is_empty()).unwrap_or(false),
+        Err(error) if error.kind() == std::io::ErrorKind::NotFound => true,
+        Err(_) => false,
+    }
+}
+
 fn check_and_apply_native_gateway_update(origin: &str, data_dir: &std::path::Path) -> Result<String, String> {
     let clean_orig = origin.trim_end_matches('/');
     let latest_url = format!("{}/updates/latest", clean_orig);
@@ -654,10 +663,31 @@ fn check_and_apply_native_gateway_update(origin: &str, data_dir: &std::path::Pat
     }
 
     let files_arr = manifest_val.get("files").and_then(|v| v.as_array()).ok_or("E_MISSING_FILES_LIST")?;
+    // Validate authenticity, version and resource limits BEFORE downloading binaries.
+    let key = ed25519_dalek::VerifyingKey::from_bytes(&recovery_engine::get_pinned_public_key_bytes()?)
+        .map_err(|_| "E_RELEASE_KEY")?;
+    let signature = ed25519_dalek::Signature::from_slice(&sig_bytes).map_err(|_| "E_RELEASE_SIGNATURE")?;
+    key.verify_strict(&manifest_bytes, &signature).map_err(|_| "E_RELEASE_SIGNATURE")?;
+    let verified: serde_json::Value = serde_json::from_slice(&manifest_bytes).map_err(|_| "E_RELEASE_JSON")?;
+    if verified != *manifest_val { return Err("E_MANIFEST_MISMATCH".into()); }
+    let version = verified.get("version").and_then(|v| v.as_str()).ok_or("E_RELEASE_VERSION")?;
+    let journal = fs::read(data_dir.join("update_journal.json")).ok()
+        .and_then(|v| serde_json::from_slice::<serde_json::Value>(&v).ok());
+    if let Some(active) = journal.as_ref().and_then(|j| j.get("active_version")).and_then(|v| v.as_str()) {
+        if recovery_engine::compare_semver(version,active) != std::cmp::Ordering::Greater {
+            return Err("E_NO_NEWER_RELEASE".into());
+        }
+    }
+    if files_arr.len() > 4096 || files_arr.iter().try_fold(0u64, |sum,f| sum.checked_add(f.get("size")?.as_u64()?)).unwrap_or(u64::MAX) > 256*1024*1024 {
+        return Err("E_RELEASE_LIMIT".into());
+    }
     let mut payload_files = Vec::new();
 
     for f_entry in files_arr {
         let fname = f_entry.get("path").and_then(|v| v.as_str()).ok_or("E_MISSING_FILE_PATH")?;
+        if fname.contains("..") || fname.contains('\\') || fname.contains(':') || fname.starts_with('/') {
+            return Err("E_RELEASE_PATH".into());
+        }
         let dl_url = format!("{}{}/{}", clean_orig, dl_prefix, fname);
 
         let f_resp = match ureq::get(&dl_url).timeout(Duration::from_secs(10)).call() {
@@ -666,7 +696,7 @@ fn check_and_apply_native_gateway_update(origin: &str, data_dir: &std::path::Pat
         };
 
         let mut content = Vec::new();
-        f_resp.into_reader().read_to_end(&mut content)
+        f_resp.into_reader().take(f_entry.get("size").and_then(|v|v.as_u64()).unwrap_or(0)+1).read_to_end(&mut content)
             .map_err(|e| format!("E_READ_DOWNLOAD_STREAM_{}: {}", fname, e))?;
 
         payload_files.push((fname.to_string(), content));
@@ -838,18 +868,22 @@ fn run_host_lifecycle(data_dir: PathBuf, is_scm: bool, timeout_sec: Option<u64>)
 
     let update_interval_secs: u64 = std::env::var("WINKEY_UPDATE_CHECK_SEC")
         .ok().and_then(|v| v.parse().ok()).unwrap_or(3600);
-    let mut last_update_check = Instant::now();
+    let mut last_update_check = Instant::now() - Duration::from_secs(update_interval_secs);
 
     while RUNNING.load(Ordering::SeqCst) {
         thread::sleep(Duration::from_millis(150));
 
         // Avtomatik Arxa Plan Auto-Update Yoxlaması və Runtime Keçidi (Timer və ya trigger)
+        let update_notice = data_dir.join("update_requested");
+        let input_idle = update_input_idle(&data_dir);
         let should_check_update = (last_update_check.elapsed() >= Duration::from_secs(update_interval_secs)
+            || (update_notice.is_file() && last_update_check.elapsed() >= Duration::from_secs(10))
             || std::env::var("WINKEY_TRIGGER_UPDATE").map(|v| v == "1" || v == "true").unwrap_or(false))
-            && !switched_to_lkg;
+            && committed && input_idle;
 
         if should_check_update {
             last_update_check = Instant::now();
+            let _ = fs::remove_file(&update_notice);
             let cfg_file = data_dir.join("config.json");
             let origin_opt = std::env::var("WINKEY_GATEWAY_ORIGIN").ok().or_else(|| {
                 if cfg_file.exists() {
@@ -866,6 +900,17 @@ fn run_host_lifecycle(data_dir: PathBuf, is_scm: bool, timeout_sec: Option<u64>)
                 match check_and_apply_native_gateway_update(&orig, &data_dir) {
                     Ok(msg) => {
                         println!("[HOST_AUTO_UPDATE_SUCCESS] {}", msg);
+                        let old_pid = active_child.as_ref().map(|c| c.id());
+                        // Pause new input first, then recheck receipts: commands may
+                        // have arrived while the release was downloading.
+                        let paused = send_control_command_to_worker(old_pid, "PAUSE");
+                        let idle = update_input_idle(&data_dir);
+                        if !paused || !idle {
+                            if paused { let _ = send_control_command_to_worker(old_pid, "RESUME"); }
+                            let _ = fs::write(&update_notice,b"deferred");
+                            println!("[HOST_UPDATE_DEFERRED] Cari emeliyyat bitdikden sonra yeniden yoxlanacaq");
+                            continue;
+                        }
                         match recovery_engine::activate_pending_update(&data_dir, None) {
                             Ok((j, new_slot)) => {
                                 println!("[HOST_AUTO_UPDATE_ACTIVATED] Yeni slot aktivləşdirildi: {} (ver={:?}). Köhnə worker dayandırılır...", new_slot, j.candidate_version);
@@ -901,6 +946,7 @@ fn run_host_lifecycle(data_dir: PathBuf, is_scm: bool, timeout_sec: Option<u64>)
                                 }
                             }
                             Err(e) => {
+                                let _ = send_control_command_to_worker(old_pid, "RESUME");
                                 eprintln!("[HOST_AUTO_UPDATE_ACTIVATE_ERR] {}", e);
                             }
                         }

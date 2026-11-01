@@ -14,6 +14,7 @@ services:
       - admin_key
     volumes:
       - gateway_data:/data
+      - updates_data:/updates
     expose:
       - "8788"
     read_only: true
@@ -54,5 +55,6 @@ secrets:
     file: ./deploy/vm/secrets/admin_key
 volumes:
   gateway_data:
+  updates_data:
   caddy_data:
   caddy_config:

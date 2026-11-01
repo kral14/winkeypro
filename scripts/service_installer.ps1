@@ -243,7 +243,7 @@ if (-not $SourceDir) {
     $c1 = $PSScriptRoot
     # 2. Release qovluğu (inkişaf mühiti)
     $c2 = Join-Path $PSScriptRoot "..\apps\winkey_service\target\release"
-    
+
     if (Test-Path (Join-Path $c1 "winkey_service.exe")) {
         $SourceDir = (Resolve-Path $c1).Path
     } elseif (Test-Path (Join-Path $c2 "winkey_service.exe")) {
@@ -355,7 +355,7 @@ function Invoke-Rollback {
     param ([string]$Reason)
     Write-Host "`n[ROLLBACK] Quraşdırma xətası baş verdi: $Reason" -ForegroundColor Red
     Write-Host "[ROLLBACK] Dəyişikliklər geri qaytarılır..." -ForegroundColor Yellow
-    
+
     # Diaqnostika hadisəsi qeyd olunur
     Write-WinKeyDiagnosticEvent -Stage "INSTALL_ROLLBACK" -EventType "error" -Severity "ERROR" -ErrorCode $Reason
 
@@ -363,7 +363,7 @@ function Invoke-Rollback {
     & sc.exe stop $serviceName 2>$null | Out-Null
     Start-Sleep -Milliseconds 500
     & sc.exe delete $serviceName 2>$null | Out-Null
-    
+
     # 2. Quraşdırma qovluğundakı faylları təmizlə
     if (Test-Path $InstallDir) {
         Remove-Item -Path $InstallDir -Recurse -Force -ErrorAction SilentlyContinue
@@ -587,6 +587,9 @@ Get-ChildItem -LiteralPath $slotADir -Recurse -File -Force | ForEach-Object {
 try {
     Copy-Item -Path $svcSrc -Destination (Join-Path $slotADir "winkey_service.exe") -Force
     Copy-Item -Path $hlpSrc -Destination (Join-Path $slotADir "winkey_helper.exe") -Force
+    if (Test-Path (Join-Path $SourceDir "winkey_desktop.exe")) {
+        Copy-Item -LiteralPath (Join-Path $SourceDir "winkey_desktop.exe") -Destination (Join-Path $slotADir "winkey_desktop.exe") -Force
+    }
     if (Test-Path (Join-Path $SourceDir "helper_runtime")) {
         Copy-Item -LiteralPath (Join-Path $SourceDir "helper_runtime") -Destination $slotADir -Recurse -Force
     }
@@ -624,13 +627,15 @@ try {
     $journalPath = Join-Path $DataDir "update_journal.json"
     if (-not (Test-Path $journalPath)) {
         $nowTs = [double](Get-Date -UFormat %s)
+        $baselineVersion = (Get-Content -LiteralPath (Join-Path $slotADir "manifest.json") -Raw | ConvertFrom-Json).version
+        if ($baselineVersion -notmatch '^\d+\.\d+\.\d+$') { throw "E_BASELINE_VERSION" }
         $initialJournal = @"
 {
   "schema_version": 1,
   "current_slot": "slot_a",
   "last_known_good_slot": "slot_a",
   "state": "IDLE",
-  "active_version": "0.1.0",
+  "active_version": "$baselineVersion",
   "candidate_version": null,
   "quarantined_versions": [],
   "crash_count": 0,

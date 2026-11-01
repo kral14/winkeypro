@@ -699,7 +699,7 @@ fn get_device_status() -> Result<DeviceStatusDto, String> {
     };
 
     let cred_ready = check_credential_status().unwrap_or(false);
-    
+
     // Server-confirmed registration yoxlanışı
     let cfg_file = get_app_data_dir().join("config.json");
     let mut is_registered = false;
@@ -737,7 +737,7 @@ fn get_device_status() -> Result<DeviceStatusDto, String> {
         pin_ready: cred_ready,
         current_process_session_id: current_proc_session,
         active_console_session_id: active_console,
-        version: "0.1.0".to_string(),
+        version: slot_update::current_version(),
         gateway_origin,
         cloud_gateway_origin,
         connection_mode,
@@ -1072,7 +1072,14 @@ fn report_ui_error(kind: String, source: String, line: u32) {
     eprintln!("[UI_ERROR] kind={} source={} line={} (details in WebView console)", clean(&kind), clean(&source), line);
 }
 
+mod slot_update;
+
 fn main() {
+    if std::env::args().skip(1).all(|arg| matches!(arg.as_str(),"--minimized"|"-m")) {
+        if let Some(target)=slot_update::different_active_desktop() {
+            if std::process::Command::new(target).args(std::env::args().skip(1)).spawn().is_ok() {return;}
+        }
+    }
     std::panic::set_hook(Box::new(|info| {
         let msg = format!("CRASH PANIC: {:?}\n", info);
         let _ = fs::write("C:\\ProgramData\\WinKey\\crash.log", &msg);
@@ -1080,7 +1087,7 @@ fn main() {
     }));
     let args: Vec<String> = std::env::args().collect();
     if args.iter().any(|a| a == "--version" || a == "-v") {
-        println!("WinKey Desktop v0.1.0");
+        println!("WinKey Desktop v{}",slot_update::current_version());
         return;
     }
     if args.iter().any(|a| a == "--check") {
@@ -1334,6 +1341,15 @@ fn main() {
             query_service_ipc_status,
         ])
         .setup(move |app| {
+            let update_handle=app.handle().clone();
+            std::thread::spawn(move || loop {
+                std::thread::sleep(std::time::Duration::from_secs(15));
+                if slot_update::different_active_desktop().is_some() {
+                    // Tauri restarts this executable; its startup delegates to the
+                    // verified committed slot. Existing PIN/config storage is shared.
+                    update_handle.restart();
+                }
+            });
             let app_handle = app.handle().clone();
 
             // Pəncərəni dərhal görünən edirik və fokus veririk

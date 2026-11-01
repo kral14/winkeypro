@@ -26,7 +26,7 @@ ROOT_DIR = Path(__file__).resolve().parents[1]
 
 
 def run_docker(*args, check=True):
-    return subprocess.run(["docker", *args], capture_output=True, text=True, check=check, timeout=120)
+    return subprocess.run(["docker", *args], capture_output=True, text=True, encoding='utf-8', errors='replace', check=check, timeout=120)
 
 
 class DockerAllowlistAndCanaryTest(unittest.TestCase):
