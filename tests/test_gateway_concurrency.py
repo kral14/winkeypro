@@ -18,6 +18,7 @@ from deploy.vm.server import VMDatabase, VMHandler
 
 
 class Concurrency(unittest.TestCase):
+    database_factory = staticmethod(VMDatabase)
     def setUp(self):
         self.tmp = tempfile.TemporaryDirectory(dir=Path(__file__).resolve().parents[1] / 'build')
         self.accepted = threading.Event()
@@ -28,7 +29,7 @@ class Concurrency(unittest.TestCase):
                 super().setup()
                 accepted.set()
 
-        self.db = VMDatabase(str(Path(self.tmp.name) / 'test.db'))
+        self.db = self.database_factory(str(Path(self.tmp.name) / 'test.db'))
         Handler.db = self.db
         self.server = GatewayHTTPServer(('127.0.0.1', 0), Handler)
         self.thread = threading.Thread(target=self.server.serve_forever, daemon=True)
@@ -46,6 +47,8 @@ class Concurrency(unittest.TestCase):
         self.server.shutdown()
         self.server.server_close()
         self.thread.join(3)
+        if hasattr(self.db, 'close'):
+            self.db.close()
         self.tmp.cleanup()
 
     def http(self, path, body=None, token=None):

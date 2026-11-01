@@ -55,8 +55,8 @@ class ProductionDatabase:
                     public_key_hex TEXT NOT NULL,
                     device_secret_hash TEXT NOT NULL,
                     status TEXT NOT NULL DEFAULT 'ACTIVE',
-                    created_at REAL NOT NULL,
-                    last_seen_at REAL NOT NULL,
+                    created_at DOUBLE PRECISION NOT NULL,
+                    last_seen_at DOUBLE PRECISION NOT NULL,
                     locked INTEGER DEFAULT 0,
                     pin_ready INTEGER DEFAULT 0,
                     owner_approved INTEGER DEFAULT 1
@@ -67,8 +67,8 @@ class ProductionDatabase:
                     nonce TEXT PRIMARY KEY,
                     purpose TEXT NOT NULL,
                     device_id TEXT,
-                    created_at REAL NOT NULL,
-                    expires_at REAL NOT NULL,
+                    created_at DOUBLE PRECISION NOT NULL,
+                    expires_at DOUBLE PRECISION NOT NULL,
                     used INTEGER DEFAULT 0
                 )
             """)
@@ -78,8 +78,8 @@ class ProductionDatabase:
                     device_id TEXT NOT NULL,
                     challenge_hex TEXT NOT NULL,
                     status TEXT NOT NULL DEFAULT 'PENDING',
-                    expires_at REAL NOT NULL,
-                    created_at REAL NOT NULL,
+                    expires_at DOUBLE PRECISION NOT NULL,
+                    created_at DOUBLE PRECISION NOT NULL,
                     FOREIGN KEY (device_id) REFERENCES devices(device_id) ON DELETE CASCADE
                 )
             """)
@@ -87,8 +87,8 @@ class ProductionDatabase:
                 CREATE TABLE IF NOT EXISTS mobile_sessions (
                     session_token TEXT PRIMARY KEY,
                     device_id TEXT NOT NULL,
-                    created_at REAL NOT NULL,
-                    expires_at REAL NOT NULL,
+                    created_at DOUBLE PRECISION NOT NULL,
+                    expires_at DOUBLE PRECISION NOT NULL,
                     scope TEXT NOT NULL DEFAULT 'mobile_remote',
                     FOREIGN KEY (device_id) REFERENCES devices(device_id) ON DELETE CASCADE
                 )
@@ -99,8 +99,8 @@ class ProductionDatabase:
                     device_id TEXT NOT NULL,
                     action TEXT NOT NULL,
                     status TEXT NOT NULL DEFAULT 'pending',
-                    created_at REAL NOT NULL,
-                    completed_at REAL,
+                    created_at DOUBLE PRECISION NOT NULL,
+                    completed_at DOUBLE PRECISION,
                     result_status TEXT,
                     FOREIGN KEY (device_id) REFERENCES devices(device_id) ON DELETE CASCADE
                 )
@@ -117,8 +117,8 @@ class ProductionDatabase:
                     severity TEXT NOT NULL,
                     error_code TEXT,
                     duration_ms INTEGER,
-                    local_time REAL,
-                    received_at REAL NOT NULL
+                    local_time DOUBLE PRECISION,
+                    received_at DOUBLE PRECISION NOT NULL
                 )
             """)
             conn.commit()
@@ -730,7 +730,7 @@ class GatewayHandler(BaseHTTPRequestHandler):
             nonce = secrets.token_hex(16)
             with self.db.get_conn() as conn:
                 conn.execute(
-                    "INSERT OR REPLACE INTO challenges (nonce, purpose, device_id, created_at, expires_at, used) VALUES (?, ?, ?, ?, ?, 0)",
+                    "INSERT INTO challenges (nonce, purpose, device_id, created_at, expires_at, used) VALUES (?, ?, ?, ?, ?, 0) ON CONFLICT (nonce) DO UPDATE SET purpose=excluded.purpose, device_id=excluded.device_id, created_at=excluded.created_at, expires_at=excluded.expires_at, used=excluded.used",
                     (nonce, purpose, device_id, time.time(), time.time() + 120)
                 )
                 conn.commit()
@@ -914,7 +914,7 @@ class GatewayHandler(BaseHTTPRequestHandler):
                 pair_code = "PAIR_" + secrets.token_hex(6).upper()
                 expires_at = time.time() + 120
                 conn.execute(
-                    "INSERT OR REPLACE INTO pairing_requests (pair_code, device_id, challenge_hex, status, expires_at, created_at) VALUES (?, ?, 'chal', 'PENDING', ?, ?)",
+                    "INSERT INTO pairing_requests (pair_code, device_id, challenge_hex, status, expires_at, created_at) VALUES (?, ?, 'chal', 'PENDING', ?, ?) ON CONFLICT (pair_code) DO UPDATE SET device_id=excluded.device_id, challenge_hex=excluded.challenge_hex, status=excluded.status, expires_at=excluded.expires_at, created_at=excluded.created_at",
                     (pair_code, device_id, expires_at, time.time())
                 )
                 conn.commit()
@@ -1078,7 +1078,7 @@ class GatewayHandler(BaseHTTPRequestHandler):
                     return
 
                 conn.execute(
-                    "INSERT OR REPLACE INTO telemetry_events (event_id, install_run_id, device_id, component, version, stage, event_type, severity, error_code, duration_ms, local_time, received_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+                    "INSERT INTO telemetry_events (event_id, install_run_id, device_id, component, version, stage, event_type, severity, error_code, duration_ms, local_time, received_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?) ON CONFLICT (event_id) DO UPDATE SET install_run_id=excluded.install_run_id, device_id=excluded.device_id, component=excluded.component, version=excluded.version, stage=excluded.stage, event_type=excluded.event_type, severity=excluded.severity, error_code=excluded.error_code, duration_ms=excluded.duration_ms, local_time=excluded.local_time, received_at=excluded.received_at",
                     (
                         event_id,
                         data.get("install_run_id"),

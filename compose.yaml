@@ -7,6 +7,7 @@ services:
     restart: unless-stopped
     init: true
     environment:
+      DATABASE_URL: ${DATABASE_URL:-}
       GATEWAY_HOST: 0.0.0.0
       WINKEY_UPDATES_DIR: /updates
     secrets:

@@ -19,6 +19,7 @@ from deploy.vm.server import VMHandler, VMDatabase
 
 
 class VMContract(unittest.TestCase):
+    database_factory = staticmethod(VMDatabase)
     def test_http_registration_pair_command_result_and_admin(self):
         with tempfile.TemporaryDirectory(dir=Path(__file__).resolve().parents[1]) as folder:
             root = Path(folder)
@@ -28,7 +29,7 @@ class VMContract(unittest.TestCase):
             self.assertEqual(key, (root / "deploy/vm/secrets/admin_key").read_text().strip())
             previous = os.environ.get("WINKEY_ADMIN_SECRET")
             os.environ["WINKEY_ADMIN_SECRET"] = key
-            VMHandler.db = VMDatabase(str(root / "test.db"))
+            VMHandler.db = self.database_factory(str(root / "test.db"))
             server = GatewayHTTPServer(("127.0.0.1", 0), VMHandler)
             thread = threading.Thread(target=server.serve_forever, daemon=True)
             thread.start()
@@ -81,10 +82,26 @@ class VMContract(unittest.TestCase):
                 self.assertEqual(http("/agent/result", {"device_id": device, "command_id": command["command_id"], "success": True, "status": "MOCK_ONLY"}, agent)[0], 200)
                 self.assertEqual(http("/commands/" + command["command_id"], token=mobile)[1]["status"], "completed")
                 self.assertEqual(len(http("/admin/devices", admin=True)[1]["devices"]), 1)
+                event = {'event_id': 'test_event', 'device_id': device,
+                         'component': 'test', 'stage': 'before_restart'}
+                self.assertEqual(http('/agent/telemetry', event, agent)[0], 200)
+                event['stage'] = 'updated_event'
+                self.assertEqual(http('/agent/telemetry', event, agent)[0], 200)
+                # Recreate the storage object, as after a gateway restart.
+                if hasattr(VMHandler.db, 'close'):
+                    VMHandler.db.close()
+                VMHandler.db = self.database_factory(str(root / "test.db"))
+                self.assertEqual(len(http("/admin/devices", admin=True)[1]["devices"]), 1)
+                self.assertEqual(http("/agent/poll", {"device_id": device}, agent)[0], 200)
+                self.assertEqual(http("/commands/" + command["command_id"], token=mobile)[1]["status"], "completed")
+                events = http('/admin/telemetry', admin=True)[1]['telemetry']
+                self.assertEqual([e['stage'] for e in events if e['event_id'] == 'test_event'], ['updated_event'])
             finally:
                 server.shutdown()
                 server.server_close()
                 thread.join(5)
+                if hasattr(VMHandler.db, 'close'):
+                    VMHandler.db.close()
                 if previous is None:
                     os.environ.pop("WINKEY_ADMIN_SECRET", None)
                 else:

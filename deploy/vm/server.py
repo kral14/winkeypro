@@ -70,9 +70,16 @@ def main():
     port = int(os.environ.get("PORT", "8788"))
     if not 1 <= port <= 65535:
         raise RuntimeError("PORT 1..65535 aralığında olmalıdır.")
-    VMHandler.db = VMDatabase(os.environ.get("WINKEY_DB_PATH", "/data/winkey.db"))
+    url = os.environ.get('DATABASE_URL', '').strip()
+    if url:
+        from deploy.postgres_database import PostgresDatabase
+        VMHandler.db = PostgresDatabase(url)
+        backend = 'PostgreSQL'
+    else:
+        VMHandler.db = VMDatabase(os.environ.get("WINKEY_DB_PATH", "/data/winkey.db"))
+        backend = 'SQLite'
     server = GatewayHTTPServer((os.environ.get("GATEWAY_HOST", "0.0.0.0"), port), VMHandler)
-    print(f"[VM] Gateway hazırdır: port={port}; PIN və giriş açarları loga yazılmır.", flush=True)
+    print(f"[VM] Gateway hazırdır: port={port}; database={backend}; PIN və giriş açarları loga yazılmır.", flush=True)
     server.serve_forever()
 
 

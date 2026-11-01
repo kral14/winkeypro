@@ -7,6 +7,7 @@ RUN pip install --no-cache-dir -r requirements.txt \
     && useradd --uid 10001 --gid 10001 --no-create-home winkey \
     && mkdir /data /updates && chown 10001:10001 /data
 COPY deploy/gateway_production_server.py /app/deploy/gateway_production_server.py
+COPY deploy/postgres_database.py /app/deploy/postgres_database.py
 COPY deploy/vm/server.py /app/server.py
 COPY deploy/vm/dashboard.html /app/dashboard.html
 USER 10001:10001

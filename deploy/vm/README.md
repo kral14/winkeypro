@@ -1,5 +1,20 @@
 # WinKey — şəxsi Linux VM-də Docker
 
+## Xarici PostgreSQL bazası
+
+Deploy panelində gizli environment kimi `DATABASE_URL` əlavə edin. Dəyər panelinizin
+verdiyi PostgreSQL bağlantı ünvanı olmalıdır; TLS parametrini saxlayın.
+Bağlantı ünvanını GitHub-a, Dockerfile-a və build argument-lərə yazmayın.
+Image yenidən build/deploy edilməlidir. Başlanğıc loqunda `database=PostgreSQL`
+görünməlidir. Cədvəllər avtomatik yaradılır; istifadəçi schema CREATE icazəsinə
+malik olmalıdır. Bağlantı uğursuz olsa server SQLite-a səssiz keçmir, dayanır.
+`DATABASE_URL` yoxdursa əvvəlki `/data/winkey.db` SQLite rejimi işləyir.
+
+PostgreSQL aktivləşəndə mövcud SQLite qeydiyyatları avtomatik köçürülmür.
+Köhnə bazanı qoruyun; boş yeni bazada PC qeydiyyatı və telefon QR cütləşməsi
+yenidən tələb olunur. Windows PIN-i kompüterdə qalır və bazaya göndərilmir.
+Redeploy zamanı eyni DATABASE_URL saxlanmalıdır; xarici baza ayrıca qalır.
+
 ## Dockerfile seçən deploy panelləri
 
 Build növü `Dockerfile`, Dockerfile yolu `Dockerfile`, build context `.` olsun.
