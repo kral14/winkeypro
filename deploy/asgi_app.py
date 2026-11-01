@@ -825,6 +825,22 @@ def build_asgi_app(service: GatewayService, dashboard_html_path: Optional[str] =
 
     @asynccontextmanager
     async def lifespan(app):
+        # The Git commit carries its Windows release. On VM auto-deploy the
+        # verified archive becomes current; no second upload or admin login is needed.
+        from pathlib import Path
+        bundled = Path(os.environ.get('WINKEY_BUNDLED_UPDATE','/app/windows_update.zip'))
+        if bundled.is_file():
+            try:
+                async with publication_lock:
+                    release = await asyncio.to_thread(repository.publish,bundled.read_bytes())
+                print('[BUNDLED_UPDATE_READY] version='+release['version'],flush=True)
+            except ValueError as error:
+                if str(error)=='E_RELEASE_NOT_NEWER':
+                    print('[BUNDLED_UPDATE_SKIP] Serverdə daha yeni buraxılış qorundu',flush=True)
+                else:
+                    print('[BUNDLED_UPDATE_REJECTED] E_INVALID_PACKAGE',flush=True)
+            except Exception:
+                print('[BUNDLED_UPDATE_REJECTED] E_IMPORT_FAILED',flush=True)
         async def sweep():
             last_release = None
             while True:

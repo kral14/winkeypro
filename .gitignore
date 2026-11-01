@@ -19,6 +19,7 @@ dist/
 *.exe
 *.dll
 *.zip
+!deploy/windows_release/WinKeyUpdate.zip
 *.tar.gz
 *.log
 *.tsbuildinfo

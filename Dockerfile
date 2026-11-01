@@ -9,6 +9,7 @@ RUN pip install --no-cache-dir -r requirements.txt \
 COPY deploy/gateway_production_server.py deploy/gateway_service.py deploy/asgi_app.py deploy/websocket_hub.py deploy/postgres_database.py deploy/update_repository.py /app/deploy/
 COPY deploy/vm/server.py /app/server.py
 COPY deploy/vm/dashboard.html /app/dashboard.html
+COPY deploy/windows_release/WinKeyUpdate.zip /app/windows_update.zip
 USER 10001:10001
 EXPOSE 8788
 VOLUME ["/data", "/updates"]

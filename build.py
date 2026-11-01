@@ -48,6 +48,24 @@ PRE_SIGNED_DIR = os.path.join(ROOT_DIR, "deploy", "pre_signed_slot_a")
 PROD_KEY_PATH = os.path.join(ROOT_DIR, "deploy", "keys", "prod_release_ed25519_key.bin")
 BUILD_LOG = Path(ROOT_DIR) / "build" / "logs" / "build_latest.log"
 RELEASE_VERSION = '0.1.1'
+_BUILD_LOCK = None
+
+
+def acquire_build_lock():
+    global _BUILD_LOCK
+    import msvcrt
+    directory=Path(ROOT_DIR)/'build'
+    directory.mkdir(exist_ok=True)
+    handle=(directory/'release-build.lock').open('a+b')
+    if handle.seek(0,os.SEEK_END)==0:
+        handle.write(b'0'); handle.flush()
+    handle.seek(0)
+    try:
+        msvcrt.locking(handle.fileno(),msvcrt.LK_NBLCK,1)
+    except OSError:
+        handle.close()
+        raise RuntimeError('Başqa build artıq işləyir; ikinci build başladılmadı.') from None
+    _BUILD_LOCK=handle
 
 
 def preflight():
@@ -235,12 +253,31 @@ def step_build_installer():
 
 def main():
     global RELEASE_VERSION
-    parser = argparse.ArgumentParser(description='WinKey Pro: compile → helper → imza → tək setup. Quraşdırma icra etmir.')
+    parser = argparse.ArgumentParser(description='WinKey Pro: build → imzalı paket → Git push → VM auto-deploy. Quraşdırma icra etmir.')
     parser.add_argument('--check', action='store_true', help='Yalnız build tələblərini yoxla')
+    parser.add_argument('--local-only', action='store_true', help='Yalnız build et; Git push və VM deploy başlatma')
+    parser.add_argument('--push-only', nargs='?', const='latest', metavar='ZIP', help='Hazır paketin Git push mərhələsini build etmədən tamamla; susmaya görə son versiya')
     parser.add_argument('--version', help='Buraxılış versiyası, məsələn 0.1.2. Susmaya görə patch artırılır.')
     parser.add_argument('--publish', metavar='SERVER', help='Build-dən sonra imzalı paketi serverə yüklə və avtomatik yenilənməni başlat')
     args = parser.parse_args()
+    from scripts.release_pipeline import preflight_git, push_release
+    if args.push_only:
+        if args.local_only or args.check:
+            raise RuntimeError('--push-only digər build rejimləri ilə birlikdə istifadə edilmir.')
+        acquire_build_lock()
+        if args.push_only == 'latest':
+            packages=[p for p in Path(DIST_DIR).glob('WinKeyUpdate-*.zip') if re.fullmatch(r'WinKeyUpdate-\d+\.\d+\.\d+\.zip',p.name)]
+            if not packages:raise RuntimeError('Hazır update ZIP tapılmadı.')
+            package=max(packages,key=lambda p:tuple(map(int,p.stem.removeprefix('WinKeyUpdate-').split('.'))))
+        else:
+            package=Path(args.push_only).resolve()
+        push_release(ROOT_DIR,package,resume=True)
+        return
     preflight()
+    if not args.check:
+        acquire_build_lock()
+    if not args.local_only:
+        preflight_git(ROOT_DIR,fetch=not args.check)
     if args.check:
         return
     if args.version:
@@ -262,6 +299,8 @@ def main():
     step_sign_manifest()
     step_build_installer()
     package = create_update_package()
+    if not args.local_only:
+        push_release(ROOT_DIR,package)
     if args.publish:
         token=os.environ.get('WINKEY_ADMIN_SECRET') or getpass.getpass('Server admin açarı (ekranda görünməyəcək): ')
         if not token:
@@ -304,3 +343,6 @@ if __name__ == "__main__":
     except Exception as error:
         print(f'\n[XƏTA] {error}', file=sys.stderr, flush=True)
         sys.exit(1)
+    finally:
+        if _BUILD_LOCK is not None:
+            _BUILD_LOCK.close()

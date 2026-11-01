@@ -137,10 +137,24 @@ class UpdateTest(WebSocketBoundaryTest):
             self.assertIn('E_RELEASE_SIGNATURE',result.stdout+result.stderr)
             self.assertEqual(downloads,[])
 
+    async def check_vm_start_imports_git_bundled_release(self):
+        from deploy.asgi_app import build_asgi_app
+        import os
+        bundle=Path(self.release_temp.name)/'bundled.zip'
+        bundle.write_bytes(self.package())
+        with patch.dict(os.environ,{'WINKEY_BUNDLED_UPDATE':str(bundle)}):
+            app=build_asgi_app(self.service)
+            async with app.router.lifespan_context(app):
+                self.assertEqual(self.repository.current()['version'],'0.2.0')
+            release_id=self.repository.current()['release_id']
+            # Idempotent VM redeploy of exactly the same signed package.
+            async with app.router.lifespan_context(app):
+                self.assertEqual(self.repository.current()['release_id'],release_id)
+
 
 if __name__=='__main__':
     names=['check_publish_push_and_immutable_download','check_offline_agent_receives_latest_on_reconnect',
            'check_bad_package_and_downgrade_preserve_current','check_native_mock_receives_update_hint',
-           'check_native_rejects_wrong_signer_before_payload_download']
+           'check_native_rejects_wrong_signer_before_payload_download','check_vm_start_imports_git_bundled_release']
     result=unittest.TextTestRunner(verbosity=2).run(unittest.TestSuite(UpdateTest(n) for n in names))
     sys.exit(not result.wasSuccessful())
