@@ -102,9 +102,28 @@ class ProductionDatabase:
                     created_at DOUBLE PRECISION NOT NULL,
                     completed_at DOUBLE PRECISION,
                     result_status TEXT,
+                    claim_owner TEXT,
+                    claim_expires_at DOUBLE PRECISION,
                     FOREIGN KEY (device_id) REFERENCES devices(device_id) ON DELETE CASCADE
                 )
             """)
+            # Dynamic migration for pre-existing commands tables lacking claim columns
+            existing_cols = set()
+            try:
+                if hasattr(self, "pool"):
+                    rows = conn.execute("SELECT column_name FROM information_schema.columns WHERE table_name = 'commands' AND table_schema = current_schema()").fetchall()
+                    existing_cols = {r[0] if isinstance(r, (tuple, list)) else r["column_name"] for r in rows}
+                else:
+                    rows = conn.execute("PRAGMA table_info(commands)").fetchall()
+                    existing_cols = {r[1] if isinstance(r, (tuple, list)) else r["name"] for r in rows}
+            except Exception:
+                pass
+            if existing_cols:
+                if "claim_owner" not in existing_cols:
+                    conn.execute("ALTER TABLE commands ADD COLUMN claim_owner TEXT")
+                if "claim_expires_at" not in existing_cols:
+                    conn.execute("ALTER TABLE commands ADD COLUMN claim_expires_at DOUBLE PRECISION")
+            conn.execute("CREATE INDEX IF NOT EXISTS commands_status_expiry ON commands(status, claim_expires_at)")
             conn.execute("""
                 CREATE TABLE IF NOT EXISTS telemetry_events (
                     event_id TEXT PRIMARY KEY,
@@ -126,105 +145,8 @@ class ProductionDatabase:
             conn.execute("UPDATE mobile_sessions SET expires_at = 0 WHERE expires_at > ?", (time.time(),))
             conn.commit()
 
-class GatewayHandler(BaseHTTPRequestHandler):
-    db: ProductionDatabase = None
-    protocol_version = 'HTTP/1.1'
-    disable_nagle_algorithm = True
-
-    def setup(self):
-        super().setup()
-        self.connection.settimeout(15)
-
-    def parse_request(self):
-        parsed = super().parse_request()
-        # Exclude idle keep-alive time from request processing measurements.
-        self.request_started = time.monotonic()
-        return parsed
-
-    def log_message(self, format, *args):
-        # Do not print raw request URLs: QR secrets can be in the query.
-        pass
-
-    def _set_security_headers(self, content_type="application/json"):
-        self.send_header("Content-Type", content_type)
-        self.send_header("X-Content-Type-Options", "nosniff")
-        self.send_header("X-Frame-Options", "DENY")
-        self.send_header("Content-Security-Policy", "default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline';")
-        self.send_header("Access-Control-Allow-Origin", "*")
-        self.send_header("Access-Control-Allow-Headers", "Content-Type, Authorization, X-Owner-Admin-Secret")
-        self.send_header("Access-Control-Allow-Methods", "GET, POST, OPTIONS")
-
-    def do_OPTIONS(self):
-        self.send_response(204)
-        self._set_security_headers()
-        self.send_header('Content-Length', '0')
-        self.end_headers()
-
-    def _read_json(self) -> Dict[str, Any]:
-        length = int(self.headers.get("Content-Length", 0))
-        if length == 0:
-            return {}
-        raw = self.rfile.read(length)
-        try:
-            return json.loads(raw.decode("utf-8"))
-        except Exception:
-            return {}
-
-    def _send_json(self, status: int, data: Dict[str, Any]):
-        duration_ms = round((time.monotonic() - getattr(self, 'request_started', time.monotonic())) * 1000)
-        print(f"[GATEWAY] {self.command if hasattr(self, 'command') else 'REQUEST'} "
-              f"{urlparse(self.path).path} HTTP={status} "
-              f"code={data.get('error', 'OK')} duration_ms={duration_ms} ts_ms={round(time.time() * 1000)}", flush=True)
-        if status >= 400:
-            self._record_incident(urlparse(self.path).path, data.get('error', f'HTTP_{status}'))
-        body = json.dumps(data).encode("utf-8")
-        self.send_response(status)
-        self._set_security_headers("application/json")
-        self.send_header("Content-Length", str(len(body)))
-        self.send_header('X-App-Duration-Ms', str(duration_ms))
-        self.end_headers()
-        self.wfile.write(body)
-
-    def _record_incident(self, stage, code, device_id=None):
-        # Server-owned allowlisted event. Never store request bodies/QRs/tokens/PINs.
-        if not self.db:
-            return
-        try:
-            with self.db.get_conn() as conn:
-                conn.execute(
-                    "INSERT INTO telemetry_events (event_id, device_id, component, version, stage, event_type, severity, error_code, local_time, received_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
-                    ('evt_' + secrets.token_hex(12), device_id, 'gateway', '0.1.0', stage,
-                     'incident', 'ERROR', str(code)[:120], time.time(), time.time()))
-                conn.commit()
-        except Exception:
-            print('[DIAGNOSTICS] E_INCIDENT_PERSIST_FAILED', flush=True)
-
-    def _get_bearer_token(self) -> Optional[str]:
-        auth = self.headers.get("Authorization", "")
-        if auth.startswith("Bearer "):
-            return auth[7:].strip()
-        return None
-
-    def _authenticate_agent(self, conn, device_id: str) -> bool:
-        """Agent Bearer token vasitəsilə cihazın həqiqi sahibi olduğunu təsdiqləyir."""
-        token = self._get_bearer_token()
-        if not token:
-            return False
-        sec_hash = hashlib.sha256(token.encode("utf-8")).hexdigest()
-        row = conn.execute("SELECT device_id FROM devices WHERE device_secret_hash = ? AND status = 'ACTIVE'", (sec_hash,)).fetchone()
-        return bool(row and row["device_id"] == device_id)
-
-    def do_GET(self):
-        if urlparse(self.path).path in ('/remote', '/mobile'):
-            print(f"[GATEWAY] phone opened {urlparse(self.path).path} (QR query redacted)", flush=True)
-        url = urlparse(self.path)
-        path = url.path.rstrip("/")
-
-        # 1. Zəngin Avant-Garde Mobil Web Remote və PWA İnterfeysi
-        if path in ("/mobile", "/remote", ""):
-            self.send_response(200)
-            self._set_security_headers("text/html; charset=utf-8")
-            html = """<!DOCTYPE html>
+def get_mobile_html() -> str:
+    return """<!DOCTYPE html>
 <html lang="az">
 <head>
     <meta charset="utf-8">
@@ -444,6 +366,7 @@ class GatewayHandler(BaseHTTPRequestHandler):
             }
             if (targetDevice) {
                 devIdEl.textContent = 'Cihaz ID: ' + targetDevice;
+                connectWS();
                 pollStatus();
                 setInterval(pollStatus, 3000);
                 if (pendingCommand) sendCommand(pendingCommand.action, true);
@@ -452,6 +375,7 @@ class GatewayHandler(BaseHTTPRequestHandler):
         }
 
         async function pollStatus() {
+            if (wsConnected) return;
             if (!authToken || !targetDevice || commandBusy || statusBusy || document.hidden) return;
             statusBusy = true;
             try {
@@ -495,6 +419,31 @@ class GatewayHandler(BaseHTTPRequestHandler):
             diagnosticAction = action;
             setBusy(true);
             const sendStarted = tappedAt;
+
+            // WS-04: Saglam WebSocket aktivdirse, emri birbasa WebSocket ile gonderirik (HTTP POST = 0)
+            if (wsConnected && ws && (ws.readyState === 1 || (typeof WebSocket !== 'undefined' && ws.readyState === WebSocket.OPEN))) {
+                try {
+                    ws.send(JSON.stringify({
+                        type: 'command',
+                        action: action,
+                        request_id: pendingCommand.requestId
+                    }));
+                    statusBox.innerHTML = '<span class="spinner"></span>WebSocket ilə göndərildi (' + action + ')...';
+                    // async wait handled by onmessage
+                } catch(e) {
+                    statusBox.textContent = 'WebSocket xətası: ' + e.message;
+                } finally {
+                    setBusy(false);
+                    if (desiredAction !== null) {
+                        const next = desiredAction;
+                        const nextSince = desiredSince;
+                        const nextId = desiredRequestId;
+                        desiredAction = null;
+                        await sendCommand(next, false, nextSince, nextId);
+                    }
+                }
+                return;
+            }
             statusBox.innerHTML = '<span class="spinner"></span>Əmr göndərilir (' + action + ')...';
             try {
                 let r;
@@ -531,6 +480,7 @@ class GatewayHandler(BaseHTTPRequestHandler):
         }
 
         async function pollCommandResult(cmdId, action, sentMs = 0, started = performance.now(), serverMs = null) {
+            if (wsConnected) return;
             const deadline = performance.now() + 20000;
             while (performance.now() < deadline) {
                 if (desiredAction !== null) return;
@@ -589,20 +539,130 @@ class GatewayHandler(BaseHTTPRequestHandler):
             location.reload();
         }
 
+
+        let ws = null;
+        let wsConnected = false;
+        let wsRetryTimer = null;
+        let activeCommandResolver = null;
+
+        function waitForWSResult(reqId, timeoutMs = 20000) {
+            return new Promise((resolve) => {
+                const timer = setTimeout(() => {
+                    if (activeCommandResolver) {
+                        activeCommandResolver = null;
+                        statusBox.textContent = 'Əmr icra vaxtı aşımı.';
+                        resolve(null);
+                    }
+                }, timeoutMs);
+                activeCommandResolver = (res) => {
+                    clearTimeout(timer);
+                    resolve(res);
+                };
+            });
+        }
+
+        function connectWS() {
+            if (!authToken || !targetDevice) return;
+            if (ws && (ws.readyState === WebSocket.OPEN || ws.readyState === WebSocket.CONNECTING)) return;
+            const proto = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
+            const wsUrl = proto + '//' + window.location.host + '/ws';
+            try {
+                ws = new WebSocket(wsUrl);
+            } catch(e) {
+                scheduleWSRetry();
+                return;
+            }
+            ws.onopen = () => {
+                ws.send(JSON.stringify({
+                    type: 'auth',
+                    role: 'mobile',
+                    session_token: authToken
+                }));
+            };
+            ws.onmessage = (event) => {
+                try {
+                    const msg = JSON.parse(event.data);
+                    if (msg.type === 'auth_ok') {
+                        wsConnected = true;
+                        statusBox.textContent = 'Canlı WebSocket bağlantısı aktivdir.';
+                    } else if (msg.type === 'device_state') {
+                        if (msg.computer_name) devNameEl.textContent = msg.computer_name;
+                        badgeEl.textContent = msg.locked ? 'Kilidli' : 'Açıq';
+                        badgeEl.className = msg.online ? 'badge badge-online' : 'badge badge-offline';
+                    } else if (msg.type === 'command_status') {
+                        if (msg.status === 'delivered') {
+                            statusBox.innerHTML = '<span class="spinner"></span>Kompüter əmri qəbul etdi, icra olunur (' + msg.action + ')...';
+                        } else if (msg.status === 'superseded') {
+                            statusBox.textContent = 'Əvvəlki əmr son istəklə əvəz edilib.';
+                        }
+                    } else if (msg.type === 'command_ack') {
+                        if (pendingCommand && (!pendingCommand.commandId || pendingCommand.requestId === msg.request_id)) {
+                            pendingCommand.commandId = msg.command_id;
+                        }
+                    } else if (msg.type === 'command_result') {
+                        const isMatch = !pendingCommand || !pendingCommand.commandId || pendingCommand.commandId === msg.command_id;
+                        if (isMatch) {
+                            setBusy(false);
+                            savePending(null);
+                            if (msg.status === 'completed') {
+                                statusBox.textContent = 'İcra tamamlandı: ' + (msg.result || 'Uğurlu');
+                            } else {
+                                statusBox.textContent = 'İcra uğursuz oldu: ' + (msg.result || 'Xəta');
+                            }
+                            if (activeCommandResolver) {
+                                const cb = activeCommandResolver;
+                                activeCommandResolver = null;
+                                cb(msg);
+                            }
+                        }
+                    }
+                } catch(e) {}
+            };
+            ws.onclose = (event) => {
+                ws = null;
+                wsConnected = false;
+                if (event.code === 4403) {
+                    localStorage.removeItem('winkey_token');
+                    authToken = null;
+                    badgeEl.textContent = 'Ləğv edildi';
+                    badgeEl.className = 'badge badge-offline';
+                    statusBox.textContent = 'Cihaz və ya sessiya serverdə ləğv edildi.';
+                    return;
+                }
+                scheduleWSRetry();
+            };
+            ws.onerror = () => {
+                if (ws) ws.close();
+            };
+        }
+
+        function scheduleWSRetry() {
+            if (wsRetryTimer) clearTimeout(wsRetryTimer);
+            wsRetryTimer = setTimeout(() => {
+                if (!wsConnected && authToken && targetDevice) {
+                    connectWS();
+                }
+            }, 3000);
+        }
+
+        if (typeof document !== 'undefined' && typeof document.addEventListener === 'function') {
+            document.addEventListener('visibilitychange', () => {
+                if (!document.hidden && !wsConnected && authToken && targetDevice) connectWS();
+            });
+        }
+        if (typeof window !== 'undefined' && typeof window.addEventListener === 'function') {
+            window.addEventListener('online', () => {
+                if (!wsConnected && authToken && targetDevice) connectWS();
+            });
+        }
+
         init();
     </script>
 </body>
 </html>"""
-            self.send_header('Content-Length', str(len(html.encode('utf-8'))))
-            self.end_headers()
-            self.wfile.write(html.encode("utf-8"))
-            return
 
-        # 1b. Zəngin Avant-Garde Private Admin Dashboard İnterfeysi
-        if path == "/admin":
-            self.send_response(200)
-            self._set_security_headers("text/html; charset=utf-8")
-            admin_html = """<!DOCTYPE html>
+def get_admin_html() -> str:
+    return """<!DOCTYPE html>
 <html lang="az">
 <head>
     <meta charset="utf-8">
@@ -791,6 +851,118 @@ class GatewayHandler(BaseHTTPRequestHandler):
     </script>
 </body>
 </html>"""
+
+class GatewayHandler(BaseHTTPRequestHandler):
+    db: ProductionDatabase = None
+    protocol_version = 'HTTP/1.1'
+    disable_nagle_algorithm = True
+
+    def setup(self):
+        super().setup()
+        self.connection.settimeout(15)
+
+    def parse_request(self):
+        parsed = super().parse_request()
+        # Exclude idle keep-alive time from request processing measurements.
+        self.request_started = time.monotonic()
+        return parsed
+
+    def log_message(self, format, *args):
+        # Do not print raw request URLs: QR secrets can be in the query.
+        pass
+
+    def _set_security_headers(self, content_type="application/json"):
+        self.send_header("Content-Type", content_type)
+        self.send_header("X-Content-Type-Options", "nosniff")
+        self.send_header("X-Frame-Options", "DENY")
+        self.send_header("Content-Security-Policy", "default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline';")
+        self.send_header("Access-Control-Allow-Origin", "*")
+        self.send_header("Access-Control-Allow-Headers", "Content-Type, Authorization, X-Owner-Admin-Secret")
+        self.send_header("Access-Control-Allow-Methods", "GET, POST, OPTIONS")
+
+    def do_OPTIONS(self):
+        self.send_response(204)
+        self._set_security_headers()
+        self.send_header('Content-Length', '0')
+        self.end_headers()
+
+    def _read_json(self) -> Dict[str, Any]:
+        length = int(self.headers.get("Content-Length", 0))
+        if length == 0:
+            return {}
+        raw = self.rfile.read(length)
+        try:
+            return json.loads(raw.decode("utf-8"))
+        except Exception:
+            return {}
+
+    def _send_json(self, status: int, data: Dict[str, Any]):
+        duration_ms = round((time.monotonic() - getattr(self, 'request_started', time.monotonic())) * 1000)
+        print(f"[GATEWAY] {self.command if hasattr(self, 'command') else 'REQUEST'} "
+              f"{urlparse(self.path).path} HTTP={status} "
+              f"code={data.get('error', 'OK')} duration_ms={duration_ms} ts_ms={round(time.time() * 1000)}", flush=True)
+        if status >= 400:
+            self._record_incident(urlparse(self.path).path, data.get('error', f'HTTP_{status}'))
+        body = json.dumps(data).encode("utf-8")
+        self.send_response(status)
+        self._set_security_headers("application/json")
+        self.send_header("Content-Length", str(len(body)))
+        self.send_header('X-App-Duration-Ms', str(duration_ms))
+        self.end_headers()
+        self.wfile.write(body)
+
+    def _record_incident(self, stage, code, device_id=None):
+        # Server-owned allowlisted event. Never store request bodies/QRs/tokens/PINs.
+        if not self.db:
+            return
+        try:
+            with self.db.get_conn() as conn:
+                conn.execute(
+                    "INSERT INTO telemetry_events (event_id, device_id, component, version, stage, event_type, severity, error_code, local_time, received_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+                    ('evt_' + secrets.token_hex(12), device_id, 'gateway', '0.1.0', stage,
+                     'incident', 'ERROR', str(code)[:120], time.time(), time.time()))
+                conn.commit()
+        except Exception:
+            print('[DIAGNOSTICS] E_INCIDENT_PERSIST_FAILED', flush=True)
+
+    def _get_bearer_token(self) -> Optional[str]:
+        auth = self.headers.get("Authorization", "")
+        if auth.startswith("Bearer "):
+            return auth[7:].strip()
+        return None
+
+    def _authenticate_agent(self, conn, device_id: str) -> bool:
+        """Agent Bearer token vasitəsilə cihazın həqiqi sahibi olduğunu təsdiqləyir."""
+        token = self._get_bearer_token()
+        if not token:
+            return False
+        sec_hash = hashlib.sha256(token.encode("utf-8")).hexdigest()
+        row = conn.execute("SELECT device_id FROM devices WHERE device_secret_hash = ? AND status = 'ACTIVE'", (sec_hash,)).fetchone()
+        return bool(row and row["device_id"] == device_id)
+
+    def do_GET(self):
+        if urlparse(self.path).path in ('/remote', '/mobile'):
+            print(f"[GATEWAY] phone opened {urlparse(self.path).path} (QR query redacted)", flush=True)
+        url = urlparse(self.path)
+        path = url.path.rstrip("/")
+
+
+
+        # 1. Zəngin Avant-Garde Mobil Web Remote və PWA İnterfeysi
+        if path in ("/mobile", "/remote", ""):
+            self.send_response(200)
+            self._set_security_headers("text/html; charset=utf-8")
+            html = get_mobile_html()
+            self.send_header('Content-Length', str(len(html.encode('utf-8'))))
+            self.end_headers()
+            self.wfile.write(html.encode("utf-8"))
+            return
+
+        # 1b. Zəngin Avant-Garde Private Admin Dashboard İnterfeysi
+        if path == "/admin":
+            self.send_response(200)
+            self._set_security_headers("text/html; charset=utf-8")
+            admin_html = get_admin_html()
             self.send_header('Content-Length', str(len(admin_html.encode('utf-8'))))
             self.end_headers()
             self.wfile.write(admin_html.encode("utf-8"))

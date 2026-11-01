@@ -8,6 +8,7 @@ mod recovery_engine;
 mod storage;
 mod diagnostics;
 mod helper_peer;
+mod ws_transport;
 
 use std::ffi::c_void;
 use std::fs;
@@ -1134,7 +1135,7 @@ fn main() {
         let is_mock = args.iter().any(|a| a == "--mock");
 
         let t_ipc = thread::spawn(move || run_ipc_worker_loop(stop_ipc, is_mock, data_ipc));
-        let t_poll = thread::spawn(move || run_gateway_poller_loop(stop_poll, is_mock, data_poll));
+        let t_poll = thread::spawn(move || ws_transport::run_gateway_transport_loop(stop_poll, is_mock, data_poll));
         let t_gw = thread::spawn(move || embedded_gateway::run_embedded_gateway(stop_gw, is_mock, data_gw, 8788));
 
         while RUNNING.load(Ordering::SeqCst) {
@@ -1453,7 +1454,7 @@ fn main() {
         });
 
         let t_poll = thread::spawn(move || {
-            run_gateway_poller_loop(stop_poll, is_mock, data_for_poll);
+            ws_transport::run_gateway_transport_loop(stop_poll, is_mock, data_for_poll);
         });
 
         let t_gw = thread::spawn(move || {

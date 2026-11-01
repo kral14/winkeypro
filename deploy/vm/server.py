@@ -73,14 +73,23 @@ def main():
     url = os.environ.get('DATABASE_URL', '').strip()
     if url:
         from deploy.postgres_database import PostgresDatabase
-        VMHandler.db = PostgresDatabase(url)
+        db = PostgresDatabase(url)
         backend = 'PostgreSQL'
     else:
-        VMHandler.db = VMDatabase(os.environ.get("WINKEY_DB_PATH", "/data/winkey.db"))
+        db = VMDatabase(os.environ.get("WINKEY_DB_PATH", "/data/winkey.db"))
         backend = 'SQLite'
-    server = GatewayHTTPServer((os.environ.get("GATEWAY_HOST", "0.0.0.0"), port), VMHandler)
-    print(f"[VM] Gateway hazırdır: port={port}; database={backend}; PIN və giriş açarları loga yazılmır.", flush=True)
-    server.serve_forever()
+    VMHandler.db = db
+
+    from deploy.gateway_service import GatewayService
+    from deploy.asgi_app import build_asgi_app
+    service = GatewayService(db, lambda: key)
+    dashboard_path = str(Path(__file__).with_name("dashboard.html"))
+    app = build_asgi_app(service, dashboard_path)
+    host = os.environ.get("GATEWAY_HOST", "0.0.0.0")
+    print(f"[VM] Gateway hazırdır (HTTP + WebSocket): port={port}; database={backend}; PIN və giriş açarları loga yazılmır.", flush=True)
+
+    import uvicorn
+    uvicorn.run(app, host=host, port=port, log_level="warning", access_log=False, ws_max_size=65536)
 
 
 if __name__ == "__main__":

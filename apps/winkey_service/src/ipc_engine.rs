@@ -64,6 +64,7 @@ impl IpcSecurityPolicy {
         }
         if let Some(ref exp_sid) = self.expected_sid {
             if &peer.os_client_sid != exp_sid {
+                eprintln!("[IPC_SID_MISMATCH] peer_sid='{}', expected_sid='{}'", peer.os_client_sid, exp_sid);
                 return Err("E_UNAUTHORIZED_PEER_SID: Client OS SID-i təsdiqlənmiş istifadəçi ilə uyğun gəlmir");
             }
         }
