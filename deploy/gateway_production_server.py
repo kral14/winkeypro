@@ -19,7 +19,7 @@ import sqlite3
 import secrets
 import hashlib
 from typing import Dict, Any, Optional
-from http.server import HTTPServer, BaseHTTPRequestHandler
+from http.server import HTTPServer, ThreadingHTTPServer, BaseHTTPRequestHandler
 from urllib.parse import urlparse, parse_qs
 from cryptography.hazmat.primitives.asymmetric import ed25519
 
@@ -1124,11 +1124,16 @@ class GatewayHandler(BaseHTTPRequestHandler):
 
         self._send_json(404, {"error": "E_NOT_FOUND"})
 
+class GatewayHTTPServer(ThreadingHTTPServer):
+    # A slow/incomplete client must not block device polls or mobile commands.
+    request_queue_size = 128
+
+
 def run_server(port: int, db_path: str) -> HTTPServer:
     db = ProductionDatabase(db_path)
     GatewayHandler.db = db
     host = os.environ.get("GATEWAY_HOST", "0.0.0.0")
-    server = HTTPServer((host, port), GatewayHandler)
+    server = GatewayHTTPServer((host, port), GatewayHandler)
     return server
 
 if __name__ == "__main__":

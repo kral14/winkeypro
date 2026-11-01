@@ -9,11 +9,11 @@ import threading
 import unittest
 from urllib.error import HTTPError
 from urllib.request import Request, urlopen
-from http.server import HTTPServer
 from cryptography.hazmat.primitives.asymmetric.ed25519 import Ed25519PrivateKey
 from cryptography.hazmat.primitives import serialization
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
+from deploy.gateway_production_server import GatewayHTTPServer
 from deploy.vm.configure import configure
 from deploy.vm.server import VMHandler, VMDatabase
 
@@ -29,7 +29,7 @@ class VMContract(unittest.TestCase):
             previous = os.environ.get("WINKEY_ADMIN_SECRET")
             os.environ["WINKEY_ADMIN_SECRET"] = key
             VMHandler.db = VMDatabase(str(root / "test.db"))
-            server = HTTPServer(("127.0.0.1", 0), VMHandler)
+            server = GatewayHTTPServer(("127.0.0.1", 0), VMHandler)
             thread = threading.Thread(target=server.serve_forever, daemon=True)
             thread.start()
             origin = f"http://127.0.0.1:{server.server_port}"
