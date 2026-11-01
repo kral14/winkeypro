@@ -583,6 +583,34 @@ Get-ChildItem -LiteralPath $slotADir -Recurse -File -Force | ForEach-Object {
     if ($LASTEXITCODE -ne 0) { Invoke-Rollback "E_SLOT_FILE_REPAIR_ACL: $($_.Name)" }
 }
 
+function Remove-UnlistedHelperRuntime {
+    param([Parameter(Mandatory=$true)][string]$RootDir, [Parameter(Mandatory=$true)]$Manifest)
+    $rootFull = [IO.Path]::GetFullPath($RootDir).TrimEnd('\')
+    $runtimeFull = [IO.Path]::GetFullPath((Join-Path $rootFull 'helper_runtime'))
+    if (-not $runtimeFull.StartsWith(($rootFull + '\'), [StringComparison]::OrdinalIgnoreCase)) { throw 'E_RUNTIME_CLEANUP_PATH' }
+    if (-not (Test-Path -LiteralPath $runtimeFull)) { return }
+    $allowed = [Collections.Generic.HashSet[string]]::new([StringComparer]::OrdinalIgnoreCase)
+    foreach ($entry in $Manifest.files) { [void]$allowed.Add([string]$entry.path) }
+    $queue = [Collections.Generic.Queue[string]]::new()
+    $queue.Enqueue($runtimeFull)
+    while ($queue.Count -gt 0) {
+        $directory = $queue.Dequeue()
+        $item = Get-Item -LiteralPath $directory -Force
+        if ($item.Attributes -band [IO.FileAttributes]::ReparsePoint) { throw 'E_RUNTIME_CLEANUP_REPARSE' }
+        foreach ($file in Get-ChildItem -LiteralPath $directory -Force) {
+            $full = [IO.Path]::GetFullPath($file.FullName)
+            if (-not $full.StartsWith(($runtimeFull + '\'), [StringComparison]::OrdinalIgnoreCase)) { throw 'E_RUNTIME_CLEANUP_ESCAPE' }
+            if ($file.Attributes -band [IO.FileAttributes]::ReparsePoint) { throw 'E_RUNTIME_CLEANUP_REPARSE' }
+            if ($file.PSIsContainer) { $queue.Enqueue($full); continue }
+            $relative = $full.Substring($rootFull.Length + 1).Replace('\','/')
+            if (-not $allowed.Contains($relative)) {
+                Write-Host ('[RUNTIME_CLEANUP] Köhnə imzasız qalıq silinir: ' + $relative)
+                Remove-Item -LiteralPath $full -Force
+            }
+        }
+    }
+}
+
 # Initial Signed Slot A Provisioning (Fresh Install Boot Preflight zəmanəti)
 try {
     Copy-Item -Path $svcSrc -Destination (Join-Path $slotADir "winkey_service.exe") -Force
@@ -622,6 +650,13 @@ try {
         Invoke-Rollback "Pre-signed Slot A native Ed25519 imza və ya SHA-256 bütövlük testindən keçmədi (Exit: $LASTEXITCODE)!"
     }
     Write-Host "[PASS] Pre-signed Slot A native Ed25519 verifier tərəfindən uğurla təsdiqləndi." -ForegroundColor Green
+    # Copy /r keeps removed DLLs from previous builds. Prune ONLY runtime files
+    # absent from this already signature-verified manifest, after service stop.
+    $signedManifest = Get-Content -LiteralPath (Join-Path $slotADir 'manifest.json') -Raw | ConvertFrom-Json
+    Remove-UnlistedHelperRuntime -RootDir $slotADir -Manifest $signedManifest
+    Remove-UnlistedHelperRuntime -RootDir $InstallDir -Manifest $signedManifest
+    & "$svcSrc" --validate-slot "$slotADir"
+    if ($LASTEXITCODE -ne 0) { Invoke-Rollback 'E_RUNTIME_CLEANUP_VALIDATION_FAILED' }
 
     # İlkin update_journal.json yazılışı
     $journalPath = Join-Path $DataDir "update_journal.json"

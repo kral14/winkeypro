@@ -329,7 +329,10 @@ pub fn validate_helper_binary(path: &std::path::Path) -> bool {
                     let path = entry.path();
                     let Ok(relative) = path.strip_prefix(root) else { return false; };
                     let name = relative.to_string_lossy().replace('\\', "/");
-                    if !files.iter().any(|f| f.get("path").and_then(|p| p.as_str()) == Some(name.as_str())) { return false; }
+                    if !files.iter().any(|f| f.get("path").and_then(|p| p.as_str()).map(|p| p.eq_ignore_ascii_case(&name)).unwrap_or(false)) {
+                        eprintln!("[HELPER_REJECT] E_RUNTIME_UNLISTED_FILE: {}", name);
+                        return false;
+                    }
                 }
             }
             true

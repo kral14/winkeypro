@@ -539,6 +539,14 @@ fn run_ipc_worker_loop(stop_signal: Arc<AtomicBool>, is_mock: bool, data_dir: Pa
                             stop_signal.store(false, Ordering::SeqCst);
                             RUNNING.store(false, Ordering::SeqCst);
                             serde_json::to_string(&IpcResponse::Ack).unwrap()
+                        } else if serde_json::from_str::<IpcCommand>(&req_str).map(|command| matches!(command,IpcCommand::RequestPairing {..})).unwrap_or(false) {
+                            let outcome = (|| -> Result<serde_json::Value,String> {
+                                let IpcCommand::RequestPairing {device_id,gateway_origin}=serde_json::from_str(&req_str).map_err(|_|"E_PAIR_REQUEST_FORMAT")? else {
+                                    return Err("E_PAIR_REQUEST_FORMAT".into());
+                                };
+                                request_pair_code_for_enrolled_device(&data_dir,&device_id,&gateway_origin)
+                            })();
+                            match outcome {Ok(pair)=>pair.to_string(),Err(code)=>serde_json::json!({"error":code}).to_string()}
                         } else if req_str.contains("ProvisionDevice") {
                             println!("[IPC_PROVISION] Autentifikasiya olunmuş interaktiv istifadəçidən cihaz təminatı qəbul edildi.");
                             if let Ok(IpcCommand::ProvisionDevice { device_id, device_secret, gateway_origin }) = serde_json::from_str::<IpcCommand>(&req_str) {
@@ -630,6 +638,65 @@ fn run_ipc_worker_loop(stop_signal: Arc<AtomicBool>, is_mock: bool, data_dir: Pa
 }
 
 // Gateway Polling və Real Command Execution Handler
+fn request_pair_code_for_enrolled_device(data_dir:&std::path::Path, device_id:&str, gateway_origin:&str) -> Result<serde_json::Value,String> {
+let config:serde_json::Value=serde_json::from_slice(&fs::read(data_dir.join("config.json")).map_err(|_|"E_SERVICE_NOT_ENROLLED")?).map_err(|_|"E_SERVICE_NOT_ENROLLED")?;
+let stored_origin=config.get("gateway_origin").and_then(|v|v.as_str()).unwrap_or("").trim_end_matches('/');
+if config.get("device_id").and_then(|v|v.as_str())!=Some(device_id) || stored_origin.is_empty()
+    || stored_origin!=gateway_origin.trim_end_matches('/') {
+    return Err("E_PAIR_SERVICE_CONTEXT_MISMATCH".into());
+}
+let secret=storage::load_device_secret_dpapi(data_dir).map_err(|_|"E_SERVICE_CREDENTIAL_UNAVAILABLE")?;
+let response=ureq::post(&format!("{}/devices/pair-request",stored_origin))
+    .timeout(Duration::from_secs(3)).set("Authorization",&format!("Bearer {}",secret))
+    .send_json(serde_json::json!({"device_id":device_id})).map_err(|_|"E_SERVICE_PAIR_REQUEST_FAILED")?;
+let pair:serde_json::Value=response.into_json().map_err(|_|"E_SERVICE_PAIR_RESPONSE")?;
+// Never return the SYSTEM device secret to the renderer/user process.
+Ok(serde_json::json!({"device_id":device_id,"pair_code":pair.get("pair_code"),"expires_at":pair.get("expires_at")}))
+}
+
+#[cfg(test)]
+mod pairing_broker_tests {
+    use super::*;
+    #[test]
+    fn broker_uses_enrolled_credential_without_registration_or_secret_response() {
+        use std::io::{Read,Write};
+        let listener=std::net::TcpListener::bind("127.0.0.1:0").unwrap();
+        let origin=format!("http://{}",listener.local_addr().unwrap());
+        let root=std::env::temp_dir().join(format!("winkey-broker-{}",uuid::Uuid::new_v4()));
+        fs::create_dir_all(&root).unwrap();
+        fs::write(root.join("config.json"),serde_json::to_vec(&serde_json::json!({"device_id":"test-device","gateway_origin":origin})).unwrap()).unwrap();
+        storage::save_device_secret_dpapi(&root,"FAKE_TEST_AGENT_SECRET").unwrap();
+        assert!(request_pair_code_for_enrolled_device(&root,"other-device",&origin).unwrap_err().contains("CONTEXT_MISMATCH"));
+        assert!(request_pair_code_for_enrolled_device(&root,"test-device","http://invalid.example").unwrap_err().contains("CONTEXT_MISMATCH"));
+        let server=std::thread::spawn(move || {
+            let (mut stream,_)=listener.accept().unwrap();
+            stream.set_read_timeout(Some(Duration::from_secs(3))).unwrap();
+            let mut bytes=Vec::new();
+            let mut buffer=[0;4096];
+            loop {
+                let count=stream.read(&mut buffer).unwrap();
+                assert!(count>0); bytes.extend_from_slice(&buffer[..count]);
+                if let Some(end)=bytes.windows(4).position(|v|v==b"\r\n\r\n") {
+                    let headers=String::from_utf8_lossy(&bytes[..end]);
+                    let length=headers.lines().find_map(|line|line.to_lowercase().strip_prefix("content-length:").and_then(|v|v.trim().parse::<usize>().ok())).unwrap_or(0);
+                    if bytes.len()>=end+4+length {break;}
+                }
+            }
+            let request=String::from_utf8_lossy(&bytes);
+            assert!(request.starts_with("POST /devices/pair-request "));
+            assert!(request.to_lowercase().contains("authorization: bearer fake_test_agent_secret"));
+            let body=r#"{"pair_code":"ABCD-EFGH-JKLM","expires_at":9999999999,"device_secret":"MUST_NOT_LEAVE_BROKER"}"#;
+            write!(stream,"HTTP/1.1 200 OK\r\nContent-Type: application/json\r\nContent-Length: {}\r\nConnection: close\r\n\r\n{}",body.len(),body).unwrap();
+        });
+        let pair=request_pair_code_for_enrolled_device(&root,"test-device",&origin).unwrap();
+        assert_eq!(pair["pair_code"],"ABCD-EFGH-JKLM");
+        assert_eq!(pair["device_id"],"test-device");
+        assert!(pair.get("device_secret").is_none());
+        server.join().unwrap();
+        fs::remove_dir_all(root).unwrap();
+    }
+}
+
 fn update_input_idle(data_dir: &std::path::Path) -> bool {
     match fs::read(data_dir.join("outbox").join("in_flight.json")) {
         Ok(raw) => serde_json::from_slice::<Vec<serde_json::Value>>(&raw).map(|v|v.is_empty()).unwrap_or(false),

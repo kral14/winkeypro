@@ -854,7 +854,18 @@ fn generate_qr_pairing(mode: Option<String>) -> Result<PairingPayloadDto, String
         secret_source.and_then(|path| fs::read(path).ok()).and_then(|b| dpapi_unprotect(&b).ok()).and_then(|b| String::from_utf8(b).ok())
     } else { None };
 
-    let (secret, pair_code, expires_at) = (|| -> Result<(String, String, u64), String> {
+    let is_local_mode = matches!(mode.as_deref(), Some("wifi") | Some("local"));
+    let broker_pair = if !is_local_mode {
+        let command=serde_json::json!({"RequestPairing":{"device_id":device_id,"gateway_origin":origin}}).to_string();
+        send_service_control_command(&command).ok()
+            .and_then(|raw|serde_json::from_str::<serde_json::Value>(&raw).ok())
+            .filter(|value|value.get("device_id").and_then(|v|v.as_str())==Some(device_id.as_str())
+                && value.get("pair_code").and_then(|v|v.as_str()).is_some()
+                && value.get("expires_at").and_then(|v|v.as_f64()).is_some())
+    } else {None};
+    let (secret, pair_code, expires_at) = if let Some(pair)=broker_pair {
+        (None,pair["pair_code"].as_str().unwrap().to_string(),pair["expires_at"].as_f64().unwrap() as u64)
+    } else {(|| -> Result<(Option<String>, String, u64), String> {
         let do_register = || -> Result<String, String> {
             let challenge = request("/agent/challenge", serde_json::json!({"purpose":"register", "device_id":device_id}), None)?;
             let nonce = challenge.get("nonce").and_then(|v| v.as_str()).ok_or("E_MISSING_NONCE")?;
@@ -863,7 +874,9 @@ fn generate_qr_pairing(mode: Option<String>) -> Result<PairingPayloadDto, String
             let registered = request("/agent/register", serde_json::json!({
                 "device_id":device_id, "computer_name":computer_name, "public_key_hex":public_key_hex,
                 "nonce":nonce, "proof_signature_hex":proof_hex
-            }), None)?;
+            }), None).map_err(|error| if error.contains("E_DEVICE_ALREADY_REGISTERED") {
+                "E_LOCAL_AGENT_ACCESS_RECOVERY_REQUIRED: Cihaz serverdə mövcuddur. Quraşdırılmış xidməti Repair/setup ilə yeniləyin; cihazı və telefon sessiyalarını silməyin.".to_string()
+            } else {error})?;
             registered.get("device_secret").and_then(|v| v.as_str()).map(String::from).ok_or_else(|| "E_MISSING_DEVICE_SECRET".to_string())
         };
 
@@ -885,17 +898,18 @@ fn generate_qr_pairing(mode: Option<String>) -> Result<PairingPayloadDto, String
         };
         let code = pair.get("pair_code").and_then(|v| v.as_str()).ok_or("E_MISSING_PAIR_CODE")?.to_string();
         let exp = pair.get("expires_at").and_then(|v| v.as_f64()).ok_or("E_MISSING_PAIR_EXPIRY")? as u64;
-        Ok((sec, code, exp))
+        Ok((Some(sec), code, exp))
     })().map_err(|err| {
         eprintln!("[PAIRING] Gateway xətası: {}", err);
         format!("E_GATEWAY_PAIRING_FAILED: {}", err)
-    })?;
+    })?};
 
     let challenge_hex = String::new();
-    let is_local_mode = matches!(mode.as_deref(), Some("wifi") | Some("local"));
-    let encrypted = dpapi_protect(secret.as_bytes())?;
-    fs::write(&endpoint_secret_file, &encrypted).map_err(|_| "E_SECRET_SAVE")?;
-    if !is_local_mode { fs::write(&secret_file, &encrypted).map_err(|_| "E_SECRET_SAVE")?; }
+    if let Some(secret)=secret.as_ref() {
+        let encrypted = dpapi_protect(secret.as_bytes())?;
+        fs::write(&endpoint_secret_file, &encrypted).map_err(|_| "E_SECRET_SAVE")?;
+        // SYSTEM vault is provisioned through IPC; never overwrite its DPAPI blob from the UI.
+    }
     cfg_val["device_id"] = serde_json::json!(device_id);
     cfg_val["computer_name"] = serde_json::json!(computer_name);
     gateway_config::record_registration(&mut cfg_val, &origin, is_local_mode);
@@ -915,8 +929,8 @@ fn generate_qr_pairing(mode: Option<String>) -> Result<PairingPayloadDto, String
     let pd_pair = std::path::PathBuf::from("C:\\ProgramData\\WinKey\\active_pair.json");
     let _ = fs::write(&pd_pair, pair_challenge_dto.to_string());
 
-    if !is_local_mode {
-        match provision_device_to_service_ipc(&device_id, &secret) {
+    if let Some(secret)=secret.as_ref().filter(|_| !is_local_mode) {
+        match provision_device_to_service_ipc(&device_id, secret) {
             Ok(_) => eprintln!("[PAIRING] trusted service provisioning OK"),
             Err(_) => eprintln!("[PAIRING] E_SERVICE_PROVISION_FAILED: QR may pair, but PC commands require the installed service"),
         }

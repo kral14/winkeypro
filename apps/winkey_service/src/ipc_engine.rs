@@ -18,6 +18,7 @@ pub enum IpcCommand {
     InjectPin { dummy_payload: String },
     ProvisionDevice { device_id: String, device_secret: String, #[serde(default)] gateway_origin: Option<String> },
     StoreUserCredential { pin: String },
+    RequestPairing { device_id: String, gateway_origin: String },
     StopService,
 }
 
