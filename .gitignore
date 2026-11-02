@@ -30,3 +30,6 @@ dist/
 pc_agent/config.json
 pc_agent/diagnostic_logs/
 plan/reports/
+
+tools/
+*.sqlite

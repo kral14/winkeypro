@@ -2,15 +2,120 @@
   "files": [
     {
       "path": "winkey_service.exe",
-      "sha256": "707064ae12f9338561d09ce19d2c719bd409601319c07682fad48f2834736973",
-      "size": 1528832
+      "sha256": "17801643702f773509c96d1d640ff231f0ef34b8d2a63df5c893420b7a831b50",
+      "size": 4420173
     },
     {
       "path": "winkey_helper.exe",
-      "sha256": "657289ff61a58b4b1835529ec53a1c0614e26c141dc27024ff02db68ea1ec72a",
-      "size": 8672977
+      "sha256": "96a241302bc081486293d8f2e46c50dfdcc6afc3b69f71340efe391a5834000d",
+      "size": 1866671
+    },
+    {
+      "path": "winkey_desktop.exe",
+      "sha256": "54f3553b212bdd54774927ad6b6b53e19d3ed94a90a0eeedbed8da4267e38246",
+      "size": 23454354
+    },
+    {
+      "path": "WebView2Loader.dll",
+      "sha256": "86545b66cdb0603bc26b626fb9ad610cb6e71f28d468f5ea66df23b03dda96d5",
+      "size": 160880
+    },
+    {
+      "path": "helper_runtime/_bz2.pyd",
+      "sha256": "65f610646d10d5babea080e060d244b546ec52c54012e5e937dc72dcc2e2e7bc",
+      "size": 86896
+    },
+    {
+      "path": "helper_runtime/_ctypes.pyd",
+      "sha256": "0e56107a891100535f2da79d85a5ae65ff1227b4765bd108f8593ac1a1110d81",
+      "size": 127480
+    },
+    {
+      "path": "helper_runtime/_decimal.pyd",
+      "sha256": "aeacfead2befcc0768063a037bb64bd32109ae09cb144e5f571b04dd7965db9d",
+      "size": 262000
+    },
+    {
+      "path": "helper_runtime/_hashlib.pyd",
+      "sha256": "03d233dbace599168eaffec823de6ed7beec8c2a4ebfe9b8a3d8e042a59af3ba",
+      "size": 68976
+    },
+    {
+      "path": "helper_runtime/_lzma.pyd",
+      "sha256": "e3deecc1f59a3b811c608861decd84de1e8df8bafd5e2b39188861318c5a38cf",
+      "size": 161136
+    },
+    {
+      "path": "helper_runtime/_socket.pyd",
+      "sha256": "3efa4636cf9e350856f6927d67a4c2564bf9bd2758a00bbf17d3aece5b60016d",
+      "size": 85496
+    },
+    {
+      "path": "helper_runtime/_uuid.pyd",
+      "sha256": "acce4f281d7ffb2dec0997527faf25b1df62ad7bd3032c568ddcf65c90edc867",
+      "size": 27128
+    },
+    {
+      "path": "helper_runtime/_wmi.pyd",
+      "sha256": "a980f1e7a29842bd946863fc2693fbeb555a9dc0f9e1630dfed9a2fcdef3ece2",
+      "size": 40304
+    },
+    {
+      "path": "helper_runtime/base_library.zip",
+      "sha256": "3114b9c5955d0ec3a3b40379d06e20bca8e0d88881759f9aa1ab6a7ae14363c6",
+      "size": 1333717
+    },
+    {
+      "path": "helper_runtime/focus_credential.ps1",
+      "sha256": "1a262d896a6067bb981ccd41577e0c85e612e7d6a3c9261533a21f823c4d7b07",
+      "size": 6127
+    },
+    {
+      "path": "helper_runtime/libcrypto-3.dll",
+      "sha256": "ccfffddcd3defb8d899026298af9af43bc186130f8483d77e97c93233d5f27d7",
+      "size": 5231472
+    },
+    {
+      "path": "helper_runtime/libffi-8.dll",
+      "sha256": "eff52743773eb550fcc6ce3efc37c85724502233b6b002a35496d828bd7b280a",
+      "size": 39696
+    },
+    {
+      "path": "helper_runtime/psutil/_psutil_windows.pyd",
+      "sha256": "0035450801bd7d938e9e146c5ec28e619cb5a5f4a18cdc53ac7e9734c7f94f78",
+      "size": 70656
+    },
+    {
+      "path": "helper_runtime/python3.dll",
+      "sha256": "fb975a606e7fbf74f64260e3f60c3490b4f74a183c0926fd6ed1ac4c52ac7b1c",
+      "size": 70376
+    },
+    {
+      "path": "helper_runtime/python312.dll",
+      "sha256": "9a0e3435aaa680d868150f87ab3e388ad2eebc22f87e036155c7b4eda8cd2120",
+      "size": 6945272
+    },
+    {
+      "path": "helper_runtime/select.pyd",
+      "sha256": "d4d7181b11db0bd22a6cd5cda6f8583d1f5c77615fd0a6ca33350619d6e0438a",
+      "size": 33136
+    },
+    {
+      "path": "helper_runtime/unicodedata.pyd",
+      "sha256": "208ee1cd3cbad0828433ca7246b05be2b1ff5569983d27d296c0b38888585488",
+      "size": 1140592
+    },
+    {
+      "path": "helper_runtime/VCRUNTIME140.dll",
+      "sha256": "052ad6a20d375957e82aa6a3c441ea548d89be0981516ca7eb306e063d5027f4",
+      "size": 120400
+    },
+    {
+      "path": "helper_runtime/VCRUNTIME140_1.dll",
+      "sha256": "6a99bc0128e0c7d6cbbf615fcc26909565e17d4ca3451b97f8987f9c6acbc6c8",
+      "size": 49776
     }
   ],
-  "timestamp": 1740000000.0,
-  "version": "0.1.0"
+  "timestamp": 1793605798.7744675,
+  "version": "0.1.5"
 }

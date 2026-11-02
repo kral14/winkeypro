@@ -158,56 +158,787 @@ def get_mobile_html() -> str:
     <title>WinKey Pro — Mobil İdarəetmə</title>
     <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
     <style>
-        * { box-sizing: border-box; margin: 0; padding: 0; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; }
-        body { background: #0f1211; color: #e6ede8; display: flex; justify-content: center; min-height: 100vh; padding: 20px; }
-        .app-container { width: 100%; max-width: 420px; display: flex; flex-direction: column; gap: 16px; }
-        .header { display: flex; justify-content: space-between; align-items: center; padding: 12px 0; border-bottom: 1px solid #1f2723; }
-        .logo { font-size: 1.2rem; font-weight: 700; color: #c8f279; letter-spacing: -0.5px; }
-        .badge { font-size: 0.75rem; padding: 4px 8px; border-radius: 6px; font-weight: 600; text-transform: uppercase; }
-        .badge-online { background: rgba(200, 242, 121, 0.15); color: #c8f279; border: 1px solid rgba(200, 242, 121, 0.3); }
-        .badge-offline { background: rgba(239, 68, 68, 0.15); color: #ef4444; border: 1px solid rgba(239, 68, 68, 0.3); }
-        .card { background: #161c19; border: 1px solid #222b26; border-radius: 14px; padding: 18px; display: flex; flex-direction: column; gap: 12px; }
-        .device-info { display: flex; flex-direction: column; gap: 4px; }
-        .device-name { font-size: 1.4rem; font-weight: 700; color: #fff; }
-        .device-sub { font-size: 0.85rem; color: #8e9e95; }
-        .btn-group { display: flex; flex-direction: column; gap: 10px; margin-top: 8px; }
-        .btn { padding: 14px; border-radius: 10px; font-size: 1rem; font-weight: 600; cursor: pointer; border: none; transition: all 0.15s ease; text-align: center; }
-        .btn-unlock { background: #c8f279; color: #0f1211; }
-        .btn-unlock:active { background: #b2db63; transform: scale(0.98); }
-        .btn-lock { background: #222c27; color: #e6ede8; border: 1px solid #33423b; }
-        .btn-lock:active { background: #2b3832; transform: scale(0.98); }
-        .btn-revoke { background: transparent; color: #ef4444; border: 1px solid rgba(239, 68, 68, 0.3); font-size: 0.85rem; padding: 10px; margin-top: 6px; }
-        .btn:disabled { opacity: 0.4; cursor: not-allowed; }
-        .status-box { font-size: 0.85rem; padding: 12px; border-radius: 8px; background: #101412; border: 1px solid #1c2420; color: #8e9e95; word-break: break-all; min-height: 44px; display: flex; align-items: center; }
-        .notice { font-size: 0.75rem; color: #627269; text-align: center; line-height: 1.4; padding: 8px; }
-        .spinner { display: inline-block; width: 14px; height: 14px; border: 2px solid rgba(200,242,121,0.3); border-radius: 50%; border-top-color: #c8f279; animation: spin 0.8s linear infinite; margin-right: 8px; }
-        @keyframes spin { to { transform: rotate(360deg); } }
+        :root {
+            --bg: #0c0f0d;
+            --card-bg: #141a16;
+            --card-border: #232d26;
+            --accent-green: #c8f279;
+            --accent-green-hover: #b5e462;
+            --accent-green-glow: rgba(200, 242, 121, 0.25);
+            --accent-cyan: #38bdf8;
+            --accent-cyan-hover: #0ea5e9;
+            --accent-cyan-glow: rgba(56, 189, 248, 0.25);
+            --danger: #ef4444;
+            --danger-hover: #dc2626;
+            --danger-glow: rgba(239, 68, 68, 0.25);
+            --text-main: #f3f4f6;
+            --text-muted: #9ca3af;
+            --text-dim: #6b7280;
+        }
+
+        * {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+            -webkit-tap-highlight-color: transparent;
+        }
+
+        body {
+            background-color: var(--bg);
+            color: var(--text-main);
+            min-height: 100vh;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            padding: 16px;
+            position: relative;
+            overflow-x: hidden;
+        }
+
+        .mobile-wrapper {
+            width: 100%;
+            max-width: 440px;
+            display: flex;
+            flex-direction: column;
+            gap: 18px;
+        }
+
+        /* Header */
+        .header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 8px 4px;
+        }
+
+        .logo {
+            font-size: 1.15rem;
+            font-weight: 800;
+            letter-spacing: -0.3px;
+            color: var(--text-main);
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        .logo span {
+            color: var(--accent-green);
+        }
+
+        .header-actions {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+
+        /* Status Badge */
+        .badge {
+            font-size: 0.72rem;
+            font-weight: 700;
+            letter-spacing: 0.5px;
+            padding: 4px 9px;
+            border-radius: 9999px;
+            display: flex;
+            align-items: center;
+            gap: 5px;
+            text-transform: uppercase;
+        }
+
+        .badge-online {
+            background: rgba(200, 242, 121, 0.12);
+            color: var(--accent-green);
+            border: 1px solid rgba(200, 242, 121, 0.3);
+        }
+
+        .badge-offline {
+            background: rgba(239, 68, 68, 0.15);
+            color: var(--danger);
+            border: 1px solid rgba(239, 68, 68, 0.3);
+        }
+
+        .status-dot {
+            width: 6px;
+            height: 6px;
+            border-radius: 50%;
+            background: currentColor;
+            box-shadow: 0 0 8px currentColor;
+            animation: pulse 2s infinite;
+        }
+
+        @keyframes pulse {
+            0%, 100% { opacity: 1; transform: scale(1); }
+            50% { opacity: 0.4; transform: scale(0.85); }
+        }
+
+        /* Header Icon Buttons */
+        .icon-btn {
+            width: 38px;
+            height: 38px;
+            border-radius: 12px;
+            background: var(--card-bg);
+            border: 1px solid var(--card-border);
+            color: var(--text-main);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            cursor: pointer;
+            position: relative;
+            transition: all 0.2s ease;
+        }
+
+        .icon-btn:hover {
+            border-color: #3f4e43;
+            transform: translateY(-1px);
+        }
+
+        .icon-btn:active {
+            transform: scale(0.95);
+        }
+
+        .icon-btn.power {
+            color: var(--danger);
+            border-color: rgba(239, 68, 68, 0.25);
+            background: rgba(239, 68, 68, 0.08);
+        }
+
+        .icon-btn.power:hover {
+            background: rgba(239, 68, 68, 0.18);
+            border-color: var(--danger);
+        }
+
+        .badge-count {
+            position: absolute;
+            top: -4px;
+            right: -4px;
+            background: var(--danger);
+            color: #fff;
+            font-size: 0.65rem;
+            font-weight: 700;
+            min-width: 17px;
+            height: 17px;
+            padding: 0 4px;
+            border-radius: 9999px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            border: 2px solid var(--bg);
+        }
+
+        /* Main Card */
+        .card {
+            background: var(--card-bg);
+            border: 1px solid var(--card-border);
+            border-radius: 24px;
+            padding: 24px 20px;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            box-shadow: 0 12px 30px rgba(0, 0, 0, 0.4);
+            position: relative;
+            overflow: hidden;
+        }
+
+        .card::before {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: 0;
+            right: 0;
+            height: 2px;
+            background: linear-gradient(90deg, transparent, var(--accent-green), transparent);
+            opacity: 0.6;
+        }
+
+        /* PC Device Info */
+        .device-info {
+            text-align: center;
+            margin-bottom: 24px;
+            width: 100%;
+        }
+
+        .device-name {
+            font-size: 1.35rem;
+            font-weight: 800;
+            letter-spacing: -0.4px;
+            color: #ffffff;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 8px;
+        }
+
+        .device-sub {
+            font-size: 0.78rem;
+            color: var(--text-muted);
+            margin-top: 4px;
+            font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+        }
+
+        .device-state-tag {
+            display: inline-flex;
+            align-items: center;
+            gap: 6px;
+            padding: 4px 12px;
+            border-radius: 9999px;
+            font-size: 0.75rem;
+            font-weight: 700;
+            margin-top: 10px;
+            letter-spacing: 0.3px;
+        }
+
+        .state-locked {
+            background: rgba(245, 158, 11, 0.12);
+            color: #fbbf24;
+            border: 1px solid rgba(245, 158, 11, 0.3);
+        }
+
+        .state-unlocked {
+            background: rgba(200, 242, 121, 0.12);
+            color: var(--accent-green);
+            border: 1px solid rgba(200, 242, 121, 0.3);
+        }
+
+        /* Circular Action Button */
+        .circle-button-container {
+            position: relative;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            margin: 18px 0 24px;
+            width: 210px;
+            height: 210px;
+        }
+
+        .circle-ring {
+            position: absolute;
+            width: 210px;
+            height: 210px;
+            border-radius: 50%;
+            border: 2px dashed rgba(200, 242, 121, 0.25);
+            animation: rotateRing 20s linear infinite;
+        }
+
+        @keyframes rotateRing {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+
+        .circle-btn {
+            width: 180px;
+            height: 180px;
+            border-radius: 50%;
+            border: none;
+            outline: none;
+            cursor: pointer;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            gap: 8px;
+            font-weight: 800;
+            text-transform: uppercase;
+            letter-spacing: 0.8px;
+            font-size: 0.92rem;
+            box-shadow: 0 10px 28px rgba(0, 0, 0, 0.5);
+            transition: all 0.25s cubic-bezier(0.34, 1.56, 0.64, 1);
+            position: relative;
+            z-index: 2;
+        }
+
+        .circle-btn:active {
+            transform: scale(0.93);
+        }
+
+        .circle-btn.mode-unlock {
+            background: linear-gradient(145deg, #c8f279, #9ed840);
+            color: #0c1708;
+            box-shadow: 0 0 35px var(--accent-green-glow), 0 10px 25px rgba(0,0,0,0.4);
+        }
+
+        .circle-btn.mode-unlock:hover {
+            box-shadow: 0 0 45px var(--accent-green-glow), 0 12px 30px rgba(0,0,0,0.5);
+            transform: translateY(-2px);
+        }
+
+        .circle-btn.mode-lock {
+            background: linear-gradient(145deg, #38bdf8, #0284c7);
+            color: #041725;
+            box-shadow: 0 0 35px var(--accent-cyan-glow), 0 10px 25px rgba(0,0,0,0.4);
+        }
+
+        .circle-btn.mode-lock:hover {
+            box-shadow: 0 0 45px var(--accent-cyan-glow), 0 12px 30px rgba(0,0,0,0.5);
+            transform: translateY(-2px);
+        }
+
+        .circle-btn .btn-icon {
+            width: 46px;
+            height: 46px;
+            stroke-width: 2.2;
+        }
+
+        .circle-btn.busy {
+            pointer-events: none;
+            opacity: 0.85;
+        }
+
+        /* Action Toast / Mini Banner */
+        .action-toast {
+            width: 100%;
+            border-radius: 14px;
+            padding: 12px 14px;
+            font-size: 0.86rem;
+            font-weight: 600;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            gap: 10px;
+            cursor: pointer;
+            transition: all 0.2s ease;
+            background: #17201a;
+            border: 1px solid var(--card-border);
+            color: var(--text-muted);
+        }
+
+        .action-toast:hover {
+            transform: translateY(-1px);
+        }
+
+        .toast-left {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            white-space: nowrap;
+        }
+
+        .toast-indicator {
+            width: 22px;
+            height: 22px;
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 0.75rem;
+            font-weight: 800;
+            flex-shrink: 0;
+        }
+
+        .action-toast.success {
+            background: rgba(200, 242, 121, 0.1);
+            border-color: rgba(200, 242, 121, 0.4);
+            color: #d8f89c;
+        }
+
+        .action-toast.success .toast-indicator {
+            background: var(--accent-green);
+            color: #0c1708;
+        }
+
+        .action-toast.error {
+            background: rgba(239, 68, 68, 0.12);
+            border-color: rgba(239, 68, 68, 0.4);
+            color: #fca5a5;
+        }
+
+        .action-toast.error .toast-indicator {
+            background: var(--danger);
+            color: #fff;
+        }
+
+        .toast-click-hint {
+            font-size: 0.7rem;
+            color: var(--text-dim);
+            font-weight: 500;
+            white-space: nowrap;
+        }
+
+        .notice {
+            font-size: 0.74rem;
+            color: var(--text-dim);
+            text-align: center;
+            line-height: 1.45;
+            padding: 0 10px;
+            margin-top: 8px;
+        }
+
+        /* Modal Overlay & Drawer */
+        .modal-overlay {
+            position: fixed;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background: rgba(0, 0, 0, 0.75);
+            backdrop-filter: blur(4px);
+            z-index: 100;
+            display: none;
+            align-items: flex-end;
+            justify-content: center;
+        }
+
+        .modal-overlay.open {
+            display: flex;
+        }
+
+        .modal-drawer {
+            background: #151c17;
+            border: 1px solid #28362b;
+            border-radius: 24px 24px 0 0;
+            width: 100%;
+            max-width: 480px;
+            max-height: 82vh;
+            display: flex;
+            flex-direction: column;
+            animation: slideUp 0.25s cubic-bezier(0.16, 1, 0.3, 1);
+            box-shadow: 0 -10px 40px rgba(0,0,0,0.6);
+        }
+
+        @keyframes slideUp {
+            from { transform: translateY(100%); }
+            to { transform: translateY(0); }
+        }
+
+        .drawer-header {
+            padding: 18px 20px 14px;
+            border-bottom: 1px solid var(--card-border);
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+        }
+
+        .drawer-title {
+            font-size: 1.05rem;
+            font-weight: 700;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            color: #fff;
+        }
+
+        .drawer-close {
+            background: transparent;
+            border: none;
+            color: var(--text-muted);
+            cursor: pointer;
+            padding: 4px;
+            border-radius: 8px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+
+        .drawer-close:hover {
+            color: #fff;
+            background: rgba(255,255,255,0.08);
+        }
+
+        .drawer-actions-bar {
+            display: flex;
+            gap: 10px;
+            padding: 12px 20px;
+            background: #111713;
+            border-bottom: 1px solid #1f2a22;
+        }
+
+        .action-pill-btn {
+            flex: 1;
+            padding: 8px 12px;
+            border-radius: 10px;
+            border: 1px solid #2e3e32;
+            background: #18221b;
+            color: var(--text-main);
+            font-size: 0.78rem;
+            font-weight: 600;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 6px;
+            cursor: pointer;
+            transition: all 0.15s ease;
+        }
+
+        .action-pill-btn:hover {
+            background: #223026;
+            border-color: var(--accent-green);
+            color: var(--accent-green);
+        }
+
+        .action-pill-btn:active {
+            transform: scale(0.97);
+        }
+
+        .drawer-content {
+            padding: 16px 20px 24px;
+            overflow-y: auto;
+            display: flex;
+            flex-direction: column;
+            gap: 12px;
+            min-height: 180px;
+        }
+
+        .notification-item {
+            background: #19231d;
+            border: 1px solid #233128;
+            border-radius: 12px;
+            padding: 12px 14px;
+            cursor: pointer;
+            transition: all 0.2s ease;
+        }
+
+        .notification-item:hover {
+            border-color: #374b3f;
+            background: #1f2c25;
+        }
+
+        .notif-top {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 6px;
+        }
+
+        .notif-tag {
+            font-size: 0.7rem;
+            font-weight: 700;
+            padding: 2px 7px;
+            border-radius: 6px;
+        }
+
+        .notif-tag.success {
+            background: rgba(200, 242, 121, 0.15);
+            color: var(--accent-green);
+        }
+
+        .notif-tag.error {
+            background: rgba(239, 68, 68, 0.15);
+            color: var(--danger);
+        }
+
+        .notif-time {
+            font-size: 0.7rem;
+            color: var(--text-dim);
+        }
+
+        .notif-title {
+            font-size: 0.84rem;
+            font-weight: 700;
+            color: #fff;
+            margin-bottom: 4px;
+        }
+
+        .notif-summary {
+            font-size: 0.76rem;
+            color: var(--text-muted);
+            line-height: 1.35;
+            display: -webkit-box;
+            -webkit-line-clamp: 2;
+            -webkit-box-orient: vertical;
+            overflow: hidden;
+        }
+
+        .detail-modal-box {
+            background: #18221b;
+            border: 1px solid #2a3a2e;
+            border-radius: 20px;
+            width: 90%;
+            max-width: 420px;
+            padding: 22px;
+            margin: auto;
+            box-shadow: 0 15px 40px rgba(0,0,0,0.8);
+        }
+
+        .detail-tag {
+            display: inline-block;
+            font-size: 0.72rem;
+            font-weight: 700;
+            padding: 3px 8px;
+            border-radius: 6px;
+            margin-bottom: 12px;
+        }
+
+        .detail-text-area {
+            background: #0f1612;
+            border: 1px solid #202b23;
+            border-radius: 10px;
+            padding: 12px;
+            font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+            font-size: 0.78rem;
+            color: #d1d5db;
+            line-height: 1.45;
+            max-height: 240px;
+            overflow-y: auto;
+            white-space: pre-wrap;
+            word-break: break-all;
+        }
+
+        .spinner {
+            display: inline-block;
+            width: 14px;
+            height: 14px;
+            border: 2px solid rgba(200,242,121,0.3);
+            border-radius: 50%;
+            border-top-color: #c8f279;
+            animation: spin 0.8s linear infinite;
+            margin-right: 8px;
+        }
+
+        @keyframes spin {
+            to { transform: rotate(360deg); }
+        }
     </style>
 </head>
 <body>
-    <div class="app-container">
-        <div class="header">
-            <div class="logo">WinKey Mobile Remote</div>
-            <div id="status-badge" class="badge badge-online">Onlayn</div>
-        </div>
+    <div class="mobile-wrapper">
+        <!-- Header -->
+        <header class="header">
+            <div class="logo">
+                <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" style="color:var(--accent-green)">
+                    <rect x="3" y="11" width="18" height="11" rx="2" ry="2"></rect>
+                    <path d="M7 11V7a5 5 0 0 1 10 0v4"></path>
+                </svg>
+                <span>WinKey Mobile Remote</span>
+            </div>
 
-        <div class="card">
+            <div class="header-actions">
+                <div id="status-badge" class="badge badge-online">
+                    <span class="status-dot"></span>
+                    <span id="status-badge-text">Onlayn</span>
+                </div>
+
+                <!-- Notification Bell -->
+                <button class="icon-btn" id="bellBtn" title="Bildirişlər" onclick="openDrawer()">
+                    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                        <path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"></path>
+                        <path d="M13.73 21a2 2 0 0 1-3.46 0"></path>
+                    </svg>
+                    <span class="badge-count" id="notifBadge">0</span>
+                </button>
+
+                <!-- Power / Disconnect Icon -->
+                <button class="icon-btn power" id="btn-revoke" title="Bağlantını Kəs" onclick="openDisconnectModal()">
+                    <svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
+                        <path d="M18.36 6.64a9 9 0 1 1-12.73 0"></path>
+                        <line x1="12" y1="2" x2="12" y2="12"></line>
+                    </svg>
+                </button>
+            </div>
+        </header>
+
+        <!-- Main Card -->
+        <main class="card">
             <div class="device-info">
                 <div id="dev-name" class="device-name">PC Qoşulur...</div>
                 <div id="dev-id" class="device-sub">Cihaz ID: —</div>
+                <div id="deviceStateBadge" class="device-state-tag state-locked">
+                    <span>🔒 Kompüter Kilidlidir</span>
+                </div>
             </div>
 
-            <div class="btn-group">
-                <button id="btn-unlock" class="btn btn-unlock" onclick="sendCommand('unlock')">Kilidi Aç</button>
-                <button id="btn-lock" class="btn btn-lock" onclick="sendCommand('lock')">Kompüteri Kilidlə</button>
+            <!-- State-Aware Circular Button -->
+            <div class="circle-button-container">
+                <div class="circle-ring"></div>
+                <button class="circle-btn mode-unlock" id="actionCircleBtn" onclick="triggerCurrentAction()">
+                    <svg class="btn-icon" id="actionIcon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round">
+                        <rect x="3" y="11" width="18" height="11" rx="2" ry="2"></rect>
+                        <path d="M7 11V7a5 5 0 0 1 9.9-1"></path>
+                    </svg>
+                    <span id="actionLabel">KİLİDİ AÇ</span>
+                </button>
             </div>
 
-            <div id="action-status" class="status-box">Sistem hazırdır. Əməliyyat gözlənilir.</div>
-            <button id="btn-revoke" class="btn btn-revoke" onclick="revokeDevice()">Bağlantını Kəs (Revoke)</button>
-        </div>
+            <!-- Action Toast / Live Banner -->
+            <div class="action-toast success" id="liveToast" onclick="showLatestDetail()" title="Tam mətni görmək üçün toxunun">
+                <div class="toast-left">
+                    <div class="toast-indicator" id="toastIcon">✓</div>
+                    <span id="action-status">Sistem hazırdır. Əməliyyat gözlənilir.</span>
+                </div>
+                <span class="toast-click-hint">Detallar ➔</span>
+            </div>
+        </main>
 
         <div class="notice">
             Qorunan Zəncir: Telefon yalnız kriptoqrafik əmr siqnalı göndərir. Windows PIN heç vaxt serverə və ya şəbəkəyə çıxmır; yalnız PC-nin təhlükəsiz DPAPI anbarında saxlanılır.
+        </div>
+    </div>
+
+    <!-- Notification Drawer -->
+    <div class="modal-overlay" id="notifDrawerOverlay">
+        <div class="modal-drawer">
+            <div class="drawer-header">
+                <div class="drawer-title">
+                    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"></path>
+                        <path d="M13.73 21a2 2 0 0 1-3.46 0"></path>
+                    </svg>
+                    <span>Bildiriş Tarixçəsi</span>
+                </div>
+                <button class="drawer-close" onclick="closeDrawer()">
+                    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
+                        <line x1="18" y1="6" x2="6" y2="18"></line>
+                        <line x1="6" y1="6" x2="18" y2="18"></line>
+                    </svg>
+                </button>
+            </div>
+
+            <div class="drawer-actions-bar">
+                <button class="action-pill-btn" onclick="copyNotifications()">
+                    <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect>
+                        <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path>
+                    </svg>
+                    <span>Kopyala</span>
+                </button>
+                <button class="action-pill-btn" onclick="downloadNotifications()">
+                    <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path>
+                        <polyline points="7 10 12 15 17 10"></polyline>
+                        <line x1="12" y1="15" x2="12" y2="3"></line>
+                    </svg>
+                    <span>Endir</span>
+                </button>
+            </div>
+
+            <div class="drawer-content" id="notifListContainer"></div>
+        </div>
+    </div>
+
+    <!-- Detail Modal -->
+    <div class="modal-overlay" id="detailModalOverlay" style="align-items: center;">
+        <div class="detail-modal-box">
+            <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:12px;">
+                <h3 id="detailTitle" style="font-size:1.05rem; font-weight:700;">Ətraflı Məlumat</h3>
+                <button class="drawer-close" onclick="closeDetailModal()">
+                    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
+                        <line x1="18" y1="6" x2="6" y2="18"></line>
+                        <line x1="6" y1="6" x2="18" y2="18"></line>
+                    </svg>
+                </button>
+            </div>
+            <div id="detailTag" class="detail-tag">Status</div>
+            <div class="detail-text-area" id="detailText"></div>
+            <button class="action-pill-btn" style="margin-top:14px; width:100%; padding:10px;" onclick="closeDetailModal()">Bağla</button>
+        </div>
+    </div>
+
+    <!-- Disconnect Confirmation Modal -->
+    <div class="modal-overlay" id="disconnectModalOverlay" style="align-items: center;">
+        <div class="detail-modal-box">
+            <h3 style="font-size:1.1rem; font-weight:700; color:var(--danger); margin-bottom:10px; display:flex; align-items:center; gap:8px;">
+                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2">
+                    <path d="M18.36 6.64a9 9 0 1 1-12.73 0"></path><line x1="12" y1="2" x2="12" y2="12"></line>
+                </svg>
+                Bağlantını Kəsmək İstəyirsiniz?
+            </h3>
+            <p style="font-size:0.82rem; color:var(--text-muted); line-height:1.4; margin-bottom:16px;">
+                Bu əməliyyat mobil cihazın bu kompüterlə olan cütləşməsini ləğv edəcək. Yenidən idarə etmək üçün QR kodu yenidən skan etməlisiniz.
+            </p>
+            <div style="display:flex; gap:10px;">
+                <button class="action-pill-btn" style="background:#261818; border-color:var(--danger); color:#fca5a5;" onclick="confirmDisconnect()">Bəli, Kəs</button>
+                <button class="action-pill-btn" onclick="closeDisconnectModal()">Ləğv Et</button>
+            </div>
         </div>
     </div>
 
@@ -220,7 +951,18 @@ def get_mobile_html() -> str:
         const devNameEl = document.getElementById('dev-name');
         const devIdEl = document.getElementById('dev-id');
         const badgeEl = document.getElementById('status-badge');
+        const badgeTextEl = document.getElementById('status-badge-text');
         const statusBox = document.getElementById('action-status');
+        const liveToast = document.getElementById('liveToast');
+        const toastIcon = document.getElementById('toastIcon');
+        const circleBtn = document.getElementById('actionCircleBtn');
+        const actionLabel = document.getElementById('actionLabel');
+        const actionIcon = document.getElementById('actionIcon');
+        const stateBadge = document.getElementById('deviceStateBadge');
+        const notifBadge = document.getElementById('notifBadge');
+        const notifListContainer = document.getElementById('notifListContainer');
+
+        let isPcLocked = true;
         let commandBusy = false;
         let desiredAction = null;
         let desiredSince = 0;
@@ -229,6 +971,188 @@ def get_mobile_html() -> str:
         let resultController = null;
         let statusBusy = false;
         let pendingCommand = null;
+
+        const SVG_LOCK = '<rect x="3" y="11" width="18" height="11" rx="2" ry="2"></rect><path d="M7 11V7a5 5 0 0 1 10 0v4"></path>';
+        const SVG_UNLOCK = '<rect x="3" y="11" width="18" height="11" rx="2" ry="2"></rect><path d="M7 11V7a5 5 0 0 1 9.9-1"></path>';
+
+        let notificationHistory = [];
+        let activeNotification = null;
+        try {
+            const savedNotifs = JSON.parse(localStorage.getItem('winkey_notif_history') || '[]');
+            if (Array.isArray(savedNotifs)) notificationHistory = savedNotifs.slice(-50);
+        } catch(e) {}
+
+        function persistNotifications() {
+            try { localStorage.setItem('winkey_notif_history', JSON.stringify(notificationHistory)); } catch(e) {}
+        }
+
+        function updateBadgeCount() {
+            if (notifBadge) notifBadge.textContent = notificationHistory.length;
+        }
+
+        function recordNotification(success, title, fullText) {
+            const now = new Date();
+            const timeStr = now.toTimeString().split(' ')[0];
+            const dateStr = now.toISOString().split('T')[0];
+            const summary = success ? "Uğurlu" : "Uğursuz oldu, yenidən cəhd edin";
+
+            const notif = {
+                id: Date.now(),
+                success,
+                summary,
+                title,
+                timestamp: timeStr,
+                date: dateStr,
+                fullText
+            };
+
+            activeNotification = notif;
+            notificationHistory.unshift(notif);
+            if (notificationHistory.length > 50) notificationHistory = notificationHistory.slice(0, 50);
+            persistNotifications();
+            updateToast(notif);
+            renderDrawerList();
+            updateBadgeCount();
+        }
+
+        function updateToast(notif) {
+            if (!liveToast) return;
+            liveToast.className = 'action-toast ' + (notif.success ? 'success' : 'error');
+            if (toastIcon) toastIcon.textContent = notif.success ? '✓' : '✕';
+            if (statusBox) statusBox.textContent = notif.summary;
+        }
+
+        function showLatestDetail() {
+            if (activeNotification) {
+                showDetailModal(activeNotification);
+            } else if (notificationHistory.length > 0) {
+                showDetailModal(notificationHistory[0]);
+            } else {
+                showDetailModal({
+                    title: "Sistem Statusu",
+                    success: true,
+                    fullText: statusBox ? statusBox.textContent : "Sistem hazırdır."
+                });
+            }
+        }
+
+        function showDetailModal(notif) {
+            document.getElementById('detailTitle').textContent = notif.title || "Əməliyyat Detalları";
+            const tag = document.getElementById('detailTag');
+            tag.className = 'detail-tag ' + (notif.success ? 'state-unlocked' : 'state-locked');
+            tag.textContent = notif.success ? '✓ Status: Uğurlu' : '✕ Status: Uğursuz';
+            document.getElementById('detailText').textContent = notif.fullText || notif.summary || '';
+            document.getElementById('detailModalOverlay').classList.add('open');
+        }
+
+        function closeDetailModal() {
+            document.getElementById('detailModalOverlay').classList.remove('open');
+        }
+
+        function openDrawer() {
+            renderDrawerList();
+            document.getElementById('notifDrawerOverlay').classList.add('open');
+        }
+
+        function closeDrawer() {
+            document.getElementById('notifDrawerOverlay').classList.remove('open');
+        }
+
+        document.getElementById('notifDrawerOverlay').addEventListener('click', (e) => {
+            if (e.target === document.getElementById('notifDrawerOverlay')) closeDrawer();
+        });
+
+        function renderDrawerList() {
+            if (!notifListContainer) return;
+            notifListContainer.innerHTML = '';
+            if (notificationHistory.length === 0) {
+                notifListContainer.innerHTML = '<div style="color:var(--text-dim); text-align:center; padding:30px 0;">Heç bir bildiriş yoxdur.</div>';
+                return;
+            }
+
+            notificationHistory.forEach(item => {
+                const div = document.createElement('div');
+                div.className = 'notification-item';
+                div.innerHTML = `
+                    <div class="notif-top">
+                        <span class="notif-tag ${item.success ? 'success' : 'error'}">${item.summary}</span>
+                        <span class="notif-time">${item.timestamp}</span>
+                    </div>
+                    <div class="notif-title">${item.title}</div>
+                    <div class="notif-summary">${item.fullText ? item.fullText.split('
+')[0] : ''}</div>
+                `;
+                div.onclick = () => showDetailModal(item);
+                notifListContainer.appendChild(div);
+            });
+        }
+
+        function copyNotifications() {
+            const text = notificationHistory.map(n => `[${n.date} ${n.timestamp}] ${n.title} - ${n.summary}
+${n.fullText}
+------------------------`).join('
+');
+            if (navigator.clipboard && navigator.clipboard.writeText) {
+                navigator.clipboard.writeText(text).then(() => {
+                    alert("Bildiriş tarixçəsi panoya kopyalandı!");
+                }).catch(() => {
+                    alert("Kopyalama xətası.");
+                });
+            } else {
+                alert("Brauzer panoya birbaşa yazmağı dəstəkləmir.");
+            }
+        }
+
+        function downloadNotifications() {
+            const text = notificationHistory.map(n => `[${n.date} ${n.timestamp}] ${n.title} - ${n.summary}
+${n.fullText}
+------------------------`).join('
+');
+            const blob = new Blob([text], { type: 'text/plain;charset=utf-8' });
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = `winkey_bildirisler_${new Date().toISOString().slice(0,10)}.txt`;
+            document.body.appendChild(a);
+            a.click();
+            document.body.removeChild(a);
+            URL.revokeObjectURL(url);
+        }
+
+        function openDisconnectModal() {
+            document.getElementById('disconnectModalOverlay').classList.add('open');
+        }
+
+        function closeDisconnectModal() {
+            document.getElementById('disconnectModalOverlay').classList.remove('open');
+        }
+
+        async function confirmDisconnect() {
+            closeDisconnectModal();
+            await revokeDevice();
+        }
+
+        function renderState() {
+            if (isPcLocked) {
+                circleBtn.className = "circle-btn mode-unlock";
+                actionLabel.textContent = "KİLİDİ AÇ";
+                actionIcon.innerHTML = SVG_UNLOCK;
+                stateBadge.className = "device-state-tag state-locked";
+                stateBadge.innerHTML = "<span>🔒 Kompüter Kilidlidir</span>";
+            } else {
+                circleBtn.className = "circle-btn mode-lock";
+                actionLabel.textContent = "KİLİDLƏ";
+                actionIcon.innerHTML = SVG_LOCK;
+                stateBadge.className = "device-state-tag state-unlocked";
+                stateBadge.innerHTML = "<span>🔓 Kompüter Açıqdır</span>";
+            }
+        }
+
+        function triggerCurrentAction() {
+            const act = isPcLocked ? 'unlock' : 'lock';
+            sendCommand(act);
+        }
+
         try { pendingCommand = JSON.parse(localStorage.getItem('winkey_pending_command') || 'null'); } catch(e) {}
         if (pendingCommand && (pendingCommand.device !== targetDevice ||
             !/^[0-9a-f]{32}$/.test(pendingCommand.requestId) ||
@@ -261,7 +1185,6 @@ def get_mobile_html() -> str:
             const control = new AbortController();
             const timer = setTimeout(() => control.abort(), 3000);
             try {
-                // Do not instrument this fetch: diagnostics must never log themselves.
                 const response = await fetch('/mobile/telemetry', {method: 'POST', cache: 'no-store',
                     signal: control.signal, headers: {'Content-Type': 'application/json', 'Authorization': 'Bearer ' + authToken},
                     body: JSON.stringify({device_id: targetDevice, events: batch})});
@@ -339,10 +1262,19 @@ def get_mobile_html() -> str:
         }
         function setBusy(value) {
             commandBusy = value;
-            // Keep accepting taps: the last desired state replaces waiting work.
+            if (circleBtn) {
+                if (value) circleBtn.classList.add('busy');
+                else circleBtn.classList.remove('busy');
+            }
         }
 
         async function init() {
+            renderState();
+            updateBadgeCount();
+            if (notificationHistory.length > 0) {
+                updateToast(notificationHistory[0]);
+            }
+
             if (pairCode) {
                 statusBox.innerHTML = '<span class="spinner"></span>QR cütləşmə kodu göndərilir...';
                 try {
@@ -361,12 +1293,12 @@ def get_mobile_html() -> str:
                         if (window.history.replaceState) {
                             window.history.replaceState({}, document.title, window.location.pathname);
                         }
-                        statusBox.textContent = 'Cütləşmə uğurla tamamlandı!';
+                        recordNotification(true, "Cütləşmə", "Cütləşmə uğurla tamamlandı! Cihaz ID: " + targetDevice);
                     } else {
-                        statusBox.textContent = 'Cütləşmə xətası: ' + (res.message || res.error);
+                        recordNotification(false, "Cütləşmə Xətası", "Cütləşmə xətası: " + (res.message || res.error));
                     }
                 } catch(e) {
-                    statusBox.textContent = 'Şəbəkə xətası: ' + e;
+                    recordNotification(false, "Şəbəkə Xətası", "Şəbəkə xətası: " + e);
                 }
             }
             if (targetDevice) {
@@ -390,10 +1322,12 @@ def get_mobile_html() -> str:
                 if (r.ok) {
                     const d = await r.json();
                     devNameEl.textContent = d.computer_name || targetDevice;
-                    badgeEl.textContent = d.locked ? 'Kilidli' : 'Açıq';
+                    isPcLocked = Boolean(d.locked);
+                    renderState();
+                    badgeTextEl.textContent = 'Onlayn';
                     badgeEl.className = 'badge badge-online';
                 } else if (r.status === 403 || r.status === 401) {
-                    badgeEl.textContent = 'İcazəsiz';
+                    badgeTextEl.textContent = 'İcazəsiz';
                     badgeEl.className = 'badge badge-offline';
                 }
             } catch(e) {} finally { statusBusy = false; }
@@ -413,7 +1347,6 @@ def get_mobile_html() -> str:
                 statusBox.textContent = 'Son istək saxlanıldı (' + action + '). Göndərilir...';
                 return;
             }
-            // An explicit tap is a new intent; transport retries alone reuse IDs.
             if (!resume) savePending(null);
             if (!pendingCommand) {
                 savePending({device: targetDevice, action,
@@ -425,7 +1358,6 @@ def get_mobile_html() -> str:
             setBusy(true);
             const sendStarted = tappedAt;
 
-            // WS-04: Saglam WebSocket aktivdirse, emri birbasa WebSocket ile gonderirik (HTTP POST = 0)
             if (wsConnected && ws && (ws.readyState === 1 || (typeof WebSocket !== 'undefined' && ws.readyState === WebSocket.OPEN))) {
                 try {
                     ws.send(JSON.stringify({
@@ -433,10 +1365,9 @@ def get_mobile_html() -> str:
                         action: action,
                         request_id: pendingCommand.requestId
                     }));
-                    statusBox.innerHTML = '<span class="spinner"></span>WebSocket ilə göndərildi (' + action + ')...';
-                    // async wait handled by onmessage
+                    statusBox.innerHTML = '<span class="spinner"></span>Əmr icra olunur (' + action + ')...';
                 } catch(e) {
-                    statusBox.textContent = 'WebSocket xətası: ' + e.message;
+                    recordNotification(false, "WebSocket Xətası", "WebSocket xətası: " + e.message);
                 } finally {
                     setBusy(false);
                     if (desiredAction !== null) {
@@ -449,6 +1380,7 @@ def get_mobile_html() -> str:
                 }
                 return;
             }
+
             statusBox.innerHTML = '<span class="spinner"></span>Əmr göndərilir (' + action + ')...';
             try {
                 let r;
@@ -464,14 +1396,14 @@ def get_mobile_html() -> str:
                 if (desiredAction !== null) return;
                 if (r.ok && res.command_id) {
                     const sentMs = Math.round(performance.now() - sendStarted);
-                    statusBox.textContent = 'Əmr serverə çatdı (' + sentMs + ' ms; server: ' + r.serverMs + ' ms). PC-nin icrası gözlənilir...';
+                    statusBox.textContent = 'Əmr qəbul olundu. PC-nin icrası gözlənilir...';
                     await pollCommandResult(res.command_id, action, sentMs, sendStarted, r.serverMs);
                 } else {
                     if (r.status < 500) savePending(null);
-                    statusBox.textContent = 'Xəta: ' + (res.message || res.error);
+                    recordNotification(false, "Əmr Xətası", "Xəta: " + (res.message || res.error || "Bilinməyən xəta"));
                 }
             } catch(e) {
-                statusBox.textContent = 'Server cavabı alınmadı. Əvvəlki əmr qəbul edilmiş ola bilər. Yeni basış son istəyi göndərəcək.';
+                recordNotification(false, "Şəbəkə Xətası", "Server cavabı alınmadı. Şəbəkə bağlantısını yoxlayın.");
             } finally {
                 setBusy(false);
                 if (desiredAction !== null) {
@@ -498,36 +1430,49 @@ def get_mobile_html() -> str:
                     if (desiredAction !== null) return;
                     if (r.status === 401 || r.status === 403) {
                         savePending(null);
-                        statusBox.textContent = 'Telefon bağlantısı ləğv edilib və ya giriş icazəsi yoxdur.';
+                        recordNotification(false, "İcazə Xətası", "Telefon bağlantısı ləğv edilib və ya giriş icazəsi yoxdur.");
                         return;
                     }
                     if (r.ok) {
                         const cmd = await r.json();
                         if (cmd.status === 'superseded') {
                             savePending(null);
-                            statusBox.textContent = 'Əvvəlki əmr son istəklə əvəz edilib.';
+                            recordNotification(false, "Əmr Əvəzləndi", "Əvvəlki əmr son istəklə əvəz edilib.");
                             return;
                         }
                         if (cmd.status === 'executed' || cmd.status === 'completed') {
                             mobileEvent('total', 'COMMAND_COMPLETED', performance.now() - started, action, pendingCommand ? pendingCommand.requestId : '');
                             savePending(null);
-                            statusBox.textContent = 'İcra tamamlandı (' + action + '): ' + (cmd.result || 'Uğurlu') +
-                                ' | Göndəriş: ' + sentMs + ' ms; server: ' + serverMs + ' ms; ümumi: ' + Math.round(performance.now() - started) + ' ms';
+                            const totalMs = Math.round(performance.now() - started);
+                            const detailInfo = "Status: 200 OK
+Əmr: " + action.toUpperCase() + "
+Nəticə: " + (cmd.result || 'Uğurlu') +
+                                "
+Göndəriş: " + sentMs + " ms
+Server icrası: " + serverMs + " ms
+Ümumi müddət: " + totalMs + " ms";
+                            recordNotification(true, action === 'unlock' ? "Kilid Açma İcrası" : "Kilidləmə İcrası", detailInfo);
+                            isPcLocked = (action === 'lock');
+                            renderState();
                             pollStatus();
                             return;
                         } else if (cmd.status === 'failed') {
                             mobileEvent('total', 'COMMAND_FAILED', performance.now() - started, action, pendingCommand ? pendingCommand.requestId : '', true);
                             savePending(null);
-                            statusBox.textContent = 'İcra uğursuz oldu: ' + (cmd.result || 'Xəta');
+                            const failInfo = "Xəta Statusu: Failed
+Əmr: " + action.toUpperCase() + "
+Səbəb: " + (cmd.result || 'Xəta') +
+                                "
+Ümumi müddət: " + Math.round(performance.now() - started) + " ms";
+                            recordNotification(false, "İcra Uğursuz Oldu", failInfo);
                             return;
                         }
                     }
                 } catch(e) {} finally { resultController = null; }
                 if (desiredAction !== null) return;
-
                 await pause(250);
             }
-            statusBox.textContent = 'Əvvəlki nəticə təsdiqlənməyib. Yeni basış son istəyi göndərəcək.';
+            recordNotification(false, "Cavab Təsdiqlənmədi", "Əvvəlki nəticə təsdiqlənməyib. Yenidən cəhd edin.");
             mobileEvent('total', 'RESULT_UNCONFIRMED', performance.now() - started, action, pendingCommand ? pendingCommand.requestId : '', true);
         }
 
@@ -544,7 +1489,6 @@ def get_mobile_html() -> str:
             location.reload();
         }
 
-
         let ws = null;
         let wsConnected = false;
         let wsRetryTimer = null;
@@ -555,7 +1499,7 @@ def get_mobile_html() -> str:
                 const timer = setTimeout(() => {
                     if (activeCommandResolver) {
                         activeCommandResolver = null;
-                        statusBox.textContent = 'Əmr icra vaxtı aşımı.';
+                        recordNotification(false, "Vaxt Aşımı", "Əmr icra vaxtı aşımı.");
                         resolve(null);
                     }
                 }, timeoutMs);
@@ -589,16 +1533,19 @@ def get_mobile_html() -> str:
                     const msg = JSON.parse(event.data);
                     if (msg.type === 'auth_ok') {
                         wsConnected = true;
-                        statusBox.textContent = 'Canlı WebSocket bağlantısı aktivdir.';
+                        badgeTextEl.textContent = 'Onlayn';
+                        badgeEl.className = 'badge badge-online';
                     } else if (msg.type === 'device_state') {
                         if (msg.computer_name) devNameEl.textContent = msg.computer_name;
-                        badgeEl.textContent = msg.locked ? 'Kilidli' : 'Açıq';
+                        isPcLocked = Boolean(msg.locked);
+                        renderState();
+                        badgeTextEl.textContent = msg.online ? 'Onlayn' : 'Oflayn';
                         badgeEl.className = msg.online ? 'badge badge-online' : 'badge badge-offline';
                     } else if (msg.type === 'command_status') {
                         if (msg.status === 'delivered') {
-                            statusBox.innerHTML = '<span class="spinner"></span>Kompüter əmri qəbul etdi, icra olunur (' + msg.action + ')...';
+                            statusBox.innerHTML = '<span class="spinner"></span>Kompüter əmri qəbul etdi (' + msg.action + ')...';
                         } else if (msg.status === 'superseded') {
-                            statusBox.textContent = 'Əvvəlki əmr son istəklə əvəz edilib.';
+                            recordNotification(false, "Əmr Əvəzləndi", "Əvvəlki əmr son istəklə əvəz edilib.");
                         }
                     } else if (msg.type === 'command_ack') {
                         if (pendingCommand && (!pendingCommand.commandId || pendingCommand.requestId === msg.request_id)) {
@@ -609,10 +1556,22 @@ def get_mobile_html() -> str:
                         if (isMatch) {
                             setBusy(false);
                             savePending(null);
-                            if (msg.status === 'completed') {
-                                statusBox.textContent = 'İcra tamamlandı: ' + (msg.result || 'Uğurlu');
+                            const isOk = (msg.status === 'completed');
+                            const act = msg.action || (isPcLocked ? 'unlock' : 'lock');
+                            if (isOk) {
+                                isPcLocked = (act === 'lock');
+                                renderState();
+                                recordNotification(true, act === 'unlock' ? "Kilid Açma İcrası" : "Kilidləmə İcrası",
+                                    "Status: 200 OK
+Əmr: " + act.toUpperCase() + "
+Nəticə: " + (msg.result || 'Uğurlu') + "
+Bağlantı: WebSocket Live");
                             } else {
-                                statusBox.textContent = 'İcra uğursuz oldu: ' + (msg.result || 'Xəta');
+                                recordNotification(false, "İcra Uğursuz Oldu",
+                                    "Status: Failed
+Əmr: " + act.toUpperCase() + "
+Səbəb: " + (msg.result || 'Xəta') + "
+Bağlantı: WebSocket Live");
                             }
                             if (activeCommandResolver) {
                                 const cb = activeCommandResolver;
@@ -629,9 +1588,9 @@ def get_mobile_html() -> str:
                 if (event.code === 4403) {
                     localStorage.removeItem('winkey_token');
                     authToken = null;
-                    badgeEl.textContent = 'Ləğv edildi';
+                    badgeTextEl.textContent = 'Ləğv edildi';
                     badgeEl.className = 'badge badge-offline';
-                    statusBox.textContent = 'Cihaz və ya sessiya serverdə ləğv edildi.';
+                    recordNotification(false, "Sessiya Ləğvi", "Cihaz və ya sessiya serverdə ləğv edildi.");
                     return;
                 }
                 scheduleWSRetry();

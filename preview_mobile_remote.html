@@ -1,0 +1,1122 @@
+<!DOCTYPE html>
+<html lang="az">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+  <title>WinKey Mobile Remote - Test Preview</title>
+  <style>
+    :root {
+      --bg: #0c0f0d;
+      --card-bg: #141a16;
+      --card-border: #232d26;
+      --accent-green: #c8f279;
+      --accent-green-hover: #b5e462;
+      --accent-green-glow: rgba(200, 242, 121, 0.25);
+      --accent-cyan: #38bdf8;
+      --accent-cyan-hover: #0ea5e9;
+      --accent-cyan-glow: rgba(56, 189, 248, 0.25);
+      --danger: #ef4444;
+      --danger-hover: #dc2626;
+      --danger-glow: rgba(239, 68, 68, 0.25);
+      --text-main: #f3f4f6;
+      --text-muted: #9ca3af;
+      --text-dim: #6b7280;
+    }
+
+    * {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+      -webkit-tap-highlight-color: transparent;
+    }
+
+    body {
+      background-color: var(--bg);
+      color: var(--text-main);
+      min-height: 100vh;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      padding: 16px;
+      position: relative;
+      overflow-x: hidden;
+    }
+
+    /* Container */
+    .mobile-wrapper {
+      width: 100%;
+      max-width: 440px;
+      display: flex;
+      flex-direction: column;
+      gap: 18px;
+    }
+
+    /* Header */
+    .header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      padding: 8px 4px;
+    }
+
+    .brand {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+
+    .brand-icon {
+      width: 28px;
+      height: 28px;
+      color: var(--accent-green);
+    }
+
+    .brand-title {
+      font-size: 1.15rem;
+      font-weight: 800;
+      letter-spacing: -0.3px;
+      color: var(--text-main);
+    }
+
+    .brand-title span {
+      color: var(--accent-green);
+    }
+
+    .header-actions {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+    }
+
+    /* Status Pill */
+    .status-pill {
+      font-size: 0.72rem;
+      font-weight: 700;
+      letter-spacing: 0.5px;
+      padding: 4px 9px;
+      border-radius: 9999px;
+      background: rgba(200, 242, 121, 0.12);
+      color: var(--accent-green);
+      border: 1px solid rgba(200, 242, 121, 0.3);
+      display: flex;
+      align-items: center;
+      gap: 5px;
+    }
+
+    .status-dot {
+      width: 6px;
+      height: 6px;
+      border-radius: 50%;
+      background: var(--accent-green);
+      box-shadow: 0 0 8px var(--accent-green);
+      animation: pulse 2s infinite;
+    }
+
+    @keyframes pulse {
+      0%, 100% { opacity: 1; transform: scale(1); }
+      50% { opacity: 0.4; transform: scale(0.85); }
+    }
+
+    /* Header Icon Buttons */
+    .icon-btn {
+      width: 38px;
+      height: 38px;
+      border-radius: 12px;
+      background: var(--card-bg);
+      border: 1px solid var(--card-border);
+      color: var(--text-main);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      cursor: pointer;
+      position: relative;
+      transition: all 0.2s ease;
+    }
+
+    .icon-btn:hover {
+      border-color: #3f4e43;
+      transform: translateY(-1px);
+    }
+
+    .icon-btn:active {
+      transform: scale(0.95);
+    }
+
+    .icon-btn.power {
+      color: var(--danger);
+      border-color: rgba(239, 68, 68, 0.25);
+      background: rgba(239, 68, 68, 0.08);
+    }
+
+    .icon-btn.power:hover {
+      background: rgba(239, 68, 68, 0.18);
+      border-color: var(--danger);
+    }
+
+    .badge-count {
+      position: absolute;
+      top: -4px;
+      right: -4px;
+      background: var(--danger);
+      color: #fff;
+      font-size: 0.65rem;
+      font-weight: 700;
+      min-width: 17px;
+      height: 17px;
+      padding: 0 4px;
+      border-radius: 9999px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      border: 2px solid var(--bg);
+    }
+
+    /* Main Card */
+    .card {
+      background: var(--card-bg);
+      border: 1px solid var(--card-border);
+      border-radius: 24px;
+      padding: 24px 20px;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      box-shadow: 0 12px 30px rgba(0, 0, 0, 0.4);
+      position: relative;
+      overflow: hidden;
+    }
+
+    .card::before {
+      content: '';
+      position: absolute;
+      top: 0;
+      left: 0;
+      right: 0;
+      height: 2px;
+      background: linear-gradient(90deg, transparent, var(--accent-green), transparent);
+      opacity: 0.6;
+    }
+
+    /* PC Device Info */
+    .device-info {
+      text-align: center;
+      margin-bottom: 24px;
+      width: 100%;
+    }
+
+    .device-name {
+      font-size: 1.35rem;
+      font-weight: 800;
+      letter-spacing: -0.4px;
+      color: #ffffff;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 8px;
+    }
+
+    .device-id {
+      font-size: 0.78rem;
+      color: var(--text-muted);
+      margin-top: 4px;
+      font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+    }
+
+    .device-state-tag {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      padding: 4px 12px;
+      border-radius: 9999px;
+      font-size: 0.75rem;
+      font-weight: 700;
+      margin-top: 10px;
+      letter-spacing: 0.3px;
+    }
+
+    .state-locked {
+      background: rgba(245, 158, 11, 0.12);
+      color: #fbbf24;
+      border: 1px solid rgba(245, 158, 11, 0.3);
+    }
+
+    .state-unlocked {
+      background: rgba(200, 242, 121, 0.12);
+      color: var(--accent-green);
+      border: 1px solid rgba(200, 242, 121, 0.3);
+    }
+
+    /* Circular Main Action Button */
+    .circle-button-container {
+      position: relative;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      margin: 18px 0 24px;
+      width: 210px;
+      height: 210px;
+    }
+
+    /* Outer Pulse Ring */
+    .circle-ring {
+      position: absolute;
+      width: 210px;
+      height: 210px;
+      border-radius: 50%;
+      border: 2px dashed rgba(200, 242, 121, 0.25);
+      animation: rotateRing 20s linear infinite;
+    }
+
+    @keyframes rotateRing {
+      0% { transform: rotate(0deg); }
+      100% { transform: rotate(360deg); }
+    }
+
+    .circle-btn {
+      width: 180px;
+      height: 180px;
+      border-radius: 50%;
+      border: none;
+      outline: none;
+      cursor: pointer;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      gap: 8px;
+      font-weight: 800;
+      text-transform: uppercase;
+      letter-spacing: 0.8px;
+      font-size: 0.92rem;
+      box-shadow: 0 10px 28px rgba(0, 0, 0, 0.5);
+      transition: all 0.25s cubic-bezier(0.34, 1.56, 0.64, 1);
+      position: relative;
+      z-index: 2;
+    }
+
+    .circle-btn:active {
+      transform: scale(0.93);
+    }
+
+    /* Mode: Locked -> Click to Unlock (Green) */
+    .circle-btn.mode-unlock {
+      background: linear-gradient(145deg, #c8f279, #9ed840);
+      color: #0c1708;
+      box-shadow: 0 0 35px var(--accent-green-glow), 0 10px 25px rgba(0,0,0,0.4);
+    }
+
+    .circle-btn.mode-unlock:hover {
+      box-shadow: 0 0 45px var(--accent-green-glow), 0 12px 30px rgba(0,0,0,0.5);
+      transform: translateY(-2px);
+    }
+
+    /* Mode: Unlocked -> Click to Lock (Cyan/Warning) */
+    .circle-btn.mode-lock {
+      background: linear-gradient(145deg, #38bdf8, #0284c7);
+      color: #041725;
+      box-shadow: 0 0 35px var(--accent-cyan-glow), 0 10px 25px rgba(0,0,0,0.4);
+    }
+
+    .circle-btn.mode-lock:hover {
+      box-shadow: 0 0 45px var(--accent-cyan-glow), 0 12px 30px rgba(0,0,0,0.5);
+      transform: translateY(-2px);
+    }
+
+    .circle-btn .btn-icon {
+      width: 46px;
+      height: 46px;
+      stroke-width: 2.2;
+    }
+
+    .circle-btn.busy {
+      pointer-events: none;
+      opacity: 0.85;
+    }
+
+    /* Action Toast / Mini Banner */
+    .action-toast {
+      width: 100%;
+      border-radius: 14px;
+      padding: 12px 14px;
+      font-size: 0.86rem;
+      font-weight: 600;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 10px;
+      cursor: pointer;
+      transition: all 0.2s ease;
+      background: #17201a;
+      border: 1px solid var(--card-border);
+      color: var(--text-muted);
+    }
+
+    .action-toast:hover {
+      transform: translateY(-1px);
+    }
+
+    .toast-left {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+    }
+
+    .toast-indicator {
+      width: 22px;
+      height: 22px;
+      border-radius: 50%;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 0.75rem;
+      font-weight: 800;
+      flex-shrink: 0;
+    }
+
+    .action-toast.success {
+      background: rgba(200, 242, 121, 0.1);
+      border-color: rgba(200, 242, 121, 0.4);
+      color: #d8f89c;
+    }
+
+    .action-toast.success .toast-indicator {
+      background: var(--accent-green);
+      color: #0c1708;
+    }
+
+    .action-toast.error {
+      background: rgba(239, 68, 68, 0.12);
+      border-color: rgba(239, 68, 68, 0.4);
+      color: #fca5a5;
+    }
+
+    .action-toast.error .toast-indicator {
+      background: var(--danger);
+      color: #fff;
+    }
+
+    .toast-click-hint {
+      font-size: 0.7rem;
+      color: var(--text-dim);
+      font-weight: 500;
+      white-space: nowrap;
+    }
+
+    /* Footer Security Text */
+    .footer-note {
+      text-align: center;
+      font-size: 0.74rem;
+      color: var(--text-dim);
+      line-height: 1.45;
+      padding: 0 10px;
+      margin-top: 8px;
+    }
+
+    /* Modal / Slide-Over Drawer */
+    .modal-overlay {
+      position: fixed;
+      top: 0;
+      left: 0;
+      right: 0;
+      bottom: 0;
+      background: rgba(0, 0, 0, 0.75);
+      backdrop-filter: blur(4px);
+      z-index: 100;
+      display: none;
+      align-items: flex-end;
+      justify-content: center;
+    }
+
+    .modal-overlay.open {
+      display: flex;
+    }
+
+    .modal-drawer {
+      background: #151c17;
+      border: 1px solid #28362b;
+      border-radius: 24px 24px 0 0;
+      width: 100%;
+      max-width: 480px;
+      max-height: 82vh;
+      display: flex;
+      flex-direction: column;
+      animation: slideUp 0.25s cubic-bezier(0.16, 1, 0.3, 1);
+      box-shadow: 0 -10px 40px rgba(0,0,0,0.6);
+    }
+
+    @keyframes slideUp {
+      from { transform: translateY(100%); }
+      to { transform: translateY(0); }
+    }
+
+    .drawer-header {
+      padding: 18px 20px 14px;
+      border-bottom: 1px solid var(--card-border);
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+    }
+
+    .drawer-title {
+      font-size: 1.05rem;
+      font-weight: 700;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      color: #fff;
+    }
+
+    .drawer-close {
+      background: transparent;
+      border: none;
+      color: var(--text-muted);
+      cursor: pointer;
+      padding: 4px;
+      border-radius: 8px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+
+    .drawer-close:hover {
+      color: #fff;
+      background: rgba(255,255,255,0.08);
+    }
+
+    /* Drawer Actions (Kopyala, Endir) */
+    .drawer-actions-bar {
+      display: flex;
+      gap: 10px;
+      padding: 12px 20px;
+      background: #111713;
+      border-bottom: 1px solid #1f2a22;
+    }
+
+    .action-pill-btn {
+      flex: 1;
+      padding: 8px 12px;
+      border-radius: 10px;
+      border: 1px solid #2e3e32;
+      background: #18221b;
+      color: var(--text-main);
+      font-size: 0.78rem;
+      font-weight: 600;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 6px;
+      cursor: pointer;
+      transition: all 0.15s ease;
+    }
+
+    .action-pill-btn:hover {
+      background: #223026;
+      border-color: var(--accent-green);
+      color: var(--accent-green);
+    }
+
+    .action-pill-btn:active {
+      transform: scale(0.97);
+    }
+
+    /* Drawer List */
+    .drawer-content {
+      padding: 16px 20px 24px;
+      overflow-y: auto;
+      display: flex;
+      flex-direction: column;
+      gap: 12px;
+      min-height: 180px;
+    }
+
+    .notification-item {
+      background: #19231d;
+      border: 1px solid #233128;
+      border-radius: 12px;
+      padding: 12px 14px;
+      cursor: pointer;
+      transition: all 0.2s ease;
+    }
+
+    .notification-item:hover {
+      border-color: #374b3f;
+      background: #1f2c25;
+    }
+
+    .notif-top {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 6px;
+    }
+
+    .notif-tag {
+      font-size: 0.7rem;
+      font-weight: 700;
+      padding: 2px 7px;
+      border-radius: 6px;
+    }
+
+    .notif-tag.success {
+      background: rgba(200, 242, 121, 0.15);
+      color: var(--accent-green);
+    }
+
+    .notif-tag.error {
+      background: rgba(239, 68, 68, 0.15);
+      color: var(--danger);
+    }
+
+    .notif-time {
+      font-size: 0.7rem;
+      color: var(--text-dim);
+    }
+
+    .notif-title {
+      font-size: 0.84rem;
+      font-weight: 700;
+      color: #fff;
+      margin-bottom: 4px;
+    }
+
+    .notif-summary {
+      font-size: 0.76rem;
+      color: var(--text-muted);
+      line-height: 1.35;
+      display: -webkit-box;
+      -webkit-line-clamp: 2;
+      -webkit-box-orient: vertical;
+      overflow: hidden;
+    }
+
+    /* Detail Modal (Tam Mətn / Drill-Down) */
+    .detail-modal-box {
+      background: #18221b;
+      border: 1px solid #2a3a2e;
+      border-radius: 20px;
+      width: 90%;
+      max-width: 420px;
+      padding: 22px;
+      margin: auto;
+      box-shadow: 0 15px 40px rgba(0,0,0,0.8);
+    }
+
+    .detail-tag {
+      display: inline-block;
+      font-size: 0.72rem;
+      font-weight: 700;
+      padding: 3px 8px;
+      border-radius: 6px;
+      margin-bottom: 12px;
+    }
+
+    .detail-text-area {
+      background: #0f1612;
+      border: 1px solid #202b23;
+      border-radius: 10px;
+      padding: 12px;
+      font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+      font-size: 0.78rem;
+      color: #d1d5db;
+      line-height: 1.45;
+      max-height: 240px;
+      overflow-y: auto;
+      white-space: pre-wrap;
+      word-break: break-all;
+    }
+
+    /* Interactive Test Controller Bar */
+    .test-suite-panel {
+      margin-top: 24px;
+      width: 100%;
+      max-width: 440px;
+      background: #111713;
+      border: 1px dashed #2f4335;
+      border-radius: 16px;
+      padding: 14px 16px;
+    }
+
+    .test-header {
+      font-size: 0.78rem;
+      font-weight: 700;
+      color: var(--accent-green);
+      letter-spacing: 0.5px;
+      text-transform: uppercase;
+      margin-bottom: 10px;
+      display: flex;
+      align-items: center;
+      gap: 6px;
+    }
+
+    .test-buttons {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 8px;
+    }
+
+    .test-btn {
+      padding: 8px 10px;
+      font-size: 0.74rem;
+      font-weight: 600;
+      background: #1a241d;
+      border: 1px solid #2c3a2f;
+      color: var(--text-main);
+      border-radius: 8px;
+      cursor: pointer;
+    }
+
+    .test-btn:hover {
+      background: #25352a;
+      border-color: #435c4b;
+    }
+
+    /* Spinner */
+    .spinner {
+      width: 32px;
+      height: 32px;
+      border: 3px solid rgba(0,0,0,0.15);
+      border-top-color: currentColor;
+      border-radius: 50%;
+      animation: spin 0.8s linear infinite;
+    }
+
+    @keyframes spin {
+      to { transform: rotate(360deg); }
+    }
+  </style>
+</head>
+<body>
+
+  <div class="mobile-wrapper">
+    <!-- Header -->
+    <header class="header">
+      <div class="brand">
+        <svg class="brand-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
+          <rect x="3" y="11" width="18" height="11" rx="2" ry="2"></rect>
+          <path d="M7 11V7a5 5 0 0 1 10 0v4"></path>
+        </svg>
+        <div class="brand-title">WinKey <span>Remote</span></div>
+      </div>
+
+      <div class="header-actions">
+        <!-- Status Pill -->
+        <div class="status-pill" id="onlinePill">
+          <span class="status-dot"></span>
+          <span>ONLAYN</span>
+        </div>
+
+        <!-- Notification Bell Icon -->
+        <button class="icon-btn" id="bellBtn" title="Bildirişlər">
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"></path>
+            <path d="M13.73 21a2 2 0 0 1-3.46 0"></path>
+          </svg>
+          <span class="badge-count" id="notifBadge">2</span>
+        </button>
+
+        <!-- Power / Disconnect Icon -->
+        <button class="icon-btn power" id="powerBtn" title="Bağlantını Kəs">
+          <svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M18.36 6.64a9 9 0 1 1-12.73 0"></path>
+            <line x1="12" y1="2" x2="12" y2="12"></line>
+          </svg>
+        </button>
+      </div>
+    </header>
+
+    <!-- Main Card -->
+    <main class="card">
+      <!-- Device Info -->
+      <div class="device-info">
+        <div class="device-name" id="pcName">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <rect x="2" y="3" width="20" height="14" rx="2"></rect>
+            <line x1="8" y1="21" x2="16" y2="21"></line>
+            <line x1="12" y1="17" x2="12" y2="21"></line>
+          </svg>
+          <span>DESKTOP-NESIB-PC</span>
+        </div>
+        <div class="device-id" id="deviceId">Cihaz ID: 7b3e9a4f-0128</div>
+        <div id="deviceStateBadge" class="device-state-tag state-locked">
+          <span>🔒 Kompüter Kilidlidir</span>
+        </div>
+      </div>
+
+      <!-- State-Aware Circular Button -->
+      <div class="circle-button-container">
+        <div class="circle-ring"></div>
+        <button class="circle-btn mode-unlock" id="actionCircleBtn">
+          <!-- Icon will change dynamically -->
+          <svg class="btn-icon" id="actionIcon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round">
+            <rect x="3" y="11" width="18" height="11" rx="2" ry="2"></rect>
+            <path d="M7 11V7a5 5 0 0 1 9.9-1"></path>
+          </svg>
+          <span id="actionLabel">KİLİDİ AÇ</span>
+        </button>
+      </div>
+
+      <!-- Action Toast / Live Banner -->
+      <div class="action-toast success" id="liveToast" title="Tam mətni görmək üçün toxunun">
+        <div class="toast-left">
+          <div class="toast-indicator" id="toastIcon">✓</div>
+          <span id="toastSummary">Uğurlu</span>
+        </div>
+        <span class="toast-click-hint">Detallara bax ➔</span>
+      </div>
+    </main>
+
+    <!-- Footer Note -->
+    <p class="footer-note">
+      Qorunan Zəncir: Telefon yalnız kriptoqrafik əmr siqnalı göndərir. Windows PIN heç vaxt serverə və ya şəbəkəyə çıxmır; yalnız PC-nin təhlükəsiz DPAPI anbarında saxlanılır.
+    </p>
+
+    <!-- Interactive Simulator Toolbar -->
+    <section class="test-suite-panel">
+      <div class="test-header">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M12 2v4M12 18v4M4.93 4.93l2.83 2.83M16.24 16.24l2.83 2.83M2 12h4M18 12h4M4.93 19.07l2.83-2.83M16.24 7.76l2.83-2.83"/></svg>
+        İnteraktiv Test Paneli (Simulyasiya)
+      </div>
+      <div class="test-buttons">
+        <button class="test-btn" onclick="togglePcLockState()">🔄 PC Vəziyyətini Dəyiş</button>
+        <button class="test-btn" onclick="simulateSuccess()">✅ Uğurlu Əmr Göndər</button>
+        <button class="test-btn" onclick="simulateFailure()">❌ Uğursuz Əmr Göndər</button>
+        <button class="test-btn" onclick="openDrawer()">🔔 Bildirişləri Aç</button>
+      </div>
+    </section>
+  </div>
+
+  <!-- Notification History Drawer (Modal) -->
+  <div class="modal-overlay" id="notifDrawerOverlay">
+    <div class="modal-drawer">
+      <div class="drawer-header">
+        <div class="drawer-title">
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"></path>
+            <path d="M13.73 21a2 2 0 0 1-3.46 0"></path>
+          </svg>
+          <span>Bildiriş Tarixçəsi</span>
+        </div>
+        <button class="drawer-close" onclick="closeDrawer()">
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
+            <line x1="18" y1="6" x2="6" y2="18"></line>
+            <line x1="6" y1="6" x2="18" y2="18"></line>
+          </svg>
+        </button>
+      </div>
+
+      <!-- Action Buttons: Endir & Kopyala -->
+      <div class="drawer-actions-bar">
+        <button class="action-pill-btn" onclick="copyNotifications()">
+          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect>
+            <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path>
+          </svg>
+          <span>Kopyala</span>
+        </button>
+        <button class="action-pill-btn" onclick="downloadNotifications()">
+          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path>
+            <polyline points="7 10 12 15 17 10"></polyline>
+            <line x1="12" y1="15" x2="12" y2="3"></line>
+          </svg>
+          <span>Endir</span>
+        </button>
+      </div>
+
+      <!-- Notifications List -->
+      <div class="drawer-content" id="notifListContainer">
+        <!-- Rendered via JS -->
+      </div>
+    </div>
+  </div>
+
+  <!-- Full Text Detail Modal (Drill-Down) -->
+  <div class="modal-overlay" id="detailModalOverlay" style="align-items: center;">
+    <div class="detail-modal-box">
+      <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:12px;">
+        <h3 id="detailTitle" style="font-size:1.05rem; font-weight:700;">Ətraflı Məlumat</h3>
+        <button class="drawer-close" onclick="closeDetailModal()">
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
+            <line x1="18" y1="6" x2="6" y2="18"></line>
+            <line x1="6" y1="6" x2="18" y2="18"></line>
+          </svg>
+        </button>
+      </div>
+      <div id="detailTag" class="detail-tag">Status</div>
+      <div class="detail-text-area" id="detailText"></div>
+      <button class="action-pill-btn" style="margin-top:14px; width:100%; padding:10px;" onclick="closeDetailModal()">Bağla</button>
+    </div>
+  </div>
+
+  <!-- Disconnect Confirmation Modal -->
+  <div class="modal-overlay" id="disconnectModalOverlay" style="align-items: center;">
+    <div class="detail-modal-box">
+      <h3 style="font-size:1.1rem; font-weight:700; color:var(--danger); margin-bottom:10px; display:flex; align-items:center; gap:8px;">
+        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2">
+          <path d="M18.36 6.64a9 9 0 1 1-12.73 0"></path><line x1="12" y1="2" x2="12" y2="12"></line>
+        </svg>
+        Bağlantını Kəsmək İstəyirsiniz?
+      </h3>
+      <p style="font-size:0.82rem; color:var(--text-muted); line-height:1.4; margin-bottom:16px;">
+        Bu əməliyyat mobil cihazın bu kompüterlə olan cütləşməsini ləğv edəcək. Yenidən idarə etmək üçün QR kodu yenidən skan etməlisiniz.
+      </p>
+      <div style="display:flex; gap:10px;">
+        <button class="action-pill-btn" style="background:#261818; border-color:var(--danger); color:#fca5a5;" onclick="confirmDisconnect()">Bəli, Kəs</button>
+        <button class="action-pill-btn" onclick="closeDisconnectModal()">Ləğv Et</button>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    // State
+    let isPcLocked = true; // PC hazırda kilidlidir
+    let isBusy = false;
+    let activeNotification = null;
+
+    // Notification History Store
+    let notificationHistory = [
+      {
+        id: 1,
+        success: true,
+        summary: "Uğurlu",
+        title: "Kilid Açma İcrası",
+        timestamp: "12:10:45",
+        date: "2026-11-02",
+        fullText: "Status: 200 OK\nƏmr: UNLOCK\nCihaz: DESKTOP-NESIB-PC\nİcra müddəti: 142ms\nDPAPI: Auth Token verify olundu\nWindows Logon Screen: Fokus aktivləşdi və PIN daxil edildi."
+      },
+      {
+        id: 2,
+        success: false,
+        summary: "Uğursuz oldu, yenidən cəhd edin",
+        title: "Kilidləmə Cəhdi Xətası",
+        timestamp: "12:05:12",
+        date: "2026-11-02",
+        fullText: "Xəta Kodu: E_SESSION_INPUT_BUSY (Exit 0x80004005)\nSəbəb: Windows ekranda UAC dialoqu və ya başqa tətbiq tərəfindən kilidli idi.\nTövsiyə: Ekranın sərbəst olduğunu yoxlayın və təkrar cəhd edin."
+      }
+    ];
+
+    // DOM Elements
+    const circleBtn = document.getElementById('actionCircleBtn');
+    const actionLabel = document.getElementById('actionLabel');
+    const actionIcon = document.getElementById('actionIcon');
+    const stateBadge = document.getElementById('deviceStateBadge');
+    const liveToast = document.getElementById('liveToast');
+    const toastIcon = document.getElementById('toastIcon');
+    const toastSummary = document.getElementById('toastSummary');
+    const notifBadge = document.getElementById('notifBadge');
+    const notifListContainer = document.getElementById('notifListContainer');
+
+    // SVGs
+    const SVG_LOCK = `
+      <rect x="3" y="11" width="18" height="11" rx="2" ry="2"></rect>
+      <path d="M7 11V7a5 5 0 0 1 10 0v4"></path>
+    `;
+    const SVG_UNLOCK = `
+      <rect x="3" y="11" width="18" height="11" rx="2" ry="2"></rect>
+      <path d="M7 11V7a5 5 0 0 1 9.9-1"></path>
+    `;
+
+    // Render PC & Circle Button State
+    function renderState() {
+      if (isPcLocked) {
+        // PC Kilidlidir -> Düymə KİLİDİ AÇ olmalıdır
+        circleBtn.className = "circle-btn mode-unlock";
+        actionLabel.textContent = "KİLİDİ AÇ";
+        actionIcon.innerHTML = SVG_UNLOCK;
+        stateBadge.className = "device-state-tag state-locked";
+        stateBadge.innerHTML = "<span>🔒 Kompüter Kilidlidir</span>";
+      } else {
+        // PC Açıqdır -> Düymə KOMPÜTERİ KİLİDLƏ olmalıdır
+        circleBtn.className = "circle-btn mode-lock";
+        actionLabel.textContent = "KİLİDLƏ";
+        actionIcon.innerHTML = SVG_LOCK;
+        stateBadge.className = "device-state-tag state-unlocked";
+        stateBadge.innerHTML = "<span>🔓 Kompüter Açıqdır</span>";
+      }
+    }
+
+    // Toggle State (For simulation)
+    function togglePcLockState() {
+      isPcLocked = !isPcLocked;
+      renderState();
+    }
+
+    // Handle Circular Button Click
+    circleBtn.addEventListener('click', () => {
+      if (isBusy) return;
+      isBusy = true;
+      circleBtn.classList.add('busy');
+      const prevText = actionLabel.textContent;
+      actionLabel.textContent = "GÖZLƏYİN...";
+
+      setTimeout(() => {
+        isBusy = false;
+        circleBtn.classList.remove('busy');
+        
+        // Əgər kilidli idisə, açırıq
+        if (isPcLocked) {
+          isPcLocked = false;
+          recordNotification(true, "Kilid Açma İcrası", "Status: 200 OK\nƏmr: UNLOCK\nPC uğurla açıldı və masaüstü aktivdir.");
+        } else {
+          isPcLocked = true;
+          recordNotification(true, "Kilidləmə İcrası", "Status: 200 OK\nƏmr: LOCK\nWindows Workstation uğurla kilidləndi.");
+        }
+        renderState();
+      }, 700);
+    });
+
+    // Record and Show Notification
+    function recordNotification(success, title, fullText) {
+      const now = new Date();
+      const timeStr = now.toTimeString().split(' ')[0];
+      const dateStr = now.toISOString().split('T')[0];
+      const summary = success ? "Uğurlu" : "Uğursuz oldu, yenidən cəhd edin";
+
+      const notif = {
+        id: Date.now(),
+        success,
+        summary,
+        title,
+        timestamp: timeStr,
+        date: dateStr,
+        fullText
+      };
+
+      activeNotification = notif;
+      notificationHistory.unshift(notif);
+      updateToast(notif);
+      renderDrawerList();
+      updateBadge();
+    }
+
+    // Update Toast Banner
+    function updateToast(notif) {
+      liveToast.className = `action-toast ${notif.success ? 'success' : 'error'}`;
+      toastIcon.textContent = notif.success ? '✓' : '✕';
+      toastSummary.textContent = notif.summary;
+    }
+
+    liveToast.addEventListener('click', () => {
+      if (activeNotification) {
+        showDetailModal(activeNotification);
+      } else if (notificationHistory.length > 0) {
+        showDetailModal(notificationHistory[0]);
+      }
+    });
+
+    // Detail Modal (Tam Mətn)
+    function showDetailModal(notif) {
+      document.getElementById('detailTitle').textContent = notif.title;
+      const tag = document.getElementById('detailTag');
+      tag.className = `detail-tag ${notif.success ? 'state-unlocked' : 'state-locked'}`;
+      tag.textContent = notif.success ? '✓ Status: Uğurlu' : '✕ Status: Uğursuz';
+      document.getElementById('detailText').textContent = notif.fullText;
+      document.getElementById('detailModalOverlay').classList.add('open');
+    }
+
+    function closeDetailModal() {
+      document.getElementById('detailModalOverlay').classList.remove('open');
+    }
+
+    // Drawer Open / Close
+    const notifDrawer = document.getElementById('notifDrawerOverlay');
+    document.getElementById('bellBtn').addEventListener('click', openDrawer);
+
+    function openDrawer() {
+      renderDrawerList();
+      notifDrawer.classList.add('open');
+    }
+
+    function closeDrawer() {
+      notifDrawer.classList.remove('open');
+    }
+
+    notifDrawer.addEventListener('click', (e) => {
+      if (e.target === notifDrawer) closeDrawer();
+    });
+
+    // Render Drawer List
+    function renderDrawerList() {
+      notifListContainer.innerHTML = '';
+      if (notificationHistory.length === 0) {
+        notifListContainer.innerHTML = '<div style="color:var(--text-dim); text-align:center; padding:30px 0;">Heç bir bildiriş yoxdur.</div>';
+        return;
+      }
+
+      notificationHistory.forEach(item => {
+        const div = document.createElement('div');
+        div.className = 'notification-item';
+        div.innerHTML = `
+          <div class="notif-top">
+            <span class="notif-tag ${item.success ? 'success' : 'error'}">${item.summary}</span>
+            <span class="notif-time">${item.timestamp}</span>
+          </div>
+          <div class="notif-title">${item.title}</div>
+          <div class="notif-summary">${item.fullText.split('\n')[0]}</div>
+        `;
+        div.onclick = () => showDetailModal(item);
+        notifListContainer.appendChild(div);
+      });
+    }
+
+    function updateBadge() {
+      notifBadge.textContent = notificationHistory.length;
+    }
+
+    // Copy Notifications
+    function copyNotifications() {
+      const text = notificationHistory.map(n => `[${n.date} ${n.timestamp}] ${n.title} - ${n.summary}\n${n.fullText}\n------------------------`).join('\n');
+      navigator.clipboard.writeText(text).then(() => {
+        alert("Bildiriş tarixçəsi panoya kopyalandı!");
+      }).catch(() => {
+        alert("Kopyalama xətası baş verdi.");
+      });
+    }
+
+    // Download Notifications
+    function downloadNotifications() {
+      const text = notificationHistory.map(n => `[${n.date} ${n.timestamp}] ${n.title} - ${n.summary}\n${n.fullText}\n------------------------`).join('\n');
+      const blob = new Blob([text], { type: 'text/plain;charset=utf-8' });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `winkey_bildirisler_${new Date().toISOString().slice(0,10)}.txt`;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      URL.revokeObjectURL(url);
+    }
+
+    // Power / Disconnect Modal
+    const disconnectModal = document.getElementById('disconnectModalOverlay');
+    document.getElementById('powerBtn').addEventListener('click', () => {
+      disconnectModal.classList.add('open');
+    });
+
+    function closeDisconnectModal() {
+      disconnectModal.classList.remove('open');
+    }
+
+    function confirmDisconnect() {
+      closeDisconnectModal();
+      alert("Cihaz bağlantısı uğurla ləğv edildi (Revoke olundu).");
+    }
+
+    // Test simulation functions
+    function simulateSuccess() {
+      recordNotification(true, "Kilid Açma İcrası", "Status: 200 OK\nƏmr: UNLOCK\nCihaz: DESKTOP-NESIB-PC\nİcra müddəti: 110ms\nDPAPI: Giriş təsdiqləndi.");
+    }
+
+    function simulateFailure() {
+      recordNotification(false, "Kilid Açma Xətası", "Xəta Kodu: E_AUTH_DPAPI_INVALID_PIN\nSəbəb: Daxil edilmiş PIN kodu Windows DPAPI anbarı ilə uyğun gəlmədi.\nTövsiyə: Desktop tətbiqindən PIN-i yeniləyin.");
+    }
+
+    // Initial setup
+    renderState();
+    activeNotification = notificationHistory[0];
+    updateToast(activeNotification);
+    updateBadge();
+  </script>
+</body>
+</html>
+
