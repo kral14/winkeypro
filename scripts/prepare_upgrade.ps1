@@ -1,8 +1,17 @@
-param(
+﻿param(
     [Parameter(Mandatory=$true)][string]$InstallDir,
     [string]$DataDir = 'C:\ProgramData\WinKey',
-    [switch]$DryRun
+    [switch]$DryRun,
+    [switch]$UnicodeOutput
 )
+
+if ($UnicodeOutput) {
+    [Console]::OutputEncoding = [System.Text.Encoding]::Unicode
+    $OutputEncoding = [System.Text.Encoding]::Unicode
+} else {
+    [Console]::OutputEncoding = [System.Text.Encoding]::UTF8
+    $OutputEncoding = [System.Text.Encoding]::UTF8
+}
 $ErrorActionPreference = 'Stop'
 try {
     $install = [IO.Path]::GetFullPath($InstallDir).TrimEnd('\') + '\'
@@ -22,10 +31,10 @@ try {
     if (-not $principal.IsInRole([Security.Principal.WindowsBuiltInRole]::Administrator)) { throw 'E_ADMIN_REQUIRED' }
     $service = Get-Service -Name WinKeyService -ErrorAction SilentlyContinue
     if ($service) {
-        Write-Output '[UPGRADE] Disabling SCM auto-restart failure actions...'
+        Write-Output '[UPGRADE] SCM avtomatik bərpa parametrləri müvəqqəti dayandırılır...'
         & sc.exe failure WinKeyService reset= 0 actions= "" 2>$null | Out-Null
         if ($service.Status -ne 'Stopped') {
-            Write-Output '[UPGRADE] Stopping WinKeyService before replacing binaries...'
+            Write-Output '[UPGRADE] Fayllar yenilənməzdən əvvəl WinKeyService dayandırılır...'
             & sc.exe stop WinKeyService | Out-Null
             try {
                 $service.WaitForStatus([ServiceProcess.ServiceControllerStatus]::Stopped, [TimeSpan]::FromSeconds(15))
@@ -36,12 +45,12 @@ try {
     Get-CimInstance Win32_Process | Where-Object { $names -contains $_.Name.ToLowerInvariant() } | ForEach-Object {
         $pPath = $_.ExecutablePath
         if ((-not $pPath) -or (Test-WinKeyBinaryPath $pPath)) {
-            Write-Output ('[UPGRADE] Closing installed process PID=' + $_.ProcessId)
+            Write-Output ('[UPGRADE] Quraşdırılmış proses dayandırılır PID=' + $_.ProcessId)
             & taskkill.exe /F /PID $_.ProcessId 2>$null | Out-Null
         }
     }
     [System.Threading.Thread]::Sleep(500)
-    Write-Output '[UPGRADE] Installed binaries are stopped; extraction may proceed.'
+    Write-Output '[UPGRADE] Quraşdırılmış proseslər dayandırıldı; faylların çıxarılması davam edə bilər.'
     exit 0
 } catch {
     Write-Output ('[UPGRADE_ERROR] ' + $_.Exception.Message)

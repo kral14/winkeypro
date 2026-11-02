@@ -38,7 +38,8 @@ class UpdateTest(WebSocketBoundaryTest):
 
     def package(self,version='0.2.0',tamper=False):
         files={'winkey_service.exe':b'FAKE_NOT_EXECUTABLE','winkey_helper.exe':b'FAKE_HELPER',
-               'helper_runtime/example.dll':b'FAKE_RUNTIME','winkey_desktop.exe':b'FAKE_DESKTOP'}
+               'helper_runtime/example.dll':b'FAKE_RUNTIME','winkey_desktop.exe':b'FAKE_DESKTOP',
+               'WebView2Loader.dll':b'FAKE_WEBVIEW_LOADER'}
         manifest={'version':version,'files':[{'path':n,'size':len(v),'sha256':hashlib.sha256(v).hexdigest()} for n,v in files.items()]}
         raw=json.dumps(manifest).encode()
         output=io.BytesIO()

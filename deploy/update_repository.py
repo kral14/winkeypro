@@ -75,7 +75,7 @@ class UpdateRepository:
                 path = PurePosixPath(name)
                 if path.is_absolute() or '..' in path.parts or '\\' in name or ':' in name or str(path) != name:
                     raise ValueError('E_PACKAGE_PATH')
-                if name not in ('winkey_service.exe', 'winkey_helper.exe', 'winkey_desktop.exe') and not name.startswith('helper_runtime/'):
+                if name not in ('winkey_service.exe', 'winkey_helper.exe', 'winkey_desktop.exe', 'WebView2Loader.dll') and not name.startswith('helper_runtime/'):
                     raise ValueError('E_PACKAGE_UNEXPECTED_FILE')
             old = self.current()
             release = hashlib.sha256(raw).hexdigest()

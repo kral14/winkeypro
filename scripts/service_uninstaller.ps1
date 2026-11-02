@@ -1,4 +1,4 @@
-<#
+﻿<#
 .SYNOPSIS
 WinKey Pro - Windows Service & Autostart Production Uninstaller (Clean Teardown, Rollback & Purge)
 
@@ -15,8 +15,18 @@ param (
     [string]$InstallDir = "C:\Program Files\WinKey Pro",
     [string]$DataDir = "C:\ProgramData\WinKey",
     [switch]$PurgeData,
-    [switch]$DryRun
+    [switch]$DryRun,
+    [switch]$Silent,
+    [switch]$UnicodeOutput
 )
+
+if ($UnicodeOutput) {
+    [Console]::OutputEncoding = [System.Text.Encoding]::Unicode
+    $OutputEncoding = [System.Text.Encoding]::Unicode
+} else {
+    [Console]::OutputEncoding = [System.Text.Encoding]::UTF8
+    $OutputEncoding = [System.Text.Encoding]::UTF8
+}
 
 $ErrorActionPreference = "Stop"
 $serviceName = "WinKeyService"

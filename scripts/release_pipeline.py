@@ -20,7 +20,7 @@ SKIP_DIRS = {'.git','.github-publish','.agents','.codex','.aws','.openai','keys'
     '.sites-runtime','.sites-checkout','pre_signed_slot_a','windows_release','rustdesk','release','release2','release3'}
 EXTENSIONS = {'.py','.rs','.ts','.tsx','.js','.mjs','.cjs','.html','.css','.json','.toml','.lock','.sql','.md',
     '.ps1','.bat','.vbs','.nsi','.svg','.png','.ico','.yml','.yaml','.spec','.nsh'}
-ROOT_FILES = {'build.py','run.py','Dockerfile','compose.yaml','README.md','.gitignore','.gitattributes','.dockerignore','manifest.json','requirements-dev.txt'}
+ROOT_FILES = {'build.py','run.py','push_to_git.py','Dockerfile','compose.yaml','README.md','.gitignore','.gitattributes','.dockerignore','manifest.json','requirements-dev.txt'}
 SKIP_FILES = {'config.json','package-credential.json','desktop_err.txt','desktop_out.txt'}
 
 

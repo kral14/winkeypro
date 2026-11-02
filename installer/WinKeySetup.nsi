@@ -1,5 +1,5 @@
 ; ==============================================================================
-; WinKey Pro -- Resmi Windows Qurasdiricisi (NSIS One-Click Setup)
+; WinKey Pro -- Rəsmi Windows Quraşdırıcısı (NSIS One-Click Setup)
 ; ==============================================================================
 
 Unicode True
@@ -14,10 +14,10 @@ SetCompressor /SOLID lzma
 !define PRODUCT_UNINST_KEY "Software\Microsoft\Windows\CurrentVersion\Uninstall\WinKeyPro"
 !define PRODUCT_UNINST_ROOT_KEY "HKLM"
 
-; UAC Administrator icazesi mecburidir
+; UAC Administrator icazəsi məcburidir
 RequestExecutionLevel admin
 
-; Cixis fayli ve susmaya gore qurasdirma yeri
+; Çıxış faylı və susmaya görə quraşdırma yeri
 !ifndef OUTPUT_FILE
 !define OUTPUT_FILE "..\dist\WinKeySetup.exe"
 !endif
@@ -31,7 +31,7 @@ ShowInstDetails show
 ShowUnInstDetails show
 
 ; ==============================================================================
-; Modern UI 2 Tenzimlemeleri
+; Modern UI 2 Tənzimləmələri
 ; ==============================================================================
 !include "MUI2.nsh"
 !include "FileFunc.nsh"
@@ -40,10 +40,10 @@ ShowUnInstDetails show
 Var DesktopShortcutSelected
 Var DesktopShortcutCheckbox
 
-; Pencere Basligi ve Mehsul Adi
+; Pəncərə Başlığı və Məhsul Adı
 Name "${PRODUCT_NAME}"
 Caption "${PRODUCT_NAME} Setup"
-BrandingText "WinKey Pro · Tehlukesizlik ve Uzaqdan Idareetme"
+BrandingText "WinKey Pro · Təhlükəsizlik və Uzaqdan İdarəetmə"
 
 Function .onInit
     SetRegView 64
@@ -58,21 +58,21 @@ FunctionEnd
 !define MUI_ICON "..\apps\desktop_tauri\src-tauri\icons\icon.ico"
 !define MUI_UNICON "..\apps\desktop_tauri\src-tauri\icons\icon.ico"
 
-; 1. Xos Geldiniz Sehifesi
-!define MUI_WELCOMEPAGE_TITLE "WinKey Pro Qurasdiricisina Xos Gelmisiniz"
-!define MUI_WELCOMEPAGE_TEXT "Bu sehrbaz WinKey Pro (v${PRODUCT_VERSION}) proqramini ve onun arxa plan tehlukesizlik xidmetini komputerinize qurasdiracaq.$\r$\n$\r$\nQurasdirma zamani sistem xidmeti avtomatik tenzimlenecek, qorunan tehlukesizlik icazeleri tetbiq olunacaq ve masaustu idareetme merkezi basladilacaq.$\r$\n$\r$\nDavam etmek ucun 'Qurasdir' duymesini sixin."
+; 1. Xoş Gəlmisiniz Səhifəsi
+!define MUI_WELCOMEPAGE_TITLE "WinKey Pro Quraşdırıcısına Xoş Gəlmisiniz"
+!define MUI_WELCOMEPAGE_TEXT "Bu sehrbaz WinKey Pro (v${PRODUCT_VERSION}) proqramını və onun arxa plan təhlükəsizlik xidmətini kompüterinizə quraşdıracaq.$\r$\n$\r$\nQuraşdırma zamanı sistem xidməti avtomatik tənzimlənəcək, qorunan təhlükəsizlik icazələri tətbiq olunacaq və masaüstü idarəetmə mərkəzi başladılacaq.$\r$\n$\r$\nDavam etmək üçün 'Quraşdır' düyməsini sıxın."
 !insertmacro MUI_PAGE_WELCOME
 
 Page custom ShortcutOptionsPage ShortcutOptionsLeave
 
 Function ShortcutOptionsPage
-    !insertmacro MUI_HEADER_TEXT "Qisayol secimi" "Masaustunde WinKey Pro qisayolu yaradilsin?"
+    !insertmacro MUI_HEADER_TEXT "Qısayol seçimi" "Masaüstündə WinKey Pro qısayolu yaradılsın?"
     nsDialogs::Create 1018
     Pop $0
     ${If} $0 == error
         Abort
     ${EndIf}
-    ${NSD_CreateCheckbox} 0 20u 100% 24u "Masaustunde WinKey Pro qisayolu yarat"
+    ${NSD_CreateCheckbox} 0 20u 100% 24u "Masaüstündə WinKey Pro qısayolu yarat"
     Pop $DesktopShortcutCheckbox
     ${NSD_SetState} $DesktopShortcutCheckbox $DesktopShortcutSelected
     nsDialogs::Show
@@ -82,61 +82,61 @@ Function ShortcutOptionsLeave
     ${NSD_GetState} $DesktopShortcutCheckbox $DesktopShortcutSelected
 FunctionEnd
 
-; 2. Qurasdirilma Prosesi Sehifesi
-!define MUI_PAGE_HEADER_TEXT "WinKey Pro Qurasdirilir"
-!define MUI_PAGE_HEADER_SUBTEXT "Fayllar ve sistem xidmeti tenzimlenir..."
+; 2. Quraşdırılma Prosesi Səhifəsi
+!define MUI_PAGE_HEADER_TEXT "WinKey Pro Quraşdırılır"
+!define MUI_PAGE_HEADER_SUBTEXT "Fayllar və sistem xidməti tənzimlənir..."
 !define MUI_INSTFILESPAGE_PROGRESSBAR "smooth"
 !insertmacro MUI_PAGE_INSTFILES
 
-; 3. Tamamlanma Sehifesi
-!define MUI_FINISHPAGE_TITLE "Qurasdirma Ugurla Tamamlandi"
-!define MUI_FINISHPAGE_TEXT "WinKey Pro ugurla qurasdirildi ve arxa plan tehlukesizlik xidmeti aktivlesdirildi.$\r$\n$\r$\nProqramda komputerinizin adi, tehlukesiz DPAPI PIN sahesi ve mobil telefonunuzu qosmaq ucun QR kod derhal acilacaq."
+; 3. Tamamlanma Səhifəsi
+!define MUI_FINISHPAGE_TITLE "Quraşdırma Uğurla Tamamlandı"
+!define MUI_FINISHPAGE_TEXT "WinKey Pro uğurla quraşdırıldı və arxa plan təhlükəsizlik xidməti aktivləşdirildi.$\r$\n$\r$\nProqramda kompüterinizin adı, təhlükəsiz DPAPI PIN sahəsi və mobil telefonunuzu qoşmaq üçün QR kod dərhal açılacaq."
 !define MUI_FINISHPAGE_RUN
 !define MUI_FINISHPAGE_RUN_FUNCTION "LaunchApp"
-!define MUI_FINISHPAGE_RUN_TEXT "WinKey Pro Idareetme Merkezini Ac"
+!define MUI_FINISHPAGE_RUN_TEXT "WinKey Pro İdarəetmə Mərkəzini Aç"
 !insertmacro MUI_PAGE_FINISH
 
 Function LaunchApp
     InitPluginsDir
     File /oname=$PLUGINSDIR\launch_desktop_user.ps1 "..\scripts\launch_desktop_user.ps1"
-    nsExec::ExecToLog '"$WINDIR\Sysnative\WindowsPowerShell\v1.0\powershell.exe" -NoProfile -NonInteractive -STA -ExecutionPolicy Bypass -WindowStyle Hidden -File "$PLUGINSDIR\launch_desktop_user.ps1" -Executable "$INSTDIR\winkey_desktop.exe"'
+    nsExec::ExecToLog '"$WINDIR\Sysnative\WindowsPowerShell\v1.0\powershell.exe" -NoProfile -NonInteractive -STA -ExecutionPolicy Bypass -WindowStyle Hidden -File "$PLUGINSDIR\launch_desktop_user.ps1" -Executable "$INSTDIR\winkey_desktop.exe" -UnicodeOutput'
     Pop $0
     ${If} $0 != 0
-        MessageBox MB_ICONEXCLAMATION|MB_OK "WinKey avtomatik acilmadi. Setup-u baglayin ve Start menyusundan WinKey Pro proqramini acin." /SD IDOK
+        MessageBox MB_ICONEXCLAMATION|MB_OK "WinKey avtomatik açılmadı. Setup-ı bağlayın və Start menyusundan WinKey Pro proqramını açın." /SD IDOK
     ${EndIf}
 FunctionEnd
 
-; Uninstaller sehifeleri
+; Uninstaller səhifələri
 !insertmacro MUI_UNPAGE_CONFIRM
 !insertmacro MUI_UNPAGE_INSTFILES
 
 !insertmacro MUI_LANGUAGE "English"
 
-; Standart basliqlarin ve Name placeholder-in temizlenmesi
+; Standart başlıqların, Şriftin və Name placeholder-in tənzimlənməsi
+LangString ^Font ${LANG_ENGLISH} "Segoe UI"
+LangString ^FontSize ${LANG_ENGLISH} "9"
 LangString ^Name ${LANG_ENGLISH} "WinKey Pro"
 LangString ^NameDA ${LANG_ENGLISH} "WinKey Pro"
-LangString MUI_TEXT_INSTALLING_TITLE ${LANG_ENGLISH} "Qurasdirilir"
-LangString MUI_TEXT_INSTALLING_SUBTITLE ${LANG_ENGLISH} "WinKey Pro komputerinize qurasdirilarken zehmet olmasa gozleyin."
 
 ; ==============================================================================
-; Esas Qurasdirma Bolmesi
+; Əsas Quraşdırma Bölməsi
 ; ==============================================================================
 Section "MainSection" SEC01
     ; Stop the installed service BEFORE extracting executable files.
     InitPluginsDir
     File /oname=$PLUGINSDIR\prepare_upgrade.ps1 "..\scripts\prepare_upgrade.ps1"
-    DetailPrint "Movcud WinKey xidmeti ve prosesleri dayandirilir..."
-    nsExec::ExecToLog '"$WINDIR\Sysnative\WindowsPowerShell\v1.0\powershell.exe" -NoProfile -ExecutionPolicy Bypass -WindowStyle Hidden -File "$PLUGINSDIR\prepare_upgrade.ps1" -InstallDir "$INSTDIR"'
+    DetailPrint "Mövcud WinKey xidməti və prosesləri dayandırılır..."
+    nsExec::ExecToLog '"$WINDIR\Sysnative\WindowsPowerShell\v1.0\powershell.exe" -NoProfile -ExecutionPolicy Bypass -WindowStyle Hidden -File "$PLUGINSDIR\prepare_upgrade.ps1" -InstallDir "$INSTDIR" -UnicodeOutput'
     Pop $0
     ${If} $0 != 0
-        MessageBox MB_ICONSTOP|MB_OK "WinKey xidmeti dayandirilmadi. Fayllar deyisdirilmedi. Detallar bolmesini yoxlayin." /SD IDOK
+        MessageBox MB_ICONSTOP|MB_OK "WinKey xidməti dayandırılmadı. Fayllar dəyişdirilmədi. Detallar bölməsini yoxlayın." /SD IDOK
         SetErrorLevel 1
         Abort
     ${EndIf}
     SetOutPath "$INSTDIR"
     SetOverwrite on
 
-    DetailPrint "Komponentler cixarilir..."
+    DetailPrint "Komponentlər çıxarılır..."
     File "..\apps\desktop_tauri\src-tauri\target\release\winkey_desktop.exe"
     File "..\apps\desktop_tauri\src-tauri\target\release\WebView2Loader.dll"
     File "..\apps\winkey_service\target\release\winkey_service.exe"
@@ -152,22 +152,22 @@ Section "MainSection" SEC01
     File "..\deploy\migrations\001_initial_schema.sql"
     File "..\deploy\keys\prod_release_ed25519_pub.hex"
 
-    ; Tehlukesiz ProgramData ve Slot A/B muhitinin hazirlanmasi
-    DetailPrint "Tehlukesizlik icazeleri ve sistem xidmeti konfiqurasiya edilir..."
+    ; Təhlükəsiz ProgramData və Slot A/B mühitinin hazırlanması
+    DetailPrint "Təhlükəsizlik icazələri və sistem xidməti konfiqurasiya edilir..."
 
-    ; service_installer.ps1 vasitesile tam tehlukesiz qurasdirma icra edilir (konsol penceresi gizledilir)
-    nsExec::ExecToLog '"$WINDIR\Sysnative\WindowsPowerShell\v1.0\powershell.exe" -NoProfile -ExecutionPolicy Bypass -WindowStyle Hidden -File "$INSTDIR\service_installer.ps1" -SourceDir "$INSTDIR" -InstallDir "$INSTDIR" -Repair'
+    ; service_installer.ps1 vasitəsilə tam təhlükəsiz quraşdırma icra edilir (konsol pəncərəsi gizlədilir)
+    nsExec::ExecToLog '"$WINDIR\Sysnative\WindowsPowerShell\v1.0\powershell.exe" -NoProfile -ExecutionPolicy Bypass -WindowStyle Hidden -File "$INSTDIR\service_installer.ps1" -SourceDir "$INSTDIR" -InstallDir "$INSTDIR" -Repair -UnicodeOutput'
     Pop $0
     ${If} $0 != 0
-        DetailPrint "XETA: Windows xidmeti qurasdirilmadi. Exit code: $0"
-        MessageBox MB_ICONSTOP|MB_OK "WinKey xidmeti qurasdirilmadi (kod: $0). Qurasdirma tamamlanmadi. Detallar bolmesindeki xetani gonderin." /SD IDOK
+        DetailPrint "XƏTA: Windows xidməti quraşdırılmadı. Çıxış kodu: $0"
+        MessageBox MB_ICONSTOP|MB_OK "WinKey xidməti quraşdırılmadı (kod: $0). Quraşdırma tamamlanmadı. Detallar bölməsindəki xətanı bildirin." /SD IDOK
         SetErrorLevel 1
         Abort
     ${Else}
-        DetailPrint "Sistem xidmeti ve tehlukesizlik slotlari ugurla hazirlandi."
+        DetailPrint "Sistem xidməti və təhlükəsizlik slotları uğurla hazırlandı."
     ${EndIf}
 
-    ; Default Gateway konfiqurasiyasinin yaradilmasi (eger movcud deyilse)
+    ; Default Gateway konfiqurasiyasının yaradılması (əgər mövcud deyilsə)
     IfFileExists "C:\ProgramData\WinKey\config.json" skip_config 0
         CreateDirectory "C:\ProgramData\WinKey"
         FileOpen $1 "C:\ProgramData\WinKey\config.json" w
@@ -175,19 +175,19 @@ Section "MainSection" SEC01
         FileClose $1
     skip_config:
 
-    ; Qisayollarin yaradilmasi
-    DetailPrint "Start Menyusu ve Is Masasi qisayollari yaradilir..."
+    ; Qısayolların yaradılması
+    DetailPrint "Start menyusu və İş masası qısayolları yaradılır..."
     CreateDirectory "$SMPROGRAMS\WinKey Pro"
     CreateShortcut "$SMPROGRAMS\WinKey Pro\WinKey Pro.lnk" "$INSTDIR\winkey_desktop.exe" "" "$INSTDIR\winkey_desktop.exe" 0
-    CreateShortcut "$SMPROGRAMS\WinKey Pro\WinKey Pro Qaldir (Uninstall).lnk" "$INSTDIR\uninstall.exe" "" "$INSTDIR\uninstall.exe" 0
+    CreateShortcut "$SMPROGRAMS\WinKey Pro\WinKey Pro Sil (Uninstall).lnk" "$INSTDIR\uninstall.exe" "" "$INSTDIR\uninstall.exe" 0
     ${If} $DesktopShortcutSelected == ${BST_CHECKED}
         CreateShortcut "$DESKTOP\WinKey Pro.lnk" "$INSTDIR\winkey_desktop.exe" "" "$INSTDIR\winkey_desktop.exe" 0
     ${Else}
         Delete "$DESKTOP\WinKey Pro.lnk"
     ${EndIf}
 
-    ; Windows Registry (Apps & Features ucun qeydiyyat)
-    DetailPrint "Windows Qurasdirilmis Proqramlar bazasinda qeydiyyat aparilir..."
+    ; Windows Registry (Apps & Features üçün qeydiyyat)
+    DetailPrint "Windows Quraşdırılmış Proqramlar bazasında qeydiyyat aparılır..."
     WriteRegStr HKLM "${PRODUCT_DIR_REGKEY}" "" "$INSTDIR\winkey_desktop.exe"
     WriteRegStr ${PRODUCT_UNINST_ROOT_KEY} "${PRODUCT_UNINST_KEY}" "DisplayName" "WinKey Pro"
     WriteRegStr ${PRODUCT_UNINST_ROOT_KEY} "${PRODUCT_UNINST_KEY}" "DisplayVersion" "${PRODUCT_VERSION}"
@@ -199,35 +199,35 @@ Section "MainSection" SEC01
     WriteRegDWORD ${PRODUCT_UNINST_ROOT_KEY} "${PRODUCT_UNINST_KEY}" "NoModify" 1
     WriteRegDWORD ${PRODUCT_UNINST_ROOT_KEY} "${PRODUCT_UNINST_KEY}" "NoRepair" 1
 
-    ; Istifadeci her defe Windows-a daxil olanda tray rejiminde ise dussun
+    ; İstifadəçi hər dəfə Windows-a daxil olanda tray rejimində işə düşsün
     WriteRegStr HKLM "Software\Microsoft\Windows\CurrentVersion\Run" "WinKeyPro" '"$INSTDIR\winkey_desktop.exe" --minimized'
 
-    ; Uninstaller binari generasiya edilir
+    ; Uninstaller binarı generasiya edilir
     WriteUninstaller "$INSTDIR\uninstall.exe"
 
-    DetailPrint "Qurasdirma muveffeqiyyetle basa catdi."
+    DetailPrint "Quraşdırma müvəffəqiyyətlə başa çatdı."
 SectionEnd
 
 ; ==============================================================================
-; Silinme Bolmesi (Uninstaller)
+; Silinmə Bölməsi (Uninstaller)
 ; ==============================================================================
 Section "Uninstall"
-    DetailPrint "WinKey Pro arxa plan xidmeti dayandirilir ve silinir..."
-    nsExec::Exec 'powershell.exe -NoProfile -ExecutionPolicy Bypass -WindowStyle Hidden -Command "& { & \"$INSTDIR\service_uninstaller.ps1\" -Silent }"'
+    DetailPrint "WinKey Pro arxa plan xidməti dayandırılır və silinir..."
+    nsExec::ExecToLog '"$WINDIR\Sysnative\WindowsPowerShell\v1.0\powershell.exe" -NoProfile -ExecutionPolicy Bypass -WindowStyle Hidden -File "$INSTDIR\service_uninstaller.ps1" -Silent -UnicodeOutput'
     Pop $0
 
-    ; Qisayollari sil
+    ; Qısayolları sil
     Delete "$DESKTOP\WinKey Pro.lnk"
     Delete "$SMPROGRAMS\WinKey Pro\WinKey Pro.lnk"
-    Delete "$SMPROGRAMS\WinKey Pro\WinKey Pro Qaldir (Uninstall).lnk"
+    Delete "$SMPROGRAMS\WinKey Pro\WinKey Pro Sil (Uninstall).lnk"
     RMDir "$SMPROGRAMS\WinKey Pro"
 
-    ; Registry qeydlerini temizle
+    ; Registry qeydlərini təmizlə
     DeleteRegKey ${PRODUCT_UNINST_ROOT_KEY} "${PRODUCT_UNINST_KEY}"
     DeleteRegKey HKLM "${PRODUCT_DIR_REGKEY}"
     DeleteRegValue HKLM "Software\Microsoft\Windows\CurrentVersion\Run" "WinKeyPro"
 
-    ; Qurasdirilmis fayllari sil
+    ; Quraşdırılmış faylları sil
     Delete "$INSTDIR\winkey_desktop.exe"
     Delete "$INSTDIR\WebView2Loader.dll"
     Delete "$INSTDIR\winkey_service.exe"

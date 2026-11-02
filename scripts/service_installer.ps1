@@ -1,4 +1,4 @@
-<#
+﻿<#
 .SYNOPSIS
 WinKey Pro - Windows Service Production Installer (Protected ProgramFiles, Service ProgramData, Enrolled Owner SID & Bounded Health)
 
@@ -24,8 +24,17 @@ param (
     [switch]$DryRun,
     [switch]$Repair,
     [switch]$ApplyAclOnly,
-    [switch]$ReplayTelemetry
+    [switch]$ReplayTelemetry,
+    [switch]$UnicodeOutput
 )
+
+if ($UnicodeOutput) {
+    [Console]::OutputEncoding = [System.Text.Encoding]::Unicode
+    $OutputEncoding = [System.Text.Encoding]::Unicode
+} else {
+    [Console]::OutputEncoding = [System.Text.Encoding]::UTF8
+    $OutputEncoding = [System.Text.Encoding]::UTF8
+}
 
 $ErrorActionPreference = "Stop"
 
@@ -418,10 +427,10 @@ function Set-WinKeyProtectedTreeAcl {
     }
 
     # 2. Allowlist ACL (SYSTEM & Admins Full, Users Read-Only)
-    & icacls.exe "$TargetDataDir" /inheritance:r /grant:r "SYSTEM:(OI)(CI)F" "Administrators:(OI)(CI)F" "Users:(OI)(CI)RX"
+    & icacls.exe "$TargetDataDir" /inheritance:r /grant:r "SYSTEM:(OI)(CI)F" "Administrators:(OI)(CI)F" "Users:(OI)(CI)RX" | Out-Null
     if ($LASTEXITCODE -ne 0) { Invoke-Rollback "icacls DataDir uğursuz oldu: $LASTEXITCODE" }
 
-    & icacls.exe "$vDir" /inheritance:r /grant:r "*S-1-5-18:(OI)(CI)F" "*S-1-5-32-544:(OI)(CI)F" "*S-1-5-32-545:(OI)(CI)RX"
+    & icacls.exe "$vDir" /inheritance:r /grant:r "*S-1-5-18:(OI)(CI)F" "*S-1-5-32-544:(OI)(CI)F" "*S-1-5-32-545:(OI)(CI)RX" | Out-Null
     if ($LASTEXITCODE -ne 0) { Invoke-Rollback "icacls versionsDir uğursuz oldu: $LASTEXITCODE" }
     Get-ChildItem -LiteralPath $vDir -Recurse -Force | ForEach-Object {
         Assert-NotReparsePoint $_.FullName
@@ -434,7 +443,7 @@ function Set-WinKeyProtectedTreeAcl {
     }
 
     if (Test-Path $jPath) {
-        & icacls.exe "$jPath" /inheritance:r /grant:r "SYSTEM:F" "Administrators:F" "Users:R"
+        & icacls.exe "$jPath" /inheritance:r /grant:r "SYSTEM:F" "Administrators:F" "Users:R" | Out-Null
         if ($LASTEXITCODE -ne 0) { Invoke-Rollback "icacls journalPath uğursuz oldu: $LASTEXITCODE" }
     }
 
@@ -768,7 +777,7 @@ if (-not $healthConfirmed) {
 }
 
 # REM-028: Dar Wi-Fi Firewall qaydasi (Yaliniz yerli private sebeke ve port 8788)
-Write-Host "[ACTION] Lokal Wi-Fi elaqesi ucun dar Windows Firewall qaydasi tetbiq olunur..." -ForegroundColor Cyan
+Write-Host "[ACTION] Lokal Wi-Fi əlaqəsi üçün dar Windows Firewall qaydası tətbiq olunur..." -ForegroundColor Cyan
 & netsh.exe advfirewall firewall add rule name="WinKey Pro Local Wi-Fi" dir=in action=allow protocol=TCP localport=8788 profile=private,domain program="$installedBin" 2>$null | Out-Null
 
 Write-Host "`n==========================================================" -ForegroundColor Green
