@@ -28,5 +28,5 @@ windows-sys = { version = "0.59", features = [
     "Win32_Storage_FileSystem",
     "Win32_System_SystemInformation"
 ] }
-ureq = { version = "2.12", default-features = false, features = ["json"] }
+ureq = { version = "2.12", default-features = false, features = ["json", "tls"] }
 qrcode = { version = "0.14.1", features = ["svg"] }

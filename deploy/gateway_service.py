@@ -166,8 +166,8 @@ class GatewayService:
 
         return 200, {"pair_code": pair_code, "expires_at": expires_at, "device_id": device_id}
 
-    def claim_pair(self, pair_code: str) -> Tuple[int, Dict[str, Any]]:
-        if not pair_code:
+    def claim_pair(self, pair_code: str, existing_token: Optional[str] = None) -> Tuple[int, Dict[str, Any]]:
+        if not isinstance(pair_code, str) or not pair_code or len(pair_code) > 256:
             return 400, {"error": "E_MISSING_PAIR_CODE", "message": "pair_code tələb olunur"}
 
         with self.db.get_conn() as conn:
@@ -184,6 +184,17 @@ class GatewayService:
                 return 410, {"error": "E_PAIR_CODE_EXPIRED", "message": "Cütləşmə kodunun vaxtı bitib"}
 
             device_id = req["device_id"]
+            # First-phone pairing intentionally uses possession of the one-use
+            # QR as authorization. Adding to an existing phone portfolio also
+            # checks that both PCs belong to the same desktop account.
+            if existing_token:
+                current = self.authenticate_mobile_session(conn, existing_token)
+                if not current:
+                    return 401, {'error': 'E_INVALID_SESSION'}
+                owner_a = conn.execute('SELECT account_id FROM account_devices WHERE device_id=?', (current['device_id'],)).fetchone()
+                owner_b = conn.execute('SELECT account_id FROM account_devices WHERE device_id=?', (device_id,)).fetchone()
+                if (owner_a or owner_b) and (not owner_a or not owner_b or owner_a['account_id'] != owner_b['account_id']):
+                    return 403, {'error': 'E_DIFFERENT_ACCOUNT', 'message': 'Yeni kompüterdə də eyni hesabla daxil olun.'}
             dev = conn.execute("SELECT status FROM devices WHERE device_id = ?", (device_id,)).fetchone()
             if not dev or dev["status"] != "ACTIVE":
                 return 403, {"error": "E_DEVICE_NOT_ACTIVE", "message": "Cihaz aktiv deyil və ya ləğv edilib"}

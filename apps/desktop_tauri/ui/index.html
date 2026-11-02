@@ -310,6 +310,21 @@
   </style>
 </head>
 <body>
+  <div id="accountOverlay" hidden style="position:fixed;inset:0;background:#101312f2;z-index:1000;padding:8vh 20px;overflow:auto;">
+    <form id="accountForm" style="max-width:430px;margin:auto;background:var(--panel);padding:28px;border:1px solid var(--line);border-radius:18px;">
+      <h2 style="margin-bottom:12px;">WinKey hesabı</h2>
+      <p style="color:var(--text-muted);margin-bottom:20px;">İlk dəfə hesab yaradın. Digər kompüterlərinizdə də həmin hesabla daxil olun. Telefon üçün giriş QR ilə olacaq.</p>
+      <label for="accountEmail">E-poçt</label>
+      <input id="accountEmail" type="email" autocomplete="username" required maxlength="254" style="display:block;width:100%;margin:8px 0 16px;padding:12px;">
+      <label for="accountPassword">Şifrə (ən azı 10 simvol)</label>
+      <input id="accountPassword" type="password" autocomplete="current-password" required minlength="10" maxlength="256" style="display:block;width:100%;margin:8px 0 16px;padding:12px;">
+      <p id="accountMessage" role="status" style="margin:12px 0;"></p>
+      <button id="accountLogin" type="submit" value="login" class="btn-primary">Daxil ol</button>
+      <button type="submit" value="register" class="btn-secondary">Hesab yarat</button>
+      <button id="accountSettings" type="button" class="btn-secondary" style="margin-top:16px;">Server ünvanını tənzimlə</button>
+    </form>
+  </div>
+  <button id="accountOpen" type="button" class="btn-secondary" style="position:fixed;bottom:12px;right:16px;z-index:20;">Hesab</button>
 
   <header>
     <div class="brand">
@@ -527,5 +542,6 @@
   </footer>
 
   <script src="app.js"></script>
+  <script src="account.js"></script>
 </body>
 </html>

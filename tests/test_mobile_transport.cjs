@@ -15,8 +15,11 @@ function context() {
     setTimeout: (f, ms) => (ms === 2000 || ms === 10000) ? 0 : setTimeout(f, Math.min(ms, 10)), clearTimeout,
     setInterval: () => { throw Error('Unexpected overlapping interval'); },
     window: {location: {search: '', pathname: '/mobile'}},
-    document: {hidden: false, getElementById: id => {
-      if (!elements.has(id)) elements.set(id, {}); return elements.get(id);
+    document: {hidden: false, createElement: () => ({}), getElementById: id => {
+      if (!elements.has(id)) elements.set(id, {
+        addEventListener() {}, appendChild() {}, style: {},
+        classList: {add() {}, remove() {}, toggle() {}},
+      }); return elements.get(id);
     }},
     localStorage: {getItem: k => storage.get(k) || null, setItem: (k,v) => storage.set(k,v),
       removeItem: k => storage.delete(k)}, fetch: () => {throw Error('Unexpected fetch');}
@@ -29,6 +32,28 @@ const response = data => ({ok: true, status: 200, json: async () => data});
 
 (async () => {
   const a = context(), posts = [];
+  assert.equal(a.run('isPcLocked'), null, 'Do not assume Windows is locked before the first state');
+  a.run('renderState()');
+  assert.equal(a.run('circleBtn.disabled'), true);
+  a.run('isPcLocked = false; renderState()');
+  assert.equal(a.run('actionLabel.textContent'), 'KİLİDLƏ');
+  a.run('isPcLocked = true; renderState()');
+  assert.equal(a.run('actionLabel.textContent'), 'KİLİDİ AÇ');
+  const switching = context();
+  let releaseOldStatus;
+  switching.ctx.fetch = async () => {
+    await new Promise(resolve => {releaseOldStatus = resolve;});
+    return response({locked:true,computer_name:'Old PC'});
+  };
+  const oldStatus = switching.run('pollStatus()');
+  switching.run('selectMobileDevice(null)');
+  releaseOldStatus(); await oldStatus;
+  assert.equal(switching.run('isPcLocked'), null, 'Old PC status must not overwrite new selection');
+  const adding = context();
+  adding.ctx.window.WinKeyDevices = {isPairing:()=>true};
+  adding.ctx.fetch = () => {throw Error('Commands must not start during pairing');};
+  await adding.run("sendCommand('lock')");
+  assert.equal(adding.run('commandBusy'),false);
   a.ctx.fetch = async (url, options) => {
     if (options.method === 'POST') {
       posts.push(JSON.parse(options.body));

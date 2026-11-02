@@ -66,7 +66,7 @@ def allowed(relative):
     if relative.name.startswith('.env') or relative.name in SKIP_FILES:return False
     if len(relative.parts)==1:return relative.name in ROOT_FILES
     if relative.parts[0] not in DIRECTORIES:return False
-    return relative.suffix.lower() in EXTENSIONS or relative.name in {'requirements.txt','CMakeLists.txt','Caddyfile','.gitignore','.npmrc'}
+    return relative.suffix.lower() in EXTENSIONS or relative.name in {'requirements.txt','CMakeLists.txt','Caddyfile','.gitignore','.npmrc','jsQR-LICENSE.txt'}
 
 
 def check_source(path):

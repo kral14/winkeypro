@@ -7,6 +7,8 @@ RUN pip install --no-cache-dir -r requirements.txt \
     && useradd --uid 10001 --gid 10001 --no-create-home winkey \
     && mkdir /data /updates && chown 10001:10001 /data /updates
 COPY deploy/gateway_production_server.py deploy/gateway_service.py deploy/asgi_app.py deploy/websocket_hub.py deploy/postgres_database.py deploy/update_repository.py /app/deploy/
+COPY deploy/account_service.py deploy/mobile_install.py /app/deploy/
+COPY deploy/static /app/deploy/static
 COPY deploy/vm/server.py /app/server.py
 COPY deploy/vm/dashboard.html /app/dashboard.html
 COPY deploy/windows_release/WinKeyUpdate.zip /app/windows_update.zip

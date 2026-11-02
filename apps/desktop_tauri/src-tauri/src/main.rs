@@ -12,6 +12,7 @@ use tauri::Manager;
 use tauri::menu::{Menu, MenuItem};
 use tauri::tray::{TrayIconBuilder, TrayIconEvent, MouseButton, MouseButtonState};
 mod gateway_config;
+mod account;
 
 use windows_sys::Win32::Foundation::{GetLastError, LocalFree, HLOCAL};
 use windows_sys::Win32::Security::Cryptography::{
@@ -901,6 +902,7 @@ fn set_gateway_origin(origin: String) -> Result<String, String> {
 // 4. Real Ed25519 QR Pairing Kodu, Server Qeydiyyatı və Həqiqi SVG QR
 #[tauri::command]
 fn generate_qr_pairing(mode: Option<String>) -> Result<PairingPayloadDto, String> {
+    account::require_account()?;
     // 1. Gateway origin-in əldə edilməsi (Dual Mode: Wi-Fi Lokal vs Bulud İnternet)
     let cfg_file = get_app_data_dir().join("config.json");
     let mut cfg_val = if cfg_file.exists() {
@@ -1020,6 +1022,8 @@ fn generate_qr_pairing(mode: Option<String>) -> Result<PairingPayloadDto, String
     gateway_config::record_registration(&mut cfg_val, &origin, is_local_mode);
     if let Some(obj) = cfg_val.as_object_mut() { obj.remove("device_secret"); }
     fs::write(&cfg_file, cfg_val.to_string()).map_err(|e| format!("E_CONFIG_SAVE: {}", e))?;
+
+    if !is_local_mode { account::bind_device(&device_id, &signing_key)?; }
 
     // Aktiv birdəfəlik LAN cütləşmə kodunu qeyd edirik
     let pair_challenge_dto = serde_json::json!({
@@ -1514,6 +1518,8 @@ fn main() {
 
     let builder = tauri::Builder::default()
         .invoke_handler(tauri::generate_handler![
+            account::account_status,
+            account::account_authenticate,
             save_credential_dpapi,
             check_credential_status,
             get_device_status,

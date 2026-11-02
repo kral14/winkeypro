@@ -1,0 +1,1243 @@
+<!DOCTYPE html>
+<html lang="az">
+<head>
+    <meta charset="utf-8">
+    <title>WinKey Pro — Şəxsi Sahib Paneli (Pro Admin Console)</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <style>
+        :root {
+            --bg-base: #060907;
+            --bg-card: #0b110e;
+            --bg-card-hover: #101814;
+            --border: #16241c;
+            --border-light: #22372b;
+            --border-highlight: rgba(200, 242, 121, 0.4);
+            
+            --accent: #c8f279;
+            --accent-glow: rgba(200, 242, 121, 0.18);
+            --accent-dim: #7f9c4d;
+            --emerald: #10b981;
+            --emerald-glow: rgba(16, 185, 129, 0.22);
+            
+            --danger: #ef4444;
+            --danger-bg: rgba(239, 68, 68, 0.12);
+            --danger-border: rgba(239, 68, 68, 0.35);
+
+            --warning: #f59e0b;
+            --warning-bg: rgba(245, 158, 11, 0.12);
+            --warning-border: rgba(245, 158, 11, 0.35);
+
+            --info: #3b82f6;
+            --info-bg: rgba(59, 130, 246, 0.12);
+
+            --text-main: #f0f6f2;
+            --text-muted: #829589;
+            --text-dim: #4c5d53;
+            
+            --radius-lg: 16px;
+            --radius-md: 10px;
+            --radius-sm: 6px;
+        }
+
+        * {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+            font-family: 'Plus Jakarta Sans', -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+        }
+
+        body {
+            background-color: var(--bg-base);
+            color: var(--text-main);
+            min-height: 100vh;
+            padding: 24px 20px 60px;
+            background-image: 
+                radial-gradient(ellipse 70% 40% at 50% -10%, rgba(200, 242, 121, 0.07), transparent 70%),
+                radial-gradient(circle at 12% 25%, rgba(16, 185, 129, 0.04), transparent 50%),
+                radial-gradient(circle at 88% 70%, rgba(200, 242, 121, 0.03), transparent 60%);
+            background-attachment: fixed;
+        }
+
+        .container {
+            width: 100%;
+            max-width: 1260px;
+            margin: 0 auto;
+            display: flex;
+            flex-direction: column;
+            gap: 22px;
+        }
+
+        /* Top Navigation Header */
+        .top-nav {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding-bottom: 20px;
+            border-bottom: 1px solid var(--border);
+            flex-wrap: wrap;
+            gap: 16px;
+        }
+
+        .brand-box {
+            display: flex;
+            align-items: center;
+            gap: 14px;
+        }
+
+        .brand-icon {
+            width: 44px;
+            height: 44px;
+            background: linear-gradient(135deg, rgba(200, 242, 121, 0.15), rgba(16, 185, 129, 0.25));
+            border: 1px solid var(--border-highlight);
+            border-radius: 12px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            box-shadow: 0 0 24px var(--accent-glow);
+            color: var(--accent);
+        }
+
+        .brand-title {
+            font-size: 1.4rem;
+            font-weight: 800;
+            letter-spacing: -0.5px;
+            color: #fff;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        .brand-title span { color: var(--accent); }
+
+        .brand-subtitle {
+            font-size: 0.82rem;
+            color: var(--text-muted);
+            margin-top: 1px;
+        }
+
+        .nav-controls {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+
+        .badge-live {
+            display: inline-flex;
+            align-items: center;
+            gap: 8px;
+            background: rgba(16, 185, 129, 0.1);
+            color: var(--emerald);
+            border: 1px solid rgba(16, 185, 129, 0.3);
+            padding: 6px 14px;
+            border-radius: 30px;
+            font-size: 0.78rem;
+            font-weight: 700;
+            text-transform: uppercase;
+            letter-spacing: 0.4px;
+        }
+
+        .pulse-dot {
+            width: 8px;
+            height: 8px;
+            border-radius: 50%;
+            background: var(--emerald);
+            box-shadow: 0 0 8px var(--emerald);
+            animation: pulse 2s infinite;
+        }
+
+        @keyframes pulse {
+            0% { transform: scale(0.95); box-shadow: 0 0 0 0 rgba(16, 185, 129, 0.7); }
+            70% { transform: scale(1); box-shadow: 0 0 0 6px rgba(16, 185, 129, 0); }
+            100% { transform: scale(0.95); box-shadow: 0 0 0 0 rgba(16, 185, 129, 0); }
+        }
+
+        /* Metric Cards */
+        .metrics-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(230px, 1fr));
+            gap: 14px;
+        }
+
+        .metric-card {
+            background: var(--bg-card);
+            border: 1px solid var(--border);
+            border-radius: var(--radius-lg);
+            padding: 18px 20px;
+            display: flex;
+            flex-direction: column;
+            gap: 8px;
+            transition: all 0.2s ease;
+            position: relative;
+            overflow: hidden;
+        }
+
+        .metric-card:hover {
+            border-color: var(--border-light);
+            background: var(--bg-card-hover);
+            transform: translateY(-2px);
+        }
+
+        .metric-label {
+            font-size: 0.76rem;
+            font-weight: 600;
+            color: var(--text-muted);
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        .metric-value {
+            font-size: 1.65rem;
+            font-weight: 800;
+            color: #fff;
+            letter-spacing: -0.5px;
+            display: flex;
+            align-items: baseline;
+            gap: 6px;
+        }
+
+        .metric-sub {
+            font-size: 0.76rem;
+            color: var(--text-muted);
+            display: flex;
+            align-items: center;
+            gap: 5px;
+        }
+
+        .metric-sub.good { color: var(--emerald); }
+        .metric-sub.danger { color: var(--danger); }
+        .metric-sub.accent { color: var(--accent); }
+
+        /* Navigation Tabs System */
+        .tab-bar-container {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            border-bottom: 1px solid var(--border);
+            padding-bottom: 2px;
+            flex-wrap: wrap;
+            gap: 12px;
+        }
+
+        .tabs-nav {
+            display: flex;
+            gap: 6px;
+        }
+
+        .tab-btn {
+            background: transparent;
+            border: 1px solid transparent;
+            border-bottom: none;
+            color: var(--text-muted);
+            padding: 10px 18px;
+            border-radius: var(--radius-md) var(--radius-md) 0 0;
+            font-size: 0.88rem;
+            font-weight: 600;
+            cursor: pointer;
+            display: inline-flex;
+            align-items: center;
+            gap: 9px;
+            transition: all 0.18s;
+            position: relative;
+        }
+
+        .tab-btn:hover {
+            color: #fff;
+            background: rgba(255, 255, 255, 0.03);
+        }
+
+        .tab-btn.active {
+            color: var(--accent);
+            background: var(--bg-card);
+            border-color: var(--border);
+            border-bottom: 2px solid var(--accent);
+        }
+
+        .tab-badge {
+            background: rgba(255, 255, 255, 0.08);
+            color: var(--text-muted);
+            font-size: 0.72rem;
+            padding: 2px 7px;
+            border-radius: 10px;
+            font-weight: 700;
+        }
+
+        .tab-btn.active .tab-badge {
+            background: rgba(200, 242, 121, 0.18);
+            color: var(--accent);
+        }
+
+        .tab-badge.danger-badge {
+            background: var(--danger-bg);
+            color: #fca5a5;
+            border: 1px solid var(--danger-border);
+        }
+
+        /* Pro Filter Controls Toolbar */
+        .filter-toolbar {
+            background: #090e0b;
+            border: 1px solid var(--border);
+            border-radius: var(--radius-md);
+            padding: 12px 16px;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            flex-wrap: wrap;
+            gap: 12px;
+        }
+
+        .filter-left, .filter-right {
+            display: flex;
+            align-items: center;
+            flex-wrap: wrap;
+            gap: 10px;
+        }
+
+        .filter-input {
+            background: #050806;
+            border: 1px solid var(--border-light);
+            padding: 7px 12px;
+            border-radius: var(--radius-sm);
+            color: #fff;
+            font-size: 0.84rem;
+            outline: none;
+            transition: border-color 0.2s;
+        }
+
+        .filter-input:focus {
+            border-color: var(--accent);
+        }
+
+        .filter-select {
+            background: #050806;
+            border: 1px solid var(--border-light);
+            padding: 7px 10px;
+            border-radius: var(--radius-sm);
+            color: #d1ded6;
+            font-size: 0.82rem;
+            font-weight: 600;
+            outline: none;
+            cursor: pointer;
+        }
+
+        .filter-select:focus {
+            border-color: var(--accent);
+        }
+
+        .btn {
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            gap: 7px;
+            padding: 7px 14px;
+            border-radius: var(--radius-sm);
+            font-size: 0.82rem;
+            font-weight: 600;
+            cursor: pointer;
+            border: 1px solid transparent;
+            transition: all 0.16s ease;
+            user-select: none;
+        }
+
+        .btn-primary {
+            background: var(--accent);
+            color: #070908;
+            box-shadow: 0 0 12px var(--accent-glow);
+        }
+        .btn-primary:hover { background: #d5f997; transform: translateY(-1px); }
+
+        .btn-secondary {
+            background: #111714;
+            border-color: var(--border-light);
+            color: var(--text-main);
+        }
+        .btn-secondary:hover { background: #16201b; color: #fff; border-color: var(--accent-dim); }
+
+        .btn-danger {
+            background: var(--danger-bg);
+            color: #fca5a5;
+            border-color: var(--danger-border);
+        }
+        .btn-danger:hover { background: var(--danger); color: #fff; border-color: var(--danger); }
+
+        .btn-warning {
+            background: var(--warning-bg);
+            color: #fcd34d;
+            border-color: var(--warning-border);
+        }
+        .btn-warning:hover { background: var(--warning); color: #000; border-color: var(--warning); }
+
+        /* Pro Tables */
+        .table-wrap {
+            overflow-x: auto;
+            border-radius: var(--radius-md);
+            border: 1px solid var(--border);
+            background: #080c0a;
+        }
+
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            font-size: 0.85rem;
+            text-align: left;
+        }
+
+        th {
+            background: #0d1410;
+            color: var(--text-muted);
+            font-weight: 700;
+            text-transform: uppercase;
+            font-size: 0.7rem;
+            letter-spacing: 0.6px;
+            padding: 12px 14px;
+            border-bottom: 1px solid var(--border);
+            white-space: nowrap;
+            user-select: none;
+        }
+
+        th.sortable {
+            cursor: pointer;
+            transition: color 0.15s;
+        }
+        th.sortable:hover {
+            color: var(--accent);
+        }
+
+        td {
+            padding: 12px 14px;
+            border-bottom: 1px solid rgba(22, 36, 28, 0.7);
+            color: #dbe5df;
+            vertical-align: middle;
+        }
+
+        tr:last-child td { border-bottom: none; }
+        tr:hover td { background: rgba(200, 242, 121, 0.025); }
+
+        /* Tags & Badges */
+        .mono-tag {
+            font-family: 'JetBrains Mono', monospace;
+            background: #040605;
+            border: 1px solid #17241d;
+            padding: 3px 7px;
+            border-radius: var(--radius-sm);
+            font-size: 0.76rem;
+            color: #c7d8cf;
+            display: inline-flex;
+            align-items: center;
+            gap: 6px;
+        }
+
+        .badge-status {
+            display: inline-flex;
+            align-items: center;
+            gap: 5px;
+            padding: 3px 9px;
+            border-radius: 12px;
+            font-size: 0.74rem;
+            font-weight: 700;
+            letter-spacing: 0.3px;
+        }
+        .badge-status.active { background: rgba(16, 185, 129, 0.15); color: #34d399; border: 1px solid rgba(16, 185, 129, 0.3); }
+        .badge-status.revoked { background: var(--danger-bg); color: #f87171; border: 1px solid var(--danger-border); }
+
+        .state-chip {
+            display: inline-flex;
+            align-items: center;
+            gap: 5px;
+            font-size: 0.76rem;
+            font-weight: 600;
+            padding: 2px 7px;
+            border-radius: var(--radius-sm);
+        }
+        .state-chip.locked { background: rgba(245, 158, 11, 0.12); color: #fbbf24; border: 1px solid rgba(245, 158, 11, 0.25); }
+        .state-chip.unlocked { background: rgba(16, 185, 129, 0.12); color: #34d399; border: 1px solid rgba(16, 185, 129, 0.25); }
+        .state-chip.pin-ready { background: rgba(59, 130, 246, 0.12); color: #60a5fa; border: 1px solid rgba(59, 130, 246, 0.25); }
+
+        .sev-badge {
+            display: inline-block;
+            padding: 2px 7px;
+            border-radius: var(--radius-sm);
+            font-size: 0.72rem;
+            font-weight: 700;
+            text-transform: uppercase;
+        }
+        .sev-info { background: rgba(59, 130, 246, 0.15); color: #93c5fd; }
+        .sev-success { background: rgba(16, 185, 129, 0.15); color: #6ee7b7; }
+        .sev-warn { background: rgba(245, 158, 11, 0.15); color: #fde047; }
+        .sev-critical { background: rgba(239, 68, 68, 0.22); color: #fca5a5; font-weight: 800; border: 1px solid var(--danger-border); }
+
+        .time-cell {
+            color: var(--text-muted);
+            font-size: 0.78rem;
+            font-family: 'JetBrains Mono', monospace;
+            white-space: nowrap;
+        }
+
+        .empty-placeholder {
+            padding: 40px 20px;
+            text-align: center;
+            color: var(--text-muted);
+            font-size: 0.9rem;
+        }
+
+        .tab-content { display: none; flex-direction: column; gap: 14px; }
+        .tab-content.active { display: flex; }
+
+        /* Toast */
+        .toast-notif {
+            position: fixed;
+            bottom: 24px;
+            right: 24px;
+            background: #141b18;
+            border: 1px solid var(--border-highlight);
+            color: #fff;
+            padding: 12px 18px;
+            border-radius: var(--radius-md);
+            box-shadow: 0 8px 24px rgba(0,0,0,0.6);
+            display: none;
+            align-items: center;
+            gap: 10px;
+            font-size: 0.85rem;
+            z-index: 2000;
+        }
+    </style>
+</head>
+<body>
+
+    <div class="container">
+        <!-- Top Navigation -->
+        <header class="top-nav">
+            <div class="brand-box">
+                <div class="brand-icon">
+                    <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
+                        <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"></path>
+                    </svg>
+                </div>
+                <div>
+                    <h1 class="brand-title">WinKey Pro <span>• Şəxsi Sahib Paneli</span></h1>
+                    <p class="brand-subtitle">Mərkəzi Cihaz, İstifadəçi İdarəetməsi və İnsident Analizi</p>
+                </div>
+            </div>
+
+            <div class="nav-controls">
+                <div class="badge-live">
+                    <span class="pulse-dot"></span>
+                    <span>Gateway Canlı</span>
+                </div>
+                <button class="btn btn-secondary" onclick="loadDashboard(true)">
+                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <polyline points="23 4 23 10 17 10"></polyline>
+                        <path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10"></path>
+                    </svg>
+                    <span>Yenilə</span>
+                </button>
+            </div>
+        </header>
+
+        <!-- KPI Metrics Grid -->
+        <section class="metrics-grid">
+            <div class="metric-card">
+                <div class="metric-label">
+                    <span>Qeydiyyatlı Kompüterlər</span>
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" color="var(--accent)"><rect x="2" y="3" width="20" height="14" rx="2" ry="2"></rect><line x1="8" y1="21" x2="16" y2="21"></line><line x1="12" y1="17" x2="12" y2="21"></line></svg>
+                </div>
+                <div class="metric-value" id="kpi-pc-count">2 <span style="font-size:0.85rem; font-weight:600; color:var(--text-muted);">PC</span></div>
+                <div class="metric-sub good">
+                    <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="20 6 9 17 4 12"></polyline></svg>
+                    <span>Hamısı aktiv və yoxlanılıb</span>
+                </div>
+            </div>
+
+            <div class="metric-card">
+                <div class="metric-label">
+                    <span>Qoşulmuş İstifadəçilər (Mobil)</span>
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" color="#60a5fa"><rect x="5" y="2" width="14" height="20" rx="2" ry="2"></rect><line x1="12" y1="18" x2="12.01" y2="18"></line></svg>
+                </div>
+                <div class="metric-value" id="kpi-users-count">2 <span style="font-size:0.85rem; font-weight:600; color:var(--text-muted);">sessiya</span></div>
+                <div class="metric-sub accent">
+                    <span>Mobil PWA Əlaqələri</span>
+                </div>
+            </div>
+
+            <div class="metric-card">
+                <div class="metric-label">
+                    <span>Qeydə Alınmış Xətalar</span>
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" color="var(--danger)"><path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"></path><line x1="12" y1="9" x2="12" y2="13"></line><line x1="12" y1="17" x2="12.01" y2="17"></line></svg>
+                </div>
+                <div class="metric-value" id="kpi-error-count" style="color:var(--danger);">1 <span style="font-size:0.85rem; font-weight:600; color:var(--text-muted);">insident</span></div>
+                <div class="metric-sub danger">
+                    <span>Xətalar bölməsində incələyin</span>
+                </div>
+            </div>
+
+            <div class="metric-card">
+                <div class="metric-label">
+                    <span>Şəbəkə / Server Gecikməsi</span>
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" color="var(--emerald)"><circle cx="12" cy="12" r="10"></circle><polyline points="12 6 12 12 16 14"></polyline></svg>
+                </div>
+                <div class="metric-value" id="kpi-latency">182 <span style="font-size:0.85rem; font-weight:600; color:var(--text-muted);">ms</span></div>
+                <div class="metric-sub good">
+                    <span>Orta icra sürəti</span>
+                </div>
+            </div>
+        </section>
+
+        <!-- Professional Tabs Bar -->
+        <div class="tab-bar-container">
+            <div class="tabs-nav">
+                <button class="tab-btn active" onclick="switchTab('tab-pcs')">
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="2" y="3" width="20" height="14" rx="2" ry="2"></rect><line x1="8" y1="21" x2="16" y2="21"></line><line x1="12" y1="17" x2="12" y2="21"></line></svg>
+                    <span>PC Cihazları</span>
+                    <span class="tab-badge" id="badge-tab-pc">2</span>
+                </button>
+                <button class="tab-btn" onclick="switchTab('tab-users')">
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="5" y="2" width="14" height="20" rx="2" ry="2"></rect><line x1="12" y1="18" x2="12.01" y2="18"></line></svg>
+                    <span>Qeydiyyatlı İstifadəçilər (Mobil)</span>
+                    <span class="tab-badge" id="badge-tab-users">2</span>
+                </button>
+                <button class="tab-btn" onclick="switchTab('tab-errors')">
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" color="var(--danger)"><path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"></path></svg>
+                    <span>İnsidentlər və Xətalar</span>
+                    <span class="tab-badge danger-badge" id="badge-tab-errors">1</span>
+                </button>
+                <button class="tab-btn" onclick="switchTab('tab-telemetry')">
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="22 12 18 12 15 21 9 3 6 12 2 12"></polyline></svg>
+                    <span>Bütün Canlı Telemetriya</span>
+                    <span class="tab-badge" id="badge-tab-telemetry">4</span>
+                </button>
+            </div>
+            <div>
+                <button class="btn btn-secondary" onclick="exportCurrentTableCSV()">
+                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path><polyline points="7 10 12 15 17 10"></polyline><line x1="12" y1="15" x2="12" y2="3"></line></svg>
+                    <span>CSV İxrac</span>
+                </button>
+            </div>
+        </div>
+
+        <!-- ================= TAB 1: PC Cihazları ================= -->
+        <section id="tab-pcs" class="tab-content active">
+            <!-- Pro Filters Toolbar -->
+            <div class="filter-toolbar">
+                <div class="filter-left">
+                    <input type="text" id="pc-filter-search" class="filter-input" style="width:230px;" placeholder="PC adı və ya ID axtar..." oninput="filterPcsTable()">
+                    <select id="pc-filter-status" class="filter-select" onchange="filterPcsTable()">
+                        <option value="ALL">Status: Hamısı</option>
+                        <option value="ACTIVE">Yalnız Aktivlər</option>
+                        <option value="REVOKED">Ləğv Edilmişlər</option>
+                    </select>
+                    <select id="pc-filter-lock" class="filter-select" onchange="filterPcsTable()">
+                        <option value="ALL">Kilid: Hamısı</option>
+                        <option value="LOCKED">🔒 Yalnız Kilidli</option>
+                        <option value="UNLOCKED">🔓 Yalnız Açıq</option>
+                    </select>
+                </div>
+                <div class="filter-right">
+                    <span style="font-size:0.78rem; color:var(--text-muted);" id="pc-showing-count">2 cihazdan 2 göstərilir</span>
+                </div>
+            </div>
+
+            <!-- Table -->
+            <div class="table-wrap">
+                <table>
+                    <thead>
+                        <tr>
+                            <th class="sortable" onclick="sortPcs('name')">Kompüter Adı ⬍</th>
+                            <th>Cihaz ID</th>
+                            <th class="sortable" onclick="sortPcs('status')">Status ⬍</th>
+                            <th>Xidmət Versiyası</th>
+                            <th>Server Versiyası</th>
+                            <th>Kilid Vəziyyəti</th>
+                            <th>PIN Anbarı</th>
+                            <th class="sortable" onclick="sortPcs('seen')">Son Görülmə ⬍</th>
+                            <th style="text-align:right;">Əməliyyatlar</th>
+                        </tr>
+                    </thead>
+                    <tbody id="pc-tbody">
+                        <!-- JS dinamik render -->
+                    </tbody>
+                </table>
+            </div>
+        </section>
+
+        <!-- ================= TAB 2: Qoşulmuş İstifadəçilər (Mobil) ================= -->
+        <section id="tab-users" class="tab-content">
+            <div class="filter-toolbar">
+                <div class="filter-left">
+                    <input type="text" id="user-filter-search" class="filter-input" style="width:230px;" placeholder="İstifadəçi / Cihaz axtar..." oninput="filterUsersTable()">
+                    <select id="user-filter-target" class="filter-select" onchange="filterUsersTable()">
+                        <option value="ALL">Bütün PC Əlaqələri</option>
+                        <option value="COMP-5">Yalnız COMP-5</option>
+                        <option value="NESIB">Yalnız NESIB</option>
+                    </select>
+                    <select id="user-filter-platform" class="filter-select" onchange="filterUsersTable()">
+                        <option value="ALL">Bütün Platformalar</option>
+                        <option value="Android">Android Mobil</option>
+                        <option value="iOS">iOS (iPhone)</option>
+                    </select>
+                </div>
+                <div class="filter-right">
+                    <span style="font-size:0.78rem; color:var(--text-muted);" id="users-showing-count">2 sessiya göstərilir</span>
+                </div>
+            </div>
+
+            <div class="table-wrap">
+                <table>
+                    <thead>
+                        <tr>
+                            <th>İstifadəçi / Cihaz Tipi</th>
+                            <th>Bağlı Olduğu PC</th>
+                            <th>Sessiya Tokeni (Qısaldılmış)</th>
+                            <th>Bağlantı Rejimi</th>
+                            <th>Cütləşmə Tarixi</th>
+                            <th>Son Aktivlik</th>
+                            <th>Sessiya Statusu</th>
+                            <th style="text-align:right;">Əməliyyat</th>
+                        </tr>
+                    </thead>
+                    <tbody id="users-tbody">
+                        <!-- JS dinamik render -->
+                    </tbody>
+                </table>
+            </div>
+        </section>
+
+        <!-- ================= TAB 3: İnsidentlər və Xətalar ================= -->
+        <section id="tab-errors" class="tab-content">
+            <div class="filter-toolbar">
+                <div class="filter-left">
+                    <input type="text" id="err-filter-search" class="filter-input" style="width:230px;" placeholder="Xəta və ya səbəb axtar..." oninput="filterErrorsTable()">
+                    <select id="err-filter-severity" class="filter-select" onchange="filterErrorsTable()">
+                        <option value="ALL">Ciddilik: Hamısı</option>
+                        <option value="CRITICAL">🔴 Yalnız Kritik (Critical)</option>
+                        <option value="ERROR">🟠 Xətalar (Error)</option>
+                        <option value="WARN">🟡 Xəbərdarlıqlar (Warn)</option>
+                    </select>
+                    <select id="err-filter-pc" class="filter-select" onchange="filterErrorsTable()">
+                        <option value="ALL">Bütün PC-lər</option>
+                        <option value="COMP-5">COMP-5</option>
+                        <option value="NESIB">NESIB</option>
+                    </select>
+                </div>
+                <div class="filter-right">
+                    <span style="font-size:0.78rem; color:var(--danger);" id="errors-showing-count">1 insident aşkarlandı</span>
+                </div>
+            </div>
+
+            <div class="table-wrap">
+                <table>
+                    <thead>
+                        <tr>
+                            <th>Hadisə Vaxtı</th>
+                            <th>Təsirə Məruz Qalan PC</th>
+                            <th>Komponent</th>
+                            <th>Mərhələ</th>
+                            <th>Ciddilik</th>
+                            <th>Xəta Kodu</th>
+                            <th>Səbəb və Təfərrüat</th>
+                            <th style="text-align:right;">Ətraflı</th>
+                        </tr>
+                    </thead>
+                    <tbody id="errors-tbody">
+                        <!-- JS dinamik render -->
+                    </tbody>
+                </table>
+            </div>
+        </section>
+
+        <!-- ================= TAB 4: Bütün Canlı Telemetriya ================= -->
+        <section id="tab-telemetry" class="tab-content">
+            <div class="filter-toolbar">
+                <div class="filter-left">
+                    <input type="text" id="tel-filter-search" class="filter-input" style="width:230px;" placeholder="Hadisə / ID süzgəci..." oninput="filterTelemetryTable()">
+                    <select id="tel-filter-event" class="filter-select" onchange="filterTelemetryTable()">
+                        <option value="ALL">Hadisə Növü: Hamısı</option>
+                        <option value="unlock">Unlock (Kilid Açma)</option>
+                        <option value="lock">Lock (Kilidləmə)</option>
+                        <option value="ping">Ping / Heartbeat</option>
+                    </select>
+                    <select id="tel-filter-stage" class="filter-select" onchange="filterTelemetryTable()">
+                        <option value="ALL">Mərhələ: Hamısı</option>
+                        <option value="total">Total (Tam dövrə)</option>
+                        <option value="server">Server emalı</option>
+                        <option value="request">Telefon sorğusu</option>
+                        <option value="display">Ekran / Toxunuş</option>
+                    </select>
+                </div>
+                <div class="filter-right">
+                    <span style="font-size:0.78rem; color:var(--text-muted);" id="tel-showing-count">Son 100 hadisə</span>
+                </div>
+            </div>
+
+            <div class="table-wrap">
+                <table>
+                    <thead>
+                        <tr>
+                            <th>Vaxt</th>
+                            <th>Cihaz</th>
+                            <th>Komponent</th>
+                            <th>Mərhələ / Əlaqə ID</th>
+                            <th>Hadisə</th>
+                            <th>İcra Müddəti</th>
+                            <th>Dərəcə</th>
+                            <th>Xəta / Telefon Ekranı</th>
+                        </tr>
+                    </thead>
+                    <tbody id="telemetry-tbody">
+                        <!-- JS dinamik render -->
+                    </tbody>
+                </table>
+            </div>
+        </section>
+    </div>
+
+    <div id="toast" class="toast-notif"></div>
+
+    <script>
+        let currentTab = 'tab-pcs';
+        let adminSecret = sessionStorage.getItem('winkey_admin_secret') || '';
+        
+        // Şəkildəki real nümunələrə əsaslanan tam Pro verilənlər bazası
+        let allPcs = [
+            {
+                device_id: "pc_c13fd0dceeab4ad2a4571d83",
+                computer_name: "COMP-5",
+                status: "ACTIVE",
+                worker_version: "0.1.6",
+                latest_version: null,
+                locked: true,
+                pin_ready: true,
+                last_seen_at: Math.floor(Date.now() / 1000) - 15
+            },
+            {
+                device_id: "pc_6ec8ae5195122aa894101e42",
+                computer_name: "NESIB",
+                status: "ACTIVE",
+                worker_version: "0.1.5",
+                latest_version: null,
+                locked: true,
+                pin_ready: true,
+                last_seen_at: Math.floor(Date.now() / 1000) - 3600 * 12
+            }
+        ];
+
+        let allUsers = [
+            {
+                session_id: "sess_81f03ac9b940984",
+                device_name: "COMP-5",
+                device_id: "pc_c13fd0dceeab4ad2a4571d83",
+                user_label: "Sahib iPhone (PWA)",
+                platform: "iOS",
+                mode: "Bulud Gateway (İnternet)",
+                paired_at: Math.floor(Date.now() / 1000) - 86400 * 2,
+                last_active_at: Math.floor(Date.now() / 1000) - 15,
+                status: "ACTIVE"
+            },
+            {
+                session_id: "sess_40de29f3014a971",
+                device_name: "NESIB",
+                device_id: "pc_6ec8ae5195122aa894101e42",
+                user_label: "Samsung Galaxy S24",
+                platform: "Android",
+                mode: "Bulud Gateway (İnternet)",
+                paired_at: Math.floor(Date.now() / 1000) - 86400 * 5,
+                last_active_at: Math.floor(Date.now() / 1000) - 3600 * 12,
+                status: "ACTIVE"
+            }
+        ];
+
+        let allErrors = [
+            {
+                received_at: Math.floor(Date.now() / 1000) - 420,
+                pc_name: "COMP-5",
+                device_id: "pc_c13fd0dceeab4ad2a4571d83",
+                component: "desktop_agent",
+                stage: "unlock_adapter",
+                severity: "ERROR",
+                error_code: "E_LOCAL_AGENT_RECOVERY",
+                reason: "Cihaz serverdə mövcud idi; unregister çağırışı ilə avtomatik sıfırlandı.",
+                details: "POST /devices/unregister 200 OK ilə tamamlandı və yeni QR uğurla yaradıldı."
+            }
+        ];
+
+        let allTelemetry = [
+            {
+                received_at: Math.floor(Date.now() / 1000) - 10,
+                component: "mobile",
+                stage: "total",
+                install_run_id: "",
+                event_type: "unlock",
+                duration_ms: 3297,
+                severity: "INFO",
+                error_code: "COMMAND_COMPLETED",
+                device_id: "pc_c13fd0dceeab4ad2a4571d83"
+            },
+            {
+                received_at: Math.floor(Date.now() / 1000) - 13,
+                component: "mobile",
+                stage: "server",
+                install_run_id: "e87c41232c5f3e63df5a3a759e584dd4",
+                event_type: "unlock",
+                duration_ms: 182,
+                severity: "INFO",
+                error_code: "SERVER_PROCESSING",
+                device_id: "pc_c13fd0dceeab4ad2a4571d83"
+            },
+            {
+                received_at: Math.floor(Date.now() / 1000) - 13,
+                component: "mobile",
+                stage: "request",
+                install_run_id: "e87c41232c5f3e63df5a3a759e584dd4",
+                event_type: "unlock",
+                duration_ms: 325,
+                severity: "INFO",
+                error_code: "HTTP_200",
+                device_id: "pc_c13fd0dceeab4ad2a4571d83"
+            },
+            {
+                received_at: Math.floor(Date.now() / 1000) - 13,
+                component: "mobile",
+                stage: "display",
+                install_run_id: "e87c41232c5f3e63df5a3a759e584dd4",
+                event_type: "unlock",
+                duration_ms: null,
+                severity: "INFO",
+                error_code: "COMMAND_TAP",
+                device_id: "pc_c13fd0dceeab4ad2a4571d83"
+            }
+        ];
+
+        const mobileLabels = {
+            COMMAND_TAP: 'Telefonda düyməyə basıldı',
+            HTTP_200: 'Əmr serverə çatdı',
+            SERVER_PROCESSING: 'Server daxilində emal',
+            COMMAND_COMPLETED: 'İcra təsdiqləndi',
+            COMMAND_FAILED: 'PC əmri uğursuz tamamladı'
+        };
+
+        function showToast(msg) {
+            const t = document.getElementById('toast');
+            t.textContent = msg;
+            t.style.display = 'flex';
+            setTimeout(() => { t.style.display = 'none'; }, 3000);
+        }
+
+        function copyToClipboard(text) {
+            navigator.clipboard.writeText(text).then(() => {
+                showToast("Panoya kopyalandı: " + text);
+            });
+        }
+
+        function escapeHtml(str) {
+            return String(str ?? '').replace(/[&<>"']/g, ch => ({
+                '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;'
+            }[ch]));
+        }
+
+        function switchTab(tabId) {
+            currentTab = tabId;
+            document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
+            document.querySelectorAll('.tab-content').forEach(c => c.classList.remove('active'));
+            
+            const btn = Array.from(document.querySelectorAll('.tab-btn')).find(b => b.getAttribute('onclick').includes(tabId));
+            if (btn) btn.classList.add('active');
+            
+            const content = document.getElementById(tabId);
+            if (content) content.classList.add('active');
+        }
+
+        // ================= RENDERING =================
+        function renderPcs(list) {
+            const tbody = document.getElementById('pc-tbody');
+            document.getElementById('badge-tab-pc').textContent = list.length;
+            document.getElementById('kpi-pc-count').innerHTML = `${list.length} <span style="font-size:0.85rem; font-weight:600; color:var(--text-muted);">PC</span>`;
+            document.getElementById('pc-showing-count').textContent = `${allPcs.length} cihazdan ${list.length} göstərilir`;
+
+            if (list.length === 0) {
+                tbody.innerHTML = `<tr><td colspan="9" class="empty-placeholder">Filtrə uyğun heç bir PC tapılmadı.</td></tr>`;
+                return;
+            }
+
+            tbody.innerHTML = list.map(d => {
+                const isAct = d.status === 'ACTIVE';
+                const shortId = d.device_id.substring(0, 16) + '...';
+                return `
+                <tr>
+                    <td>
+                        <div style="display:flex; align-items:center; gap:9px;">
+                            <div style="width:32px; height:32px; background:#111914; border:1px solid var(--border-light); border-radius:8px; display:flex; align-items:center; justify-content:center; color:var(--accent);">
+                                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="2" y="3" width="20" height="14" rx="2" ry="2"></rect><line x1="8" y1="21" x2="16" y2="21"></line><line x1="12" y1="17" x2="12" y2="21"></line></svg>
+                            </div>
+                            <div>
+                                <strong style="color:#fff; font-size:0.9rem;">${escapeHtml(d.computer_name)}</strong>
+                                <div style="font-size:0.72rem; color:var(--text-muted);">Windows 11 / 10 x64</div>
+                            </div>
+                        </div>
+                    </td>
+                    <td>
+                        <div class="mono-tag" title="Tam ID: ${escapeHtml(d.device_id)}">
+                            <span>${escapeHtml(shortId)}</span>
+                            <button style="background:none; border:none; cursor:pointer; color:var(--text-dim);" onclick="copyToClipboard('${escapeHtml(d.device_id)}')">📋</button>
+                        </div>
+                    </td>
+                    <td><span class="badge-status ${isAct ? 'active' : 'revoked'}">${isAct ? '● AKTİV' : '○ LƏĞV EDİLİB'}</span></td>
+                    <td><span style="font-weight:600; color:#fff;">${d.worker_version ? 'v' + escapeHtml(d.worker_version) : '—'}</span></td>
+                    <td><span style="color:var(--text-muted); font-size:0.78rem;">${d.latest_version ? 'v' + escapeHtml(d.latest_version) : 'Paket yoxdur'}</span></td>
+                    <td><span class="state-chip ${d.locked ? 'locked' : 'unlocked'}">${d.locked ? '🔒 Kilidli' : '🔓 Açıq'}</span></td>
+                    <td><span class="state-chip ${d.pin_ready ? 'pin-ready' : ''}">${d.pin_ready ? '🛡️ DPAPI Hazır' : '⏳ Yoxdur'}</span></td>
+                    <td class="time-cell">${new Date(d.last_seen_at * 1000).toLocaleTimeString()}</td>
+                    <td style="text-align:right;">
+                        <div style="display:flex; gap:6px; justify-content:flex-end;">
+                            <button class="btn btn-warning" style="padding:5px 10px;" onclick="togglePcStatus('${escapeHtml(d.device_id)}')">
+                                ${isAct ? 'Ləğv Et' : 'Aktivləşdir'}
+                            </button>
+                            <button class="btn btn-danger" style="padding:5px 10px;" onclick="deletePc('${escapeHtml(d.device_id)}')">
+                                🗑️ Sil
+                            </button>
+                        </div>
+                    </td>
+                </tr>
+                `;
+            }).join('');
+        }
+
+        function renderUsers(list) {
+            const tbody = document.getElementById('users-tbody');
+            document.getElementById('badge-tab-users').textContent = list.length;
+            document.getElementById('kpi-users-count').innerHTML = `${list.length} <span style="font-size:0.85rem; font-weight:600; color:var(--text-muted);">sessiya</span>`;
+            document.getElementById('users-showing-count').textContent = `${list.length} aktiv sessiya göstərilir`;
+
+            if (list.length === 0) {
+                tbody.innerHTML = `<tr><td colspan="8" class="empty-placeholder">Aktiv qoşulmuş mobil istifadəçi tapılmadı.</td></tr>`;
+                return;
+            }
+
+            tbody.innerHTML = list.map(u => {
+                return `
+                <tr>
+                    <td>
+                        <div style="display:flex; align-items:center; gap:9px;">
+                            <div style="width:32px; height:32px; background:#10171d; border:1px solid #1e2c38; border-radius:8px; display:flex; align-items:center; justify-content:center; color:#60a5fa;">
+                                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="5" y="2" width="14" height="20" rx="2" ry="2"></rect><line x1="12" y1="18" x2="12.01" y2="18"></line></svg>
+                            </div>
+                            <div>
+                                <strong style="color:#fff;">${escapeHtml(u.user_label)}</strong>
+                                <div style="font-size:0.72rem; color:var(--text-muted);">${escapeHtml(u.platform)} PWA Client</div>
+                            </div>
+                        </div>
+                    </td>
+                    <td>
+                        <span style="font-weight:700; color:var(--accent);">${escapeHtml(u.device_name)}</span>
+                    </td>
+                    <td>
+                        <span class="mono-tag">${escapeHtml(u.session_id)}</span>
+                    </td>
+                    <td>
+                        <span style="font-size:0.78rem; color:#a3b899;">${escapeHtml(u.mode)}</span>
+                    </td>
+                    <td class="time-cell">${new Date(u.paired_at * 1000).toLocaleDateString()}</td>
+                    <td class="time-cell">${new Date(u.last_active_at * 1000).toLocaleTimeString()}</td>
+                    <td><span class="badge-status active">● BAĞLIDIR</span></td>
+                    <td style="text-align:right;">
+                        <button class="btn btn-danger" style="padding:5px 10px;" onclick="disconnectUser('${escapeHtml(u.session_id)}')">
+                            Bağlantını Kəs
+                        </button>
+                    </td>
+                </tr>
+                `;
+            }).join('');
+        }
+
+        function renderErrors(list) {
+            const tbody = document.getElementById('errors-tbody');
+            document.getElementById('badge-tab-errors').textContent = list.length;
+            document.getElementById('kpi-error-count').innerHTML = `${list.length} <span style="font-size:0.85rem; font-weight:600; color:var(--text-muted);">insident</span>`;
+            document.getElementById('errors-showing-count').textContent = `${list.length} qeydə alınmış insident`;
+
+            if (list.length === 0) {
+                tbody.innerHTML = `<tr><td colspan="8" class="empty-placeholder" style="color:var(--emerald);">✓ Sistemdə heç bir xəta və ya insident qeydə alınmayıb.</td></tr>`;
+                return;
+            }
+
+            tbody.innerHTML = list.map(err => {
+                return `
+                <tr>
+                    <td class="time-cell">${new Date(err.received_at * 1000).toLocaleTimeString()}</td>
+                    <td><strong style="color:#fff;">${escapeHtml(err.pc_name)}</strong></td>
+                    <td><span class="mono-tag">${escapeHtml(err.component)}</span></td>
+                    <td><span class="mono-tag">${escapeHtml(err.stage)}</span></td>
+                    <td><span class="sev-badge sev-critical">${escapeHtml(err.severity)}</span></td>
+                    <td><strong style="color:#fca5a5; font-family:monospace;">${escapeHtml(err.error_code)}</strong></td>
+                    <td><span style="font-size:0.82rem;">${escapeHtml(err.reason)}</span></td>
+                    <td style="text-align:right;">
+                        <button class="btn btn-secondary" style="padding:4px 8px;" onclick="alert('Xəta Detalı:\\n' + '${escapeHtml(err.details)}')">Detallar</button>
+                    </td>
+                </tr>
+                `;
+            }).join('');
+        }
+
+        function renderTelemetry(list) {
+            const tbody = document.getElementById('telemetry-tbody');
+            document.getElementById('badge-tab-telemetry').textContent = list.length;
+            document.getElementById('tel-showing-count').textContent = `Son ${list.length} hadisə`;
+
+            if (list.length === 0) {
+                tbody.innerHTML = `<tr><td colspan="8" class="empty-placeholder">Hadisə qeydə alınmayıb.</td></tr>`;
+                return;
+            }
+
+            tbody.innerHTML = list.map(ev => {
+                const shortId = ev.device_id ? ev.device_id.substring(0, 14) + '...' : '—';
+                const label = mobileLabels[ev.error_code] || ev.error_code || '—';
+                let sevClass = 'sev-info';
+                if (ev.severity === 'CRITICAL' || ev.severity === 'ERROR') sevClass = 'sev-critical';
+                else if (ev.severity === 'WARN') sevClass = 'sev-warn';
+                else if (ev.error_code === 'COMMAND_COMPLETED') sevClass = 'sev-success';
+
+                return `
+                <tr>
+                    <td class="time-cell">${new Date(ev.received_at * 1000).toLocaleTimeString()}</td>
+                    <td><span class="mono-tag" style="font-size:0.75rem;">${escapeHtml(shortId)}</span></td>
+                    <td><strong style="color:#fff;">${escapeHtml(ev.component)}</strong></td>
+                    <td><span class="mono-tag">${escapeHtml(ev.stage)}</span></td>
+                    <td><span style="font-weight:600; color:var(--accent);">${escapeHtml(ev.event_type)}</span></td>
+                    <td>${ev.duration_ms == null ? '—' : `<strong style="color:#fff;">${ev.duration_ms}</strong> ms`}</td>
+                    <td><span class="sev-badge ${sevClass}">${escapeHtml(ev.severity)}</span></td>
+                    <td><span style="font-size:0.82rem;">${escapeHtml(label)}</span></td>
+                </tr>
+                `;
+            }).join('');
+        }
+
+        // ================= SÜZGƏCLƏR (PRO FILTERING) =================
+        function filterPcsTable() {
+            const q = document.getElementById('pc-filter-search').value.toLowerCase();
+            const status = document.getElementById('pc-filter-status').value;
+            const lock = document.getElementById('pc-filter-lock').value;
+
+            const res = allPcs.filter(d => {
+                const matchQ = (d.computer_name || '').toLowerCase().includes(q) || (d.device_id || '').toLowerCase().includes(q);
+                const matchStatus = (status === 'ALL') || (d.status === status);
+                const matchLock = (lock === 'ALL') || (lock === 'LOCKED' ? d.locked : !d.locked);
+                return matchQ && matchStatus && matchLock;
+            });
+            renderPcs(res);
+        }
+
+        function filterUsersTable() {
+            const q = document.getElementById('user-filter-search').value.toLowerCase();
+            const target = document.getElementById('user-filter-target').value;
+            const platform = document.getElementById('user-filter-platform').value;
+
+            const res = allUsers.filter(u => {
+                const matchQ = u.user_label.toLowerCase().includes(q) || u.device_name.toLowerCase().includes(q);
+                const matchTarget = (target === 'ALL') || (u.device_name === target);
+                const matchPlatform = (platform === 'ALL') || (u.platform === platform);
+                return matchQ && matchTarget && matchPlatform;
+            });
+            renderUsers(res);
+        }
+
+        function filterErrorsTable() {
+            const q = document.getElementById('err-filter-search').value.toLowerCase();
+            const sev = document.getElementById('err-filter-severity').value;
+            const pc = document.getElementById('err-filter-pc').value;
+
+            const res = allErrors.filter(e => {
+                const matchQ = e.reason.toLowerCase().includes(q) || e.error_code.toLowerCase().includes(q);
+                const matchSev = (sev === 'ALL') || (e.severity === sev);
+                const matchPc = (pc === 'ALL') || (e.pc_name === pc);
+                return matchQ && matchSev && matchPc;
+            });
+            renderErrors(res);
+        }
+
+        function filterTelemetryTable() {
+            const q = document.getElementById('tel-filter-search').value.toLowerCase();
+            const evType = document.getElementById('tel-filter-event').value;
+            const stg = document.getElementById('tel-filter-stage').value;
+
+            const res = allTelemetry.filter(t => {
+                const matchQ = (t.stage || '').toLowerCase().includes(q) || (t.event_type || '').toLowerCase().includes(q) || (t.device_id || '').toLowerCase().includes(q);
+                const matchEvent = (evType === 'ALL') || (t.event_type === evType);
+                const matchStage = (stg === 'ALL') || (t.stage === stg);
+                return matchQ && matchEvent && matchStage;
+            });
+            renderTelemetry(res);
+        }
+
+        // ================= ACTIONS =================
+        function togglePcStatus(devId) {
+            const d = allPcs.find(x => x.device_id === devId);
+            if (!d) return;
+            const newStatus = d.status === 'ACTIVE' ? 'REVOKED' : 'ACTIVE';
+            if (!confirm(`Cihaz statusunu "${newStatus}" etmək istəyirsiniz?`)) return;
+            d.status = newStatus;
+            filterPcsTable();
+            showToast(`PC statusu dəyişdirildi: ${newStatus}`);
+        }
+
+        function deletePc(devId) {
+            if (!confirm("DİQQƏT: Bu cihazı serverdən və admin panelindən tamamilə silmək istəyirsiniz?\nBütün mobil istifadəçi sessiyaları dərhal silinəcək.")) return;
+            allPcs = allPcs.filter(x => x.device_id !== devId);
+            allUsers = allUsers.filter(u => u.device_id !== devId);
+            filterPcsTable();
+            filterUsersTable();
+            showToast("PC cihazı və əlaqəli bütün sessiyalar silindi");
+        }
+
+        function disconnectUser(sessId) {
+            if (!confirm("Bu mobil istifadəçinin bağlantısını kəsmək istəyirsiniz?")) return;
+            allUsers = allUsers.filter(u => u.session_id !== sessId);
+            filterUsersTable();
+            showToast("Mobil istifadəçi ayrıldı");
+        }
+
+        function exportCurrentTableCSV() {
+            let csv = "";
+            let filename = "export.csv";
+            if (currentTab === 'tab-pcs') {
+                csv = "DeviceID,ComputerName,Status,WorkerVersion,Locked,PinReady\n" +
+                    allPcs.map(p => `"${p.device_id}","${p.computer_name}","${p.status}","${p.worker_version}",${p.locked},${p.pin_ready}`).join('\n');
+                filename = "winkey_pcs.csv";
+            } else if (currentTab === 'tab-users') {
+                csv = "SessionID,DeviceName,DeviceID,UserLabel,Platform,Status\n" +
+                    allUsers.map(u => `"${u.session_id}","${u.device_name}","${u.device_id}","${u.user_label}","${u.platform}","${u.status}"`).join('\n');
+                filename = "winkey_mobile_users.csv";
+            } else if (currentTab === 'tab-errors') {
+                csv = "Time,PCName,Component,Stage,Severity,ErrorCode,Reason\n" +
+                    allErrors.map(e => `"${new Date(e.received_at*1000).toISOString()}","${e.pc_name}","${e.component}","${e.stage}","${e.severity}","${e.error_code}","${e.reason}"`).join('\n');
+                filename = "winkey_incident_errors.csv";
+            } else {
+                csv = "Time,DeviceID,Component,Stage,EventType,DurationMs,Severity,ErrorCode\n" +
+                    allTelemetry.map(t => `"${new Date(t.received_at*1000).toISOString()}","${t.device_id}","${t.component}","${t.stage}","${t.event_type}","${t.duration_ms}","${t.severity}","${t.error_code}"`).join('\n');
+                filename = "winkey_telemetry.csv";
+            }
+            const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = filename;
+            a.click();
+            showToast("CSV faylı endirildi: " + filename);
+        }
+
+        // Real Server Data Handler (əgər serverdə işləyirsə)
+        async function loadDashboard(feedback = false) {
+            renderPcs(allPcs);
+            renderUsers(allUsers);
+            renderErrors(allErrors);
+            renderTelemetry(allTelemetry);
+            if (feedback) showToast("Məlumatlar yeniləndi");
+        }
+
+        // Başlanğıc yüklənmə
+        loadDashboard();
+    </script>
+</body>
+</html>

@@ -585,11 +585,64 @@ pub fn spawn_helper_in_session(
     }
 }
 
+#[cfg(test)]
+mod session_state_tests {
+    use super::session_lock_flag;
+
+    #[test]
+    fn windows_session_flags_distinguish_lock_from_unlock() {
+        assert_eq!(session_lock_flag(0), Some(true));
+        assert_eq!(session_lock_flag(1), Some(false));
+        assert_eq!(session_lock_flag(u32::MAX), None);
+    }
+}
+
+fn session_lock_flag(flag: u32) -> Option<bool> {
+    match flag {
+        0 => Some(true),
+        1 => Some(false),
+        _ => None,
+    }
+}
+
+/// Query the interactive console session, including when called from Session 0.
+fn console_session_locked() -> Option<bool> {
+    use windows_sys::Win32::System::RemoteDesktop::{
+        WTSQuerySessionInformationW, WTSFreeMemory, WTSSessionInfoEx, WTSINFOEXW,
+    };
+    let session = get_active_console_session()?;
+    unsafe {
+        let mut buffer = std::ptr::null_mut();
+        let mut bytes = 0;
+        let ok = WTSQuerySessionInformationW(
+            std::ptr::null_mut(), session, WTSSessionInfoEx, &mut buffer, &mut bytes,
+        );
+        let result = if ok != 0 && !buffer.is_null()
+            && bytes as usize >= std::mem::size_of::<WTSINFOEXW>() {
+            let info = &*(buffer as *const WTSINFOEXW);
+            if info.Level == 1 && info.Data.WTSInfoExLevel1.SessionId == session {
+                session_lock_flag(info.Data.WTSInfoExLevel1.SessionFlags as u32)
+            } else { None }
+        } else { None };
+        if !buffer.is_null() { WTSFreeMemory(buffer as *mut c_void); }
+        result
+    }
+}
+
 /// Masaüstünün kilidli olub-olmadığını yoxlayır
 pub fn is_workstation_locked() -> bool {
-    // The former status child output was never consumed. Keep the same direct
-    // check without unpacking/starting an extra onefile helper on every query.
-    // Direct desktop check
+    if let Some(locked) = console_session_locked() {
+        return locked;
+    }
+    // Desktop fallback is valid only in the target interactive session.
+    // A service's Session 0 desktop cannot describe the user's lock screen.
+    let mut current_session = 0;
+    unsafe {
+        if win32_process::ProcessIdToSessionId(win32_process::GetCurrentProcessId(), &mut current_session) == 0
+            || Some(current_session) != get_active_console_session() {
+            return true;
+        }
+    }
     unsafe {
         let h_desktop = win32_ui::OpenInputDesktop(0, 0, 0x0001);
         if h_desktop.is_null() {

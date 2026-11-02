@@ -81,7 +81,7 @@ def build_asgi_app(service: GatewayService, dashboard_html_path: Optional[str] =
         response.headers["X-Frame-Options"] = "DENY"
         response.headers["Content-Security-Policy"] = (
             "default-src 'self'; script-src 'self' 'unsafe-inline'; "
-            "style-src 'self' 'unsafe-inline'; connect-src 'self' ws: wss:;"
+            "style-src 'self' 'unsafe-inline'; connect-src 'self' ws: wss:; media-src 'self' blob:; img-src 'self' blob: data:;"
         )
         response.headers["Access-Control-Allow-Origin"] = "*"
         response.headers["Access-Control-Allow-Headers"] = "Content-Type, Authorization, X-Owner-Admin-Secret"
@@ -155,6 +155,31 @@ def build_asgi_app(service: GatewayService, dashboard_html_path: Optional[str] =
         resp.headers["Cache-Control"] = "no-store"
         return _security_headers(resp, round((time.monotonic() - start) * 1000))
 
+    async def handle_feature(request):
+        from deploy.mobile_install import feature_request
+        start = time.monotonic()
+        try:
+            body = await request.json()
+            if not isinstance(body, dict): raise ValueError()
+        except Exception:
+            return _json_resp(400, {'error': 'E_INPUT'}, start)
+        status, data = await asyncio.to_thread(feature_request, service, request.url.path, body, _get_bearer(request))
+        response = _json_resp(status, data, start)
+        response.headers['Cache-Control'] = 'no-store'
+        return response
+
+    async def handle_mobile_asset(request):
+        from deploy.mobile_install import manifest
+        from pathlib import Path
+        asset = request.path_params['asset']
+        if asset == 'manifest.webmanifest':
+            response = JSONResponse(manifest(request.query_params.get('install', '')), media_type='application/manifest+json')
+            response.headers['Cache-Control'] = 'no-store'
+            return _security_headers(response)
+        if asset in ('devices.js', 'jsQR.js', 'icon.png'):
+            return _security_headers(FileResponse(Path(__file__).parent / 'static' / asset, media_type='image/png' if asset == 'icon.png' else 'application/javascript'))
+        return Response(status_code=404)
+
     async def handle_admin_page(request: Request) -> Response:
         from deploy.gateway_production_server import get_admin_html
         start = time.monotonic()
@@ -221,7 +246,7 @@ def build_asgi_app(service: GatewayService, dashboard_html_path: Optional[str] =
         except Exception:
             body = {}
         pair_code = body.get("pair_code") or body.get("code")
-        status, data = await asyncio.to_thread(service.claim_pair, pair_code)
+        status, data = await asyncio.to_thread(service.claim_pair, pair_code, _get_bearer(request))
         return _json_resp(status, data, start)
 
     async def handle_pair_request(request: Request) -> Response:
@@ -818,6 +843,11 @@ def build_asgi_app(service: GatewayService, dashboard_html_path: Optional[str] =
         Route("/", handle_dashboard, methods=["GET"]),
         Route("/dashboard", handle_dashboard, methods=["GET"]),
         Route("/mobile", handle_mobile_page, methods=["GET"]),
+        Route("/mobile-assets/{asset}", handle_mobile_asset, methods=["GET"]),
+        Route("/accounts/{action}", handle_feature, methods=["POST"]),
+        Route("/mobile/install", handle_feature, methods=["POST"]),
+        Route("/mobile/restore", handle_feature, methods=["POST"]),
+        Route("/mobile/pair", handle_feature, methods=["POST"]),
         Route("/remote", handle_mobile_page, methods=["GET"]),
         Route("/admin", handle_admin_page, methods=["GET"]),
 

@@ -23,6 +23,10 @@ from http.server import HTTPServer, ThreadingHTTPServer, BaseHTTPRequestHandler
 from urllib.parse import urlparse, parse_qs
 from cryptography.hazmat.primitives.asymmetric import ed25519
 
+if not __package__:
+    # Keep the documented direct-script entrypoint working with shared modules.
+    sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+
 # Dinamik Admin Secret — heç vaxt hardcode edilmir!
 _RUNTIME_ADMIN_SECRET = secrets.token_hex(32)
 ADMIN_SECRET = _RUNTIME_ADMIN_SECRET
@@ -48,6 +52,8 @@ class ProductionDatabase:
 
     def _init_db(self):
         with self.get_conn() as conn:
+            from deploy.account_service import initialize_accounts
+            initialize_accounts(conn)
             conn.execute("""
                 CREATE TABLE IF NOT EXISTS devices (
                     device_id TEXT PRIMARY KEY,
@@ -156,6 +162,11 @@ def get_mobile_html() -> str:
 <head>
     <meta charset="utf-8">
     <title>WinKey Pro — Mobil İdarəetmə</title>
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-title" content="WinKey">
+    <meta name="theme-color" content="#0c0f0d">
+    <link id="appManifest" rel="manifest" href="/mobile-assets/manifest.webmanifest">
+    <link rel="apple-touch-icon" href="/mobile-assets/icon.png">
     <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
     <style>
         :root {
@@ -792,6 +803,27 @@ def get_mobile_html() -> str:
 </head>
 <body>
     <div class="mobile-wrapper">
+        <section aria-label="Kompüterlər" style="padding:16px;background:var(--card-bg);border-radius:16px;margin-bottom:16px;">
+            <label for="deviceSelect">Kompüter seç</label>
+            <select id="deviceSelect" style="display:block;width:100%;padding:12px;margin:8px 0;color:var(--text-main);background:var(--card-bg);border:1px solid var(--card-border);border-radius:8px;"></select>
+            <button class="action-pill-btn" id="deviceAdd" type="button">＋ Yeni cihaz əlavə et</button>
+            <button class="action-pill-btn" id="prepareInstall" type="button" style="margin-top:8px;">iPhone üçün tətbiqi hazırla</button>
+            <p id="deviceMessage" role="status" style="font-size:.85rem;line-height:1.5;margin:12px 0;"></p>
+            <div id="deviceAddPanel" hidden>
+              <form id="deviceAddForm">
+                <label for="deviceName">Kompüterin adı</label>
+                <input id="deviceName" required maxlength="80" placeholder="PC 1, Ofis 2…" style="display:block;width:100%;padding:12px;margin:8px 0;">
+                <button class="action-pill-btn" id="deviceScan" type="button">Kamera ilə QR oxut</button>
+                <video id="deviceCamera" hidden playsinline muted style="width:100%;margin:8px 0;"></video>
+                <label for="devicePhoto" style="display:block;margin-top:12px;">QR şəklini seç / çək</label>
+                <input id="devicePhoto" type="file" accept="image/*" capture="environment" style="max-width:100%;margin:8px 0;">
+                <label for="devicePairCode" style="display:block;">Qoşulma kodu və ya QR linki</label>
+                <input id="devicePairCode" required autocomplete="off" style="display:block;width:100%;padding:12px;margin:8px 0;">
+                <button class="action-pill-btn" id="deviceAddConfirm" type="submit">Əlavə et</button>
+                <button class="action-pill-btn" id="deviceAddCancel" type="button">Ləğv et</button>
+              </form>
+            </div>
+        </section>
         <!-- Header -->
         <header class="header">
             <div class="logo">
@@ -942,6 +974,8 @@ def get_mobile_html() -> str:
         </div>
     </div>
 
+    <script src="/mobile-assets/jsQR.js"></script>
+    <script src="/mobile-assets/devices.js"></script>
     <script>
         const urlParams = new URLSearchParams(window.location.search);
         let targetDevice = urlParams.get('device') || localStorage.getItem('winkey_dev_id') || '';
@@ -962,7 +996,7 @@ def get_mobile_html() -> str:
         const notifBadge = document.getElementById('notifBadge');
         const notifListContainer = document.getElementById('notifListContainer');
 
-        let isPcLocked = true;
+        let isPcLocked = null;
         let commandBusy = false;
         let desiredAction = null;
         let desiredSince = 0;
@@ -971,6 +1005,36 @@ def get_mobile_html() -> str:
         let resultController = null;
         let statusBusy = false;
         let pendingCommand = null;
+        let deviceEpoch = 0;
+        let deviceMutationBusy = false;
+
+        function selectMobileDevice(device, probe = false) {
+            if (commandBusy) return false;
+            if (probe) return true;
+            deviceEpoch++;
+            if (wsRetryTimer) clearTimeout(wsRetryTimer);
+            if (ws) {
+                ws.onclose = ws.onmessage = ws.onerror = ws.onopen = null;
+                ws.close(); ws = null;
+            }
+            wsConnected = false;
+            if (resultController) resultController.abort();
+            activeCommandResolver = null;
+            desiredAction = null;
+            savePending(null);
+            authToken = device ? device.token : '';
+            targetDevice = device ? device.id : '';
+            isPcLocked = null;
+            statusBusy = false;
+            renderState();
+            devNameEl.textContent = device ? device.name : 'Kompüter əlavə edin';
+            devIdEl.textContent = device ? 'Cihaz ID: ' + device.id : '';
+            badgeTextEl.textContent = device ? 'Qoşulur…' : 'Qoşulmayıb';
+            badgeEl.className = 'badge badge-offline';
+            statusBox.textContent = '';
+            if (device) { connectWS(); pollStatus(); }
+            return true;
+        }
 
         const SVG_LOCK = '<rect x="3" y="11" width="18" height="11" rx="2" ry="2"></rect><path d="M7 11V7a5 5 0 0 1 10 0v4"></path>';
         const SVG_UNLOCK = '<rect x="3" y="11" width="18" height="11" rx="2" ry="2"></rect><path d="M7 11V7a5 5 0 0 1 9.9-1"></path>';
@@ -1130,6 +1194,12 @@ ${n.fullText}
         }
 
         function renderState() {
+            circleBtn.disabled = isPcLocked === null;
+            if (isPcLocked === null) {
+                actionLabel.textContent = "YOXLANILIR…";
+                stateBadge.innerHTML = "<span>Windows vəziyyəti yoxlanılır…</span>";
+                return;
+            }
             if (isPcLocked) {
                 circleBtn.className = "circle-btn mode-unlock";
                 actionLabel.textContent = "KİLİDİ AÇ";
@@ -1146,6 +1216,7 @@ ${n.fullText}
         }
 
         function triggerCurrentAction() {
+            if (isPcLocked === null) return;
             const act = isPcLocked ? 'unlock' : 'lock';
             sendCommand(act);
         }
@@ -1272,6 +1343,17 @@ ${n.fullText}
                 updateToast(notificationHistory[0]);
             }
 
+            if (window.WinKeyDevices) {
+                try {
+                    const device = await window.WinKeyDevices.start(selectMobileDevice);
+                    selectMobileDevice(device);
+                    setInterval(pollStatus, 3000);
+                    scheduleDiagnostics();
+                } catch (error) {
+                    statusBox.textContent = 'Qoşulma alınmadı: ' + String(error) + '. Yeni cihaz əlavə et düyməsini istifadə edin.';
+                }
+                return;
+            }
             if (pairCode) {
                 statusBox.innerHTML = '<span class="spinner"></span>QR cütləşmə kodu göndərilir...';
                 try {
@@ -1312,13 +1394,15 @@ ${n.fullText}
             if (wsConnected) return;
             if (!authToken || !targetDevice || commandBusy || statusBusy || document.hidden) return;
             statusBusy = true;
+            const expectedEpoch = deviceEpoch;
             try {
                 const r = await request('/devices/' + encodeURIComponent(targetDevice) + '/status', {
                     headers: {'Authorization': 'Bearer ' + authToken}
                 });
                 if (r.ok) {
                     const d = await r.json();
-                    devNameEl.textContent = d.computer_name || targetDevice;
+                    if (deviceEpoch !== expectedEpoch) return;
+                    devNameEl.textContent = window.WinKeyDevices?.current()?.name || d.computer_name || targetDevice;
                     isPcLocked = Boolean(d.locked);
                     renderState();
                     badgeTextEl.textContent = 'Onlayn';
@@ -1327,10 +1411,14 @@ ${n.fullText}
                     badgeTextEl.textContent = 'İcazəsiz';
                     badgeEl.className = 'badge badge-offline';
                 }
-            } catch(e) {} finally { statusBusy = false; }
+            } catch(e) {} finally { if (deviceEpoch === expectedEpoch) statusBusy = false; }
         }
 
         async function sendCommand(action, resume = false, tappedAt = performance.now(), requestId = null) {
+            if (deviceMutationBusy || window.WinKeyDevices?.isPairing()) {
+                statusBox.textContent = 'Cihaz əlavə etmənin və ya bağlantı dəyişməsinin bitməsini gözləyin.';
+                return;
+            }
             if (!authToken || !targetDevice) return;
             if (!resume && !requestId) {
                 requestId = hexId();
@@ -1469,6 +1557,9 @@ ${n.fullText}
         }
 
         async function revokeDevice() {
+            if (commandBusy || deviceMutationBusy || window.WinKeyDevices?.isPairing()) return;
+            deviceMutationBusy = true;
+            const revokedDevice = targetDevice;
             if (authToken) {
                 try {
                     await request('/mobile/revoke', {
@@ -1476,6 +1567,11 @@ ${n.fullText}
                         headers: {'Authorization': 'Bearer ' + authToken}
                     });
                 } catch(e) {}
+            }
+            if (window.WinKeyDevices) {
+                window.WinKeyDevices.remove(revokedDevice);
+                deviceMutationBusy = false;
+                return;
             }
             localStorage.clear();
             location.reload();
@@ -1513,7 +1609,9 @@ ${n.fullText}
                 scheduleWSRetry();
                 return;
             }
+            const expectedEpoch = deviceEpoch;
             ws.onopen = () => {
+                if (deviceEpoch !== expectedEpoch) return;
                 ws.send(JSON.stringify({
                     type: 'auth',
                     role: 'mobile',
@@ -1521,6 +1619,7 @@ ${n.fullText}
                 }));
             };
             ws.onmessage = (event) => {
+                if (deviceEpoch !== expectedEpoch) return;
                 try {
                     const msg = JSON.parse(event.data);
                     if (msg.type === 'auth_ok') {
@@ -1528,7 +1627,7 @@ ${n.fullText}
                         badgeTextEl.textContent = 'Onlayn';
                         badgeEl.className = 'badge badge-online';
                     } else if (msg.type === 'device_state') {
-                        if (msg.computer_name) devNameEl.textContent = msg.computer_name;
+                        if (msg.computer_name) devNameEl.textContent = window.WinKeyDevices?.current()?.name || msg.computer_name;
                         isPcLocked = Boolean(msg.locked);
                         renderState();
                         badgeTextEl.textContent = msg.online ? 'Onlayn' : 'Oflayn';
@@ -1575,6 +1674,7 @@ ${n.fullText}
                 } catch(e) {}
             };
             ws.onclose = (event) => {
+                if (deviceEpoch !== expectedEpoch) return;
                 ws = null;
                 wsConnected = false;
                 if (event.code === 4403) {
@@ -1601,15 +1701,24 @@ ${n.fullText}
             }, 3000);
         }
 
+        function resumeMobileConnection() {
+            if (!authToken || !targetDevice) return;
+            if (ws) {
+                ws.onclose = ws.onmessage = ws.onerror = ws.onopen = null;
+                ws.close(); ws = null;
+            }
+            wsConnected = false;
+            connectWS();
+            pollStatus();
+        }
         if (typeof document !== 'undefined' && typeof document.addEventListener === 'function') {
             document.addEventListener('visibilitychange', () => {
-                if (!document.hidden && !wsConnected && authToken && targetDevice) connectWS();
+                if (!document.hidden) resumeMobileConnection();
             });
         }
         if (typeof window !== 'undefined' && typeof window.addEventListener === 'function') {
-            window.addEventListener('online', () => {
-                if (!wsConnected && authToken && targetDevice) connectWS();
-            });
+            window.addEventListener('online', resumeMobileConnection);
+            window.addEventListener('pageshow', resumeMobileConnection);
         }
 
         init();
@@ -1861,7 +1970,8 @@ class GatewayHandler(BaseHTTPRequestHandler):
         self.send_header("Content-Type", content_type)
         self.send_header("X-Content-Type-Options", "nosniff")
         self.send_header("X-Frame-Options", "DENY")
-        self.send_header("Content-Security-Policy", "default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline';")
+        self.send_header("Content-Security-Policy", "default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline'; media-src 'self' blob:; img-src 'self' blob: data:;")
+        self.send_header('Cache-Control', 'no-store')
         self.send_header("Access-Control-Allow-Origin", "*")
         self.send_header("Access-Control-Allow-Headers", "Content-Type, Authorization, X-Owner-Admin-Secret")
         self.send_header("Access-Control-Allow-Methods", "GET, POST, OPTIONS")
@@ -1931,9 +2041,22 @@ class GatewayHandler(BaseHTTPRequestHandler):
             print(f"[GATEWAY] phone opened {urlparse(self.path).path} (QR query redacted)", flush=True)
         url = urlparse(self.path)
         path = url.path.rstrip("/")
-
-
-
+        if path.startswith('/mobile-assets/'):
+            from pathlib import Path
+            from deploy.mobile_install import manifest
+            asset = path.rsplit('/', 1)[1]
+            if asset == 'manifest.webmanifest':
+                ticket = parse_qs(url.query).get('install', [''])[0]
+                self._send_json(200, manifest(ticket))
+                return
+            if asset in ('devices.js', 'jsQR.js', 'icon.png'):
+                content = (Path(__file__).parent / 'static' / asset).read_bytes()
+                self.send_response(200)
+                self._set_security_headers('image/png' if asset == 'icon.png' else 'application/javascript')
+                self.send_header('Content-Length', str(len(content)))
+                self.end_headers()
+                self.wfile.write(content)
+                return
         # 1. Zəngin Avant-Garde Mobil Web Remote və PWA İnterfeysi
         if path in ("/mobile", "/remote", ""):
             self.send_response(200)
@@ -2092,6 +2215,16 @@ class GatewayHandler(BaseHTTPRequestHandler):
         url = urlparse(self.path)
         path = url.path.rstrip("/")
         data = self._read_json()
+
+        if path.startswith('/accounts/') or path in ('/pair', '/mobile/install', '/mobile/restore', '/mobile/pair'):
+            from deploy.gateway_service import GatewayService
+            from deploy.mobile_install import feature_request
+            if not isinstance(data, dict):
+                self._send_json(400, {'error': 'E_INPUT'})
+                return
+            status, response = feature_request(GatewayService(self.db, get_admin_secret), path, data, self._get_bearer_token())
+            self._send_json(status, response)
+            return
 
         if path == '/mobile/telemetry':
             token = self._get_bearer_token()
