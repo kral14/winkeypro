@@ -33,3 +33,6 @@ plan/reports/
 
 tools/
 *.sqlite
+
+tmp*/
+*.db-journal
