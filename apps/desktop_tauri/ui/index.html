@@ -319,9 +319,12 @@
       <label for="accountPassword">Şifrə (ən azı 10 simvol)</label>
       <input id="accountPassword" type="password" autocomplete="current-password" required minlength="10" maxlength="256" style="display:block;width:100%;margin:8px 0 16px;padding:12px;">
       <p id="accountMessage" role="status" aria-live="polite" style="margin:12px 0;line-height:1.5;"></p>
-      <button id="accountLogin" type="submit" value="login" class="btn-action">Daxil ol</button>
-      <button id="accountRegister" type="submit" value="register" class="btn-secondary">Hesab yarat</button>
-      <button id="accountContinue" hidden type="button" class="btn-action">Davam et</button>
+      <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;">
+        <button id="accountLogin" type="submit" value="login" class="btn-action">Daxil ol</button>
+        <button id="accountRegister" type="submit" value="register" class="btn-secondary">Hesab yarat</button>
+        <button id="accountSkip" type="button" class="btn-secondary" style="margin-left:auto;">İndi deyil (Keç)</button>
+        <button id="accountContinue" hidden type="button" class="btn-action">Davam et</button>
+      </div>
     </form>
   </div>
   <button id="accountOpen" type="button" class="btn-secondary" style="position:fixed;bottom:12px;right:16px;z-index:20;">Hesab</button>

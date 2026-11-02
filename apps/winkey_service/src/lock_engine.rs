@@ -620,7 +620,7 @@ fn console_session_locked() -> Option<bool> {
         let result = if ok != 0 && !buffer.is_null()
             && bytes as usize >= std::mem::size_of::<WTSINFOEXW>() {
             let info = &*(buffer as *const WTSINFOEXW);
-            if info.Level == 1 && info.Data.WTSInfoExLevel1.SessionId == session {
+            if info.Level == 1 {
                 session_lock_flag(info.Data.WTSInfoExLevel1.SessionFlags as u32)
             } else { None }
         } else { None };

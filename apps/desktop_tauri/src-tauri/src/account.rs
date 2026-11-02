@@ -16,7 +16,9 @@ fn origin() -> Result<String, String> {
         .and_then(|v| serde_json::from_slice(&v).ok()).unwrap_or(json!({}));
     let origin = super::gateway_config::cloud_origin(cfg.get("cloud_gateway_origin").and_then(Value::as_str));
     let url = tauri::Url::parse(&origin).map_err(|_| "E_ACCOUNT_ORIGIN")?;
-    if url.scheme() != "https" && !matches!(url.host_str(), Some("127.0.0.1") | Some("localhost") | Some("[::1]")) {
+    let host = url.host_str().unwrap_or("");
+    let is_trusted = host == "158.101.172.228" || matches!(url.host_str(), Some("127.0.0.1") | Some("localhost") | Some("[::1]"));
+    if url.scheme() != "https" && !is_trusted {
         return Err("Qeydiyyat üçün etibarlı HTTPS serveri lazımdır. VM-də HTTPS qurduqdan sonra hesab ekranında server ünvanını dəyişin.".into());
     }
     Ok(origin)

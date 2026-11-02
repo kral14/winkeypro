@@ -64,6 +64,13 @@
       overlay.hidden = true;
       document.getElementById('btnRefreshQr')?.click();
     };
+    const btnSkip = document.getElementById('accountSkip');
+    if (btnSkip) {
+      btnSkip.onclick = () => {
+        overlay.hidden = true;
+        document.getElementById('btnRefreshQr')?.click();
+      };
+    }
     form.addEventListener('invalid', () => {
       showMessage('E-poçtu düzgün yazın və ən azı 10 simvollu şifrə daxil edin.', 'error');
     }, true);
