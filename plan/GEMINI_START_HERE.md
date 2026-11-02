@@ -1,5 +1,7 @@
 # Gemini üçün cari giriş
 
+**Son təhvil (2026-11-03): əvvəl `plan/NEXT_WORKDAY_HANDOFF_2026-11-03.md` oxu. Aşağıdakı köhnə WebSocket reviziya qeydləri tarixi kontekstdir; onları yeni tapşırıq kimi icra etmə. Son real worker OTA: 0.1.14 → 0.1.15 COMMITTED; desktop keçidi hələ təsdiqlənməyib. İstifadəçi bu günlük işi dayandırıb.**
+
 İş qovluğu: `D:\rust desk mobil kilid acma`.
 
 1. `docs/PROJECT_LAYOUT.md` və `plan/GEMINI_RULES.md` oxu.
