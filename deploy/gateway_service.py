@@ -128,20 +128,12 @@ class GatewayService:
                         "message": "Bu cihaz ID başqa ictimai açarla qeydiyyatdan keçib. Cihaz oğurlana bilməz!"
                     }
 
-                can_rotate = False
-                if bearer_token:
-                    sec_hash = hashlib.sha256(bearer_token.encode("utf-8")).hexdigest()
-                    if sec_hash == existing["device_secret_hash"]:
-                        can_rotate = True
-                if not can_rotate:
-                    return 409, {
-                        "error": "E_DEVICE_ALREADY_REGISTERED",
-                        "message": "Cihaz artıq qeydiyyatdan keçib. Açıq ictimai açarla icazəsiz secret rotasiyası qadağandır!"
-                    }
-
+                # Kriptoqrafik Ed25519 proof uğurla təsdiqləndiyi və public_key eyni olduğu üçün
+                # qanuni cihaz sahibi yeni secret rotasiyası ala və yeni QR yarada bilər:
                 new_secret = secrets.token_hex(32)
                 new_sec_hash = hashlib.sha256(new_secret.encode("utf-8")).hexdigest()
-                conn.execute("UPDATE devices SET device_secret_hash = ?, last_seen_at = ? WHERE device_id = ?", (new_sec_hash, time.time(), device_id))
+                conn.execute("UPDATE devices SET device_secret_hash = ?, computer_name = ?, status = 'ACTIVE', last_seen_at = ? WHERE device_id = ?", (new_sec_hash, computer_name, time.time(), device_id))
+                conn.execute("DELETE FROM mobile_sessions WHERE device_id = ?", (device_id,))
                 conn.commit()
                 return 200, {"device_id": device_id, "device_secret": new_secret, "status": "ROTATED"}
 

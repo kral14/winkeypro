@@ -186,6 +186,7 @@ class TestPublicMobilePrivateAdmin(unittest.TestCase):
             }}
         }};
         const confirm = () => true;
+        const setInterval = () => {{}};
         const fetch = async () => ({{ json: async () => ({{}}) }});
         const sessionStorage = {{
             getItem: (key) => 'test_sec',

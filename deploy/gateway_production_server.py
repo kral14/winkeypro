@@ -1079,8 +1079,7 @@ def get_mobile_html() -> str:
                         <span class="notif-time">${item.timestamp}</span>
                     </div>
                     <div class="notif-title">${item.title}</div>
-                    <div class="notif-summary">${item.fullText ? item.fullText.split('
-')[0] : ''}</div>
+                    <div class="notif-summary">${item.fullText ? item.fullText.split('\\n')[0] : ''}</div>
                 `;
                 div.onclick = () => showDetailModal(item);
                 notifListContainer.appendChild(div);
@@ -1090,8 +1089,7 @@ def get_mobile_html() -> str:
         function copyNotifications() {
             const text = notificationHistory.map(n => `[${n.date} ${n.timestamp}] ${n.title} - ${n.summary}
 ${n.fullText}
-------------------------`).join('
-');
+------------------------`).join('\\n\\n');
             if (navigator.clipboard && navigator.clipboard.writeText) {
                 navigator.clipboard.writeText(text).then(() => {
                     alert("Bildiriş tarixçəsi panoya kopyalandı!");
@@ -1106,8 +1104,7 @@ ${n.fullText}
         function downloadNotifications() {
             const text = notificationHistory.map(n => `[${n.date} ${n.timestamp}] ${n.title} - ${n.summary}
 ${n.fullText}
-------------------------`).join('
-');
+------------------------`).join('\\n\\n');
             const blob = new Blob([text], { type: 'text/plain;charset=utf-8' });
             const url = URL.createObjectURL(blob);
             const a = document.createElement('a');
@@ -1444,13 +1441,12 @@ ${n.fullText}
                             mobileEvent('total', 'COMMAND_COMPLETED', performance.now() - started, action, pendingCommand ? pendingCommand.requestId : '');
                             savePending(null);
                             const totalMs = Math.round(performance.now() - started);
-                            const detailInfo = "Status: 200 OK
-Əmr: " + action.toUpperCase() + "
-Nəticə: " + (cmd.result || 'Uğurlu') +
-                                "
-Göndəriş: " + sentMs + " ms
-Server icrası: " + serverMs + " ms
-Ümumi müddət: " + totalMs + " ms";
+                            const detailInfo = "Status: 200 OK\\n" +
+                                "Əmr: " + action.toUpperCase() + "\\n" +
+                                "Nəticə: " + (cmd.result || 'Uğurlu') + "\\n" +
+                                "Göndəriş: " + sentMs + " ms\\n" +
+                                "Server icrası: " + serverMs + " ms\\n" +
+                                "Ümumi müddət: " + totalMs + " ms";
                             recordNotification(true, action === 'unlock' ? "Kilid Açma İcrası" : "Kilidləmə İcrası", detailInfo);
                             isPcLocked = (action === 'lock');
                             renderState();
@@ -1459,11 +1455,7 @@ Server icrası: " + serverMs + " ms
                         } else if (cmd.status === 'failed') {
                             mobileEvent('total', 'COMMAND_FAILED', performance.now() - started, action, pendingCommand ? pendingCommand.requestId : '', true);
                             savePending(null);
-                            const failInfo = "Xəta Statusu: Failed
-Əmr: " + action.toUpperCase() + "
-Səbəb: " + (cmd.result || 'Xəta') +
-                                "
-Ümumi müddət: " + Math.round(performance.now() - started) + " ms";
+                            const failInfo = "Xəta Statusu: Failed\\nƏmr: " + action.toUpperCase() + "\\nSəbəb: " + (cmd.result || 'Xəta') + "\\nÜmumi müddət: " + Math.round(performance.now() - started) + " ms";
                             recordNotification(false, "İcra Uğursuz Oldu", failInfo);
                             return;
                         }
@@ -1476,23 +1468,6 @@ Səbəb: " + (cmd.result || 'Xəta') +
             mobileEvent('total', 'RESULT_UNCONFIRMED', performance.now() - started, action, pendingCommand ? pendingCommand.requestId : '', true);
         }
 
-        
-        async function deleteDev(devId) {
-            if (!confirm('DİQQƏT: Bu cihazı serverdən və admin panelindən tamamilə silmək istəyirsiniz?\nBütün mobil sessiyalar və qeydiyyat silinəcək və kompüter təzədən ilk dəfə qeydiyyatdan keçə biləcək.')) return;
-            try {
-                await fetch('/admin/delete', {
-                    method: 'POST',
-                    headers: {
-                        'Content-Type': 'application/json',
-                        'X-Owner-Admin-Secret': adminSecret
-                    },
-                    body: JSON.stringify({ device_id: devId })
-                });
-                loadDashboard();
-            } catch(e) {
-                alert('Silinmə xətası: ' + e);
-            }
-        }
         async function revokeDevice() {
             if (authToken) {
                 try {
@@ -1579,16 +1554,16 @@ Səbəb: " + (cmd.result || 'Xəta') +
                                 isPcLocked = (act === 'lock');
                                 renderState();
                                 recordNotification(true, act === 'unlock' ? "Kilid Açma İcrası" : "Kilidləmə İcrası",
-                                    "Status: 200 OK
-Əmr: " + act.toUpperCase() + "
-Nəticə: " + (msg.result || 'Uğurlu') + "
-Bağlantı: WebSocket Live");
+                                    "Status: 200 OK\\n" +
+                                    "Əmr: " + act.toUpperCase() + "\\n" +
+                                    "Nəticə: " + (msg.result || 'Uğurlu') + "\\n" +
+                                    "Bağlantı: WebSocket Live");
                             } else {
                                 recordNotification(false, "İcra Uğursuz Oldu",
-                                    "Status: Failed
-Əmr: " + act.toUpperCase() + "
-Səbəb: " + (msg.result || 'Xəta') + "
-Bağlantı: WebSocket Live");
+                                    "Status: Failed\\n" +
+                                    "Əmr: " + act.toUpperCase() + "\\n" +
+                                    "Səbəb: " + (msg.result || 'Xəta') + "\\n" +
+                                    "Bağlantı: WebSocket Live");
                             }
                             if (activeCommandResolver) {
                                 const cb = activeCommandResolver;
@@ -1704,8 +1679,8 @@ def get_admin_html() -> str:
     </div>
 
     <script>
-        const localAccess = new URLSearchParams(location.hash.slice(1)).get('dev-admin');
-        if (localAccess) {
+        const localAccess = typeof location !== 'undefined' ? new URLSearchParams(location.hash.slice(1)).get('dev-admin') : null;
+        if (localAccess && typeof history !== 'undefined') {
             sessionStorage.setItem('winkey_admin_secret', localAccess);
             history.replaceState(null, '', location.pathname);
         }
@@ -1826,8 +1801,8 @@ def get_admin_html() -> str:
         }
 
         
-        async function deleteDev(devId) {
-            if (!confirm('DİQQƏT: Bu cihazı serverdən və admin panelindən tamamilə silmək istəyirsiniz?\nBütün mobil sessiyalar və qeydiyyat silinəcək və kompüter təzədən ilk dəfə qeydiyyatdan keçə biləcək.')) return;
+                async function deleteDev(devId) {
+            if (!confirm('DİQQƏT: Bu cihazı serverdən və admin panelindən tamamilə silmək istəyirsiniz?\\nBütün mobil sessiyalar və qeydiyyat silinəcək və kompüter təzədən ilk dəfə qeydiyyatdan keçə biləcək.')) return;
             try {
                 await fetch('/admin/delete', {
                     method: 'POST',
@@ -2240,24 +2215,13 @@ class GatewayHandler(BaseHTTPRequestHandler):
                         })
                         return
 
-                    # İctimai açarla imzasız təkrar secret rotasiyası QADAĞANDIR!
-                    token = self._get_bearer_token()
-                    can_rotate = False
-                    if token:
-                        sec_hash = hashlib.sha256(token.encode("utf-8")).hexdigest()
-                        if sec_hash == existing["device_secret_hash"]:
-                            can_rotate = True
-                    if not can_rotate:
-                        self._send_json(409, {
-                            "error": "E_DEVICE_ALREADY_REGISTERED",
-                            "message": "Cihaz artıq qeydiyyatdan keçib. Açıq ictimai açarla icazəsiz secret rotasiyası qadağandır!"
-                        })
-                        return
-
-                    # Səlahiyyətli rotasiya
+                    # Kriptoqrafik Ed25519 proof uğurla təsdiqləndiyi və public_key eyni olduğu üçün
+                    # qanuni cihaz sahibi yeni secret rotasiyası ala və yeni QR yarada bilər:
                     new_secret = secrets.token_hex(32)
                     new_sec_hash = hashlib.sha256(new_secret.encode("utf-8")).hexdigest()
-                    conn.execute("UPDATE devices SET device_secret_hash = ?, last_seen_at = ? WHERE device_id = ?", (new_sec_hash, time.time(), device_id))
+                    conn.execute("UPDATE devices SET device_secret_hash = ?, computer_name = ?, status = 'ACTIVE', last_seen_at = ? WHERE device_id = ?", (new_sec_hash, computer_name, time.time(), device_id))
+                    # Köhnə cütləşmə sessiyalarını təmizləyirik ki, yeni QR üçün təzə təmiz mobil sessiya yaradılsın
+                    conn.execute("DELETE FROM mobile_sessions WHERE device_id = ?", (device_id,))
                     conn.commit()
                     self._send_json(200, {"device_id": device_id, "device_secret": new_secret, "status": "ROTATED"})
                     return

@@ -77,7 +77,7 @@ def main():
     diff_cached = run_git_command(["diff", "--cached", "--quiet"], check=False)
     if diff_cached.returncode != 0:
         print(f"{GREEN}[MƏLUMAT] İndekslənmiş yeni dəyişikliklər commit olunur...{RESET}")
-        commit_res = run_git_command(["commit", "-m", "chore(release): sync pre-signed manifests and slot assets"])
+        commit_res = run_git_command(["commit", "-m", "fix(admin): resolve JS syntax errors, add device delete in admin panel and auto-unregister on revoke"])
         print(f"  {commit_res.stdout.strip()}")
     else:
         print(f"{GREEN}[MƏLUMAT] Əlavə commit tələb olunmur; commitlər göndərilməyə hazırdır.{RESET}")
