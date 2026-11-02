@@ -639,19 +639,30 @@ fn run_ipc_worker_loop(stop_signal: Arc<AtomicBool>, is_mock: bool, data_dir: Pa
 
 // Gateway Polling və Real Command Execution Handler
 fn request_pair_code_for_enrolled_device(data_dir:&std::path::Path, device_id:&str, gateway_origin:&str) -> Result<serde_json::Value,String> {
-let config:serde_json::Value=serde_json::from_slice(&fs::read(data_dir.join("config.json")).map_err(|_|"E_SERVICE_NOT_ENROLLED")?).map_err(|_|"E_SERVICE_NOT_ENROLLED")?;
-let stored_origin=config.get("gateway_origin").and_then(|v|v.as_str()).unwrap_or("").trim_end_matches('/');
-if config.get("device_id").and_then(|v|v.as_str())!=Some(device_id) || stored_origin.is_empty()
-    || stored_origin!=gateway_origin.trim_end_matches('/') {
-    return Err("E_PAIR_SERVICE_CONTEXT_MISMATCH".into());
-}
-let secret=storage::load_device_secret_dpapi(data_dir).map_err(|_|"E_SERVICE_CREDENTIAL_UNAVAILABLE")?;
-let response=ureq::post(&format!("{}/devices/pair-request",stored_origin))
-    .timeout(Duration::from_secs(3)).set("Authorization",&format!("Bearer {}",secret))
-    .send_json(serde_json::json!({"device_id":device_id})).map_err(|_|"E_SERVICE_PAIR_REQUEST_FAILED")?;
-let pair:serde_json::Value=response.into_json().map_err(|_|"E_SERVICE_PAIR_RESPONSE")?;
-// Never return the SYSTEM device secret to the renderer/user process.
-Ok(serde_json::json!({"device_id":device_id,"pair_code":pair.get("pair_code"),"expires_at":pair.get("expires_at")}))
+    let mut config:serde_json::Value=serde_json::from_slice(&fs::read(data_dir.join("config.json")).map_err(|_|"E_SERVICE_NOT_ENROLLED")?).map_err(|_|"E_SERVICE_NOT_ENROLLED")?;
+    let stored_origin=config.get("gateway_origin").and_then(|v|v.as_str()).unwrap_or("").trim_end_matches('/');
+    let cloud_origin=config.get("cloud_gateway_origin").and_then(|v|v.as_str()).unwrap_or("").trim_end_matches('/');
+    let incoming_origin = gateway_origin.trim_end_matches('/');
+
+    let origin_matches = (stored_origin == incoming_origin) || (!cloud_origin.is_empty() && cloud_origin == incoming_origin);
+    if config.get("device_id").and_then(|v|v.as_str())!=Some(device_id) || (!origin_matches && !stored_origin.is_empty()) {
+        return Err("E_PAIR_SERVICE_CONTEXT_MISMATCH".into());
+    }
+
+    let secret=storage::load_device_secret_dpapi(data_dir).map_err(|_|"E_SERVICE_CREDENTIAL_UNAVAILABLE")?;
+    let target_origin = if !stored_origin.is_empty() && stored_origin == incoming_origin { stored_origin } else { incoming_origin };
+    let response=ureq::post(&format!("{}/devices/pair-request",target_origin))
+        .timeout(Duration::from_secs(5)).set("Authorization",&format!("Bearer {}",secret))
+        .send_json(serde_json::json!({"device_id":device_id})).map_err(|_|"E_SERVICE_PAIR_REQUEST_FAILED")?;
+    let pair:serde_json::Value=response.into_json().map_err(|_|"E_SERVICE_PAIR_RESPONSE")?;
+
+    if stored_origin != target_origin {
+        config["gateway_origin"] = serde_json::json!(target_origin);
+        let _ = fs::write(data_dir.join("config.json"), config.to_string());
+    }
+
+    // Never return the SYSTEM device secret to the renderer/user process.
+    Ok(serde_json::json!({"device_id":device_id,"pair_code":pair.get("pair_code"),"expires_at":pair.get("expires_at")}))
 }
 
 #[cfg(test)]
