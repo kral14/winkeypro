@@ -20,18 +20,24 @@ function switchTab(target) {
   try {
     var allTabs = document.querySelectorAll('.tab');
     for (var i = 0; i < allTabs.length; i++) {
-      allTabs[i].classList.remove('active');
-      if (allTabs[i].getAttribute('data-tab') === target) {
+      var isTarget = allTabs[i].getAttribute('data-tab') === target;
+      if (isTarget) {
         allTabs[i].classList.add('active');
+        allTabs[i].setAttribute('aria-selected', 'true');
+      } else {
+        allTabs[i].classList.remove('active');
+        allTabs[i].setAttribute('aria-selected', 'false');
       }
     }
     var allPanels = document.querySelectorAll('.panel');
     for (var j = 0; j < allPanels.length; j++) {
       allPanels[j].style.display = 'none';
+      allPanels[j].classList.remove('active');
     }
     var targetPanel = document.getElementById('panel-' + target);
     if (targetPanel) {
-      targetPanel.style.display = 'block';
+      targetPanel.style.display = 'flex';
+      targetPanel.classList.add('active');
     }
   } catch (err) {
     console.error('[WinKey] switchTab xətası:', err);
@@ -181,7 +187,7 @@ async function loadStatus() {
       if (document.getElementById('txtPairPcName')) document.getElementById('txtPairPcName').value = s.computer_name;
       window.currentDeviceId = s.device_id || '';
       if (s.cloud_gateway_origin) configuredCloudOrigin = s.cloud_gateway_origin;
-      if (window.applyConnectionMode) window.applyConnectionMode(s.connection_mode === 'wifi' ? 'wifi' : 'cloud');
+      if (window.applyConnectionMode && !window.__userChangedMode) window.applyConnectionMode(s.connection_mode === 'wifi' ? 'wifi' : 'cloud');
       if (document.getElementById('txtGatewayOrigin')) {
         document.getElementById('txtGatewayOrigin').value = configuredCloudOrigin;
       }
@@ -374,6 +380,7 @@ function initButtons() {
   const btnWifi = document.getElementById('btnModeWifi');
   if (btnWifi) {
     btnWifi.addEventListener('click', () => {
+      window.__userChangedMode = true;
       updateModeUI('wifi');
       refreshQrForCurrentMode();
     });
@@ -382,6 +389,7 @@ function initButtons() {
   const btnCloud = document.getElementById('btnModeCloud');
   if (btnCloud) {
     btnCloud.addEventListener('click', () => {
+      window.__userChangedMode = true;
       updateModeUI('cloud');
       refreshQrForCurrentMode();
     });

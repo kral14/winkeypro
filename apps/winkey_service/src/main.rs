@@ -1194,6 +1194,10 @@ fn run_host_lifecycle(data_dir: PathBuf, is_scm: bool, timeout_sec: Option<u64>)
                                     let pid = c.id();
                                     active_child = Some(c);
                                     switched_to_lkg = true;
+                                    // A recovered child must earn readiness again. Otherwise
+                                    // an early crash leaves auto-update disabled indefinitely.
+                                    committed = false;
+                                    start_instant = Instant::now();
                                     println!("[HOST_LKG_SPAWN] Validated LKG ({}) worker binarı işə salındı: PID={}, binar={:?}", lkg_slot, pid, lkg_bin);
                                 }
                                 Err(e) => {
@@ -1217,7 +1221,7 @@ fn run_host_lifecycle(data_dir: PathBuf, is_scm: bool, timeout_sec: Option<u64>)
             }
         } else {
             // Child hələ canlıdır
-            if !committed && !switched_to_lkg {
+            if !committed {
                 let probation_seconds = start_instant.elapsed().as_secs();
                 if probation_seconds >= 5 {
                     // YALNIZ child canlı olduqda VƏ actual health probe təsdiqləndikdə commit edilir!

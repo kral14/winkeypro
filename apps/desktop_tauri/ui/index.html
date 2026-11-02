@@ -7,575 +7,1116 @@
   <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🔑</text></svg>">
   <style>
     :root {
-      --bg: #101312;
-      --panel: #191d1b;
-      --panel-hover: #222925;
+      --bg: #0c0e0d;
+      --panel: #131715;
+      --panel-elevated: #181d1a;
+      --card: #101412;
+      --card-border: #1f2722;
+      --line: #222b25;
+      --line-subtle: #19201b;
       --green: #c8f279;
-      --green-dark: #1e2819;
-      --green-border: #3b4e2e;
-      --line: #2a302c;
-      --text: #eaf2e8;
-      --text-muted: #8e9e8c;
+      --green-glow: rgba(200, 242, 121, 0.15);
+      --green-dark: #1b2615;
+      --green-border: #384d28;
+      --text: #f0f5ee;
+      --text-muted: #849481;
+      --text-faint: #566354;
       --red: #f78d7e;
-      --red-bg: #2d1917;
+      --red-dark: #2a1614;
+      --red-border: #4d2420;
+      --radius-sm: 6px;
+      --radius-md: 10px;
+      --radius-lg: 14px;
+      --radius-full: 9999px;
+      --font: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
     }
+
     * { box-sizing: border-box; margin: 0; padding: 0; }
-    body {
+
+    html, body {
+      width: 100%;
+      height: 100%;
+      height: 100dvh;
+      overflow: hidden;
       background-color: var(--bg);
       color: var(--text);
-      font-family: Inter, "Segoe UI", system-ui, -apple-system, sans-serif;
-      min-height: 100vh;
+      font-family: var(--font);
+      font-size: 13px;
+      line-height: 1.45;
+      user-select: none;
+      -webkit-font-smoothing: antialiased;
+    }
+
+    body {
       display: flex;
       flex-direction: column;
-      user-select: none;
-      overflow-x: hidden;
     }
-    header {
+
+    /* ==========================================================================
+       1. SABİT VƏ YIĞCAM NAVBAR
+       ========================================================================== */
+    header.navbar {
+      flex-shrink: 0;
+      height: 52px;
       background: var(--panel);
       border-bottom: 1px solid var(--line);
-      padding: 14px 24px;
+      padding: 0 16px;
       display: flex;
       align-items: center;
       justify-content: space-between;
+      gap: 12px;
+      z-index: 50;
     }
-    .brand {
+
+    .nav-brand {
       display: flex;
       align-items: center;
-      gap: 10px;
-      font-size: 18px;
+      gap: 8px;
+      font-size: 15px;
       font-weight: 700;
+      color: var(--text);
+      letter-spacing: -0.3px;
+      text-decoration: none;
+      cursor: default;
+    }
+    .brand-logo {
+      width: 26px;
+      height: 26px;
+      border-radius: var(--radius-sm);
+      background: linear-gradient(135deg, #1f2e18, #2a4020);
+      border: 1px solid var(--green-border);
+      display: flex;
+      align-items: center;
+      justify-content: center;
       color: var(--green);
-      letter-spacing: -0.5px;
     }
-    .brand-icon {
-      width: 22px;
-      height: 22px;
-      fill: none;
-      stroke: currentColor;
-      stroke-width: 2;
-    }
-    .badge-native {
+    .brand-tag {
+      font-size: 10px;
+      font-weight: 600;
+      padding: 2px 6px;
+      border-radius: var(--radius-full);
       background: var(--green-dark);
       color: var(--green);
       border: 1px solid var(--green-border);
-      padding: 3px 8px;
-      border-radius: 6px;
-      font-size: 10px;
-      font-weight: 600;
+      letter-spacing: 0.3px;
     }
-    .header-actions {
+
+    .nav-tabs {
       display: flex;
       align-items: center;
-      gap: 8px;
-    }
-    .btn-tray {
-      background: #252e27;
-      border: 1px solid var(--line);
-      color: var(--text);
-      padding: 6px 12px;
-      border-radius: 6px;
-      font-size: 12px;
-      cursor: pointer;
-      display: flex;
-      align-items: center;
-      gap: 6px;
-      font-weight: 500;
-      transition: all 0.15s;
-    }
-    .btn-tray:hover {
-      background: #313d34;
-      border-color: var(--green-border);
-      color: var(--green);
-    }
-    .container {
-      max-width: 860px;
-      width: 100%;
-      margin: 0 auto;
-      padding: 24px;
-      flex: 1;
-      display: flex;
-      flex-direction: column;
-      gap: 20px;
-    }
-    .tabs {
-      display: flex;
-      gap: 8px;
-      border-bottom: 1px solid var(--line);
-      padding-bottom: 8px;
+      gap: 4px;
+      background: var(--card);
+      padding: 3px;
+      border-radius: var(--radius-md);
+      border: 1px solid var(--card-border);
     }
     .tab {
       background: transparent;
       border: none;
       color: var(--text-muted);
-      font-size: 13px;
+      font-family: inherit;
+      font-size: 12px;
       font-weight: 600;
-      padding: 8px 16px;
-      border-radius: 6px;
+      padding: 6px 14px;
+      border-radius: var(--radius-sm);
       cursor: pointer;
-      transition: all 0.15s;
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      transition: all 0.15s ease;
+      white-space: nowrap;
+    }
+    .tab:hover {
+      color: var(--text);
+      background: rgba(255, 255, 255, 0.04);
     }
     .tab.active {
-      background: var(--panel);
+      background: var(--panel-elevated);
       color: var(--green);
-      border: 1px solid var(--line);
+      box-shadow: 0 1px 3px rgba(0, 0, 0, 0.4), inset 0 0 0 1px var(--green-border);
     }
-    .panel {
-      background: var(--panel);
-      border: 1px solid var(--line);
-      border-radius: 12px;
-      padding: 24px;
+    .tab-icon {
+      width: 14px;
+      height: 14px;
+      stroke-width: 2;
+      stroke: currentColor;
+      fill: none;
     }
-    .panel-title {
-      font-size: 16px;
-      font-weight: 600;
-      margin-bottom: 16px;
+
+    .nav-actions {
       display: flex;
       align-items: center;
       gap: 8px;
+    }
+
+    /* İstifadəçi profil düyməsi (Navbar sağında) */
+    .user-pill-btn {
+      background: var(--card);
+      border: 1px solid var(--card-border);
+      color: var(--text);
+      padding: 4px 10px;
+      border-radius: var(--radius-full);
+      font-family: inherit;
+      font-size: 11px;
+      font-weight: 600;
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      transition: all 0.15s ease;
+      max-width: 160px;
+    }
+    .user-pill-btn:hover {
+      border-color: var(--green-border);
+      background: var(--green-dark);
+      color: var(--green);
+    }
+    .user-avatar {
+      width: 20px;
+      height: 20px;
+      border-radius: 50%;
+      background: var(--green);
+      color: #0c0e0d;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 10px;
+      font-weight: 800;
+      flex-shrink: 0;
+    }
+    .user-email-text {
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+
+    .icon-btn {
+      background: transparent;
+      border: 1px solid transparent;
+      color: var(--text-muted);
+      width: 30px;
+      height: 30px;
+      border-radius: var(--radius-sm);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      cursor: pointer;
+      font-size: 13px;
+      transition: all 0.15s ease;
+    }
+    .icon-btn:hover {
+      background: var(--panel-elevated);
+      border-color: var(--line);
       color: var(--text);
     }
-    .grid {
+    .icon-btn-close:hover {
+      background: var(--red-dark);
+      border-color: var(--red-border);
+      color: var(--red);
+    }
+
+    /* ==========================================================================
+       2. ƏSAS VIEWPORT VƏ ADAPTİV PANEL QURULUŞU (SCROLLBAR-SIZ)
+       ========================================================================== */
+    main.viewport {
+      flex: 1;
+      min-height: 0;
+      overflow: hidden;
+      padding: 14px 18px;
+      display: flex;
+      flex-direction: column;
+    }
+
+    .panel {
+      height: 100%;
+      display: none;
+      flex-direction: column;
+      gap: 12px;
+      animation: fadeIn 0.15s ease-out;
+    }
+    .panel.active {
+      display: flex;
+    }
+
+    @keyframes fadeIn {
+      from { opacity: 0; transform: translateY(3px); }
+      to { opacity: 1; transform: translateY(0); }
+    }
+
+    /* Kartlar və Grid Strukturu */
+    .grid-metrics {
       display: grid;
-      grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
-      gap: 16px;
-      margin-bottom: 20px;
+      grid-template-columns: repeat(4, 1fr);
+      gap: 10px;
+      flex-shrink: 0;
     }
-    .card {
-      background: #141716;
+    .metric-card {
+      background: var(--panel);
       border: 1px solid var(--line);
-      border-radius: 8px;
-      padding: 14px;
+      border-radius: var(--radius-md);
+      padding: 10px 14px;
+      display: flex;
+      flex-direction: column;
+      gap: 3px;
     }
-    .card-label {
-      font-size: 11px;
-      color: var(--text-muted);
-      margin-bottom: 6px;
+    .metric-label {
+      font-size: 10px;
+      font-weight: 600;
       text-transform: uppercase;
       letter-spacing: 0.5px;
+      color: var(--text-muted);
     }
-    .card-val {
-      font-size: 14px;
-      font-weight: 600;
+    .metric-value {
+      font-size: 13px;
+      font-weight: 700;
+      color: var(--text);
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+    .status-dot {
+      width: 7px;
+      height: 7px;
+      border-radius: 50%;
+      background: var(--green);
+      box-shadow: 0 0 6px var(--green);
+      flex-shrink: 0;
+    }
+    .status-dot.inactive {
+      background: var(--text-faint);
+      box-shadow: none;
+    }
+
+    /* İki-sütunlu elastik sahə */
+    .split-row {
+      flex: 1;
+      min-height: 0;
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 10px;
+    }
+    .content-card {
+      background: var(--panel);
+      border: 1px solid var(--line);
+      border-radius: var(--radius-md);
+      padding: 14px 16px;
+      display: flex;
+      flex-direction: column;
+      justify-content: space-between;
+      gap: 10px;
+      min-height: 0;
+    }
+    .card-header-sm {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 8px;
+      border-bottom: 1px solid var(--line-subtle);
+      padding-bottom: 8px;
+    }
+    .card-title {
+      font-size: 12px;
+      font-weight: 700;
       color: var(--text);
       display: flex;
       align-items: center;
       gap: 6px;
     }
-    .status-dot {
-      width: 8px;
-      height: 8px;
-      border-radius: 50%;
-      background: var(--green);
-      box-shadow: 0 0 8px var(--green);
+    .card-title svg {
+      width: 14px;
+      height: 14px;
+      stroke: var(--green);
+      fill: none;
+      stroke-width: 2;
     }
-    .status-dot.inactive {
-      background: var(--text-muted);
-      box-shadow: none;
-    }
-    .form-group {
-      display: flex;
-      flex-direction: column;
-      gap: 8px;
-      margin-bottom: 16px;
-    }
-    .form-group label {
-      font-size: 12px;
-      color: var(--text-muted);
-      font-weight: 500;
-    }
-    .input-row {
+
+    /* Forma və Giriş Elementləri */
+    .input-group {
       display: flex;
       gap: 8px;
+      align-items: center;
     }
-    input[type="text"], input[type="password"] {
-      background: #121514;
+    input[type="text"], input[type="password"], input[type="email"] {
+      background: var(--card);
       border: 1px solid var(--line);
-      border-radius: 6px;
+      border-radius: var(--radius-sm);
       color: var(--text);
-      padding: 8px 12px;
-      font-size: 13px;
       font-family: inherit;
+      font-size: 12px;
+      padding: 7px 11px;
       flex: 1;
       outline: none;
-      transition: border-color 0.15s;
+      transition: all 0.15s ease;
+      min-width: 0;
     }
-    input[type="text"]:focus, input[type="password"]:focus {
-      border-color: var(--green);
+    input:focus {
+      border-color: var(--green-border);
+      box-shadow: 0 0 0 2px var(--green-glow);
     }
+
     .btn-action {
       background: var(--green);
-      color: #121810;
+      color: #0c120a;
       border: none;
-      border-radius: 6px;
-      padding: 8px 16px;
-      font-size: 13px;
-      font-weight: 600;
+      border-radius: var(--radius-sm);
+      font-family: inherit;
+      font-size: 12px;
+      font-weight: 700;
+      padding: 7px 14px;
       cursor: pointer;
-      transition: background-color 0.15s;
+      transition: all 0.15s ease;
       white-space: nowrap;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      gap: 6px;
     }
     .btn-action:hover {
-      background: #d8faa0;
+      background: #dbfa9e;
+      transform: translateY(-1px);
     }
+    .btn-action:active {
+      transform: translateY(0);
+    }
+
     .btn-secondary {
-      background: #232b25;
+      background: var(--panel-elevated);
       color: var(--text);
       border: 1px solid var(--line);
-      border-radius: 6px;
-      padding: 8px 16px;
-      font-size: 13px;
-      font-weight: 500;
+      border-radius: var(--radius-sm);
+      font-family: inherit;
+      font-size: 12px;
+      font-weight: 600;
+      padding: 7px 13px;
       cursor: pointer;
-      transition: all 0.15s;
+      transition: all 0.15s ease;
+      white-space: nowrap;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      gap: 6px;
     }
     .btn-secondary:hover {
-      background: #2e3931;
+      background: #232c25;
       border-color: var(--green-border);
       color: var(--green);
     }
+
+    .btn-danger {
+      background: var(--red-dark);
+      color: var(--red);
+      border: 1px solid var(--red-border);
+      border-radius: var(--radius-sm);
+      font-family: inherit;
+      font-size: 12px;
+      font-weight: 600;
+      padding: 7px 13px;
+      cursor: pointer;
+      transition: all 0.15s ease;
+      white-space: nowrap;
+    }
+    .btn-danger:hover {
+      background: #3d1c1a;
+      border-color: var(--red);
+    }
+
     .toast {
       background: var(--green-dark);
       border: 1px solid var(--green-border);
       color: var(--green);
-      padding: 10px 14px;
-      border-radius: 6px;
-      font-size: 12px;
-      font-weight: 500;
-      display: flex;
-      align-items: center;
-      gap: 8px;
-      margin-top: 10px;
-    }
-    .qr-box {
-      background: #121514;
-      border: 1px dashed var(--line);
-      border-radius: 8px;
-      padding: 20px;
-      text-align: center;
-      display: flex;
-      flex-direction: column;
-      align-items: center;
-      gap: 12px;
-    }
-    .qr-text {
-      font-family: monospace;
-      font-size: 12px;
-      color: var(--green);
-      background: #1a2216;
-      padding: 6px 12px;
-      border-radius: 4px;
-      word-break: break-all;
-      max-width: 90%;
-    }
-    .tray-modal {
+      padding: 8px 12px;
+      border-radius: var(--radius-sm);
+      font-size: 11px;
+      font-weight: 600;
       display: none;
-      position: fixed;
-      inset: 0;
-      background: rgba(0, 0, 0, 0.85);
-      z-index: 100;
+      align-items: center;
+      gap: 6px;
+      margin-top: 6px;
+    }
+
+    /* QR vitrin qutusu */
+    .qr-showcase {
+      display: grid;
+      grid-template-columns: 190px 1fr;
+      gap: 16px;
+      align-items: center;
+      background: var(--card);
+      border: 1px solid var(--line);
+      border-radius: var(--radius-md);
+      padding: 16px;
+    }
+    .qr-frame {
+      background: #ffffff;
+      border-radius: var(--radius-sm);
+      padding: 10px;
+      width: 160px;
+      height: 160px;
+      display: flex;
       align-items: center;
       justify-content: center;
-      padding: 20px;
+      margin: 0 auto;
     }
-    .tray-card {
-      background: var(--panel);
-      border: 1px solid var(--green-border);
-      border-radius: 12px;
-      max-width: 420px;
-      width: 100%;
-      padding: 24px;
-      text-align: center;
-      box-shadow: 0 10px 30px rgba(0, 0, 0, 0.5);
-    }
-    .tray-card h3 {
-      color: var(--green);
-      margin-bottom: 10px;
-      font-size: 18px;
-    }
-    .tray-card p {
-      font-size: 13px;
-      color: var(--text-muted);
-      line-height: 1.6;
-      margin-bottom: 20px;
-    }
-    footer {
-      border-top: 1px solid var(--line);
-      padding: 12px 24px;
-      font-size: 11px;
-      color: var(--text-muted);
+
+    /* ==========================================================================
+       3. İSTİFADƏÇİ PROFİLİ VƏ GİRİŞ DRAWER/OVERLAY
+       ========================================================================== */
+    .drawer-overlay {
+      position: fixed;
+      inset: 0;
+      background: rgba(0, 0, 0, 0.7);
+      backdrop-filter: blur(4px);
+      z-index: 200;
       display: flex;
-      justify-content: space-between;
-      align-items: center;
+      justify-content: flex-end;
+      transition: opacity 0.2s ease;
     }
+    .drawer-overlay[hidden] {
+      display: none !important;
+    }
+    .drawer-panel {
+      width: 360px;
+      max-width: 90vw;
+      height: 100%;
+      background: var(--panel);
+      border-left: 1px solid var(--line);
+      padding: 24px;
+      display: flex;
+      flex-direction: column;
+      gap: 16px;
+      box-shadow: -10px 0 30px rgba(0, 0, 0, 0.6);
+      animation: slideInRight 0.2s ease-out;
+    }
+    @keyframes slideInRight {
+      from { transform: translateX(100%); }
+      to { transform: translateX(0); }
+    }
+
+    /* ==========================================================================
+       4. YIĞCAM FOOTER
+       ========================================================================== */
+    footer.app-footer {
+      flex-shrink: 0;
+      height: 30px;
+      background: var(--panel);
+      border-top: 1px solid var(--line);
+      padding: 0 16px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      font-size: 10px;
+      color: var(--text-faint);
+    }
+    .footer-security {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      color: var(--text-muted);
+    }
+    .footer-dot {
+      width: 5px;
+      height: 5px;
+      border-radius: 50%;
+      background: var(--green);
+    }
+
+    /* Media sorğuları - 760x580 minimum pəncərə və DPI adaptivliyi */
+    @media (max-width: 680px) {
+      .grid-metrics {
+        grid-template-columns: repeat(2, 1fr);
+      }
+      .split-row {
+        grid-template-columns: 1fr;
+      }
+      .tab span.tab-title {
+        display: none;
+      }
+      .tab {
+        padding: 6px 10px;
+      }
+    }
+
+    /* 640px və daha kiçik hündürlük üçün ultra-kompakt adaptiv spacing (580px min-height dəstəyi) */
+    @media (max-height: 640px) {
+      header.navbar {
+        height: 44px;
+        padding: 0 12px;
+      }
+      .nav-brand {
+        font-size: 13px;
+      }
+      .brand-logo {
+        width: 22px;
+        height: 22px;
+      }
+      .tab {
+        padding: 4px 10px;
+        font-size: 11px;
+      }
+      main.viewport {
+        padding: 8px 12px;
+      }
+      .panel {
+        gap: 8px;
+      }
+      .grid-metrics {
+        gap: 6px;
+      }
+      .metric-card {
+        padding: 6px 10px;
+        border-radius: var(--radius-sm);
+      }
+      .metric-label {
+        font-size: 9px;
+      }
+      .metric-value {
+        font-size: 11px;
+      }
+      .split-row {
+        gap: 8px;
+      }
+      .content-card {
+        padding: 8px 12px;
+        gap: 6px;
+        border-radius: var(--radius-sm);
+      }
+      .card-header-sm {
+        padding-bottom: 4px;
+      }
+      .card-title {
+        font-size: 11px;
+      }
+      input[type="text"], input[type="password"], input[type="email"] {
+        padding: 5px 9px;
+        font-size: 11px;
+      }
+      .btn-action, .btn-secondary, .btn-danger {
+        padding: 5px 11px;
+        font-size: 11px;
+      }
+      .qr-showcase {
+        grid-template-columns: 140px 1fr;
+        padding: 10px;
+        gap: 12px;
+      }
+      .qr-frame {
+        width: 120px;
+        height: 120px;
+        padding: 6px;
+      }
+      #qrSvgWrapper svg, #imgQrVisual {
+        width: 108px !important;
+        height: 108px !important;
+      }
+      #accountDevicesList {
+        max-height: 55px;
+      }
+      footer.app-footer {
+        height: 24px;
+        padding: 0 12px;
+        font-size: 9px;
+      }
+    }
+
+    /* 540px və daha kiçik viewport üçün ultra-kompakt fit (580px pəncərə pəncərə çərçivəsi daxilində) */
+    @media (max-height: 540px) {
+      header.navbar {
+        height: 40px !important;
+        padding: 0 10px !important;
+      }
+      .brand-logo {
+        width: 20px !important;
+        height: 20px !important;
+      }
+      .brand-tag {
+        display: none !important;
+      }
+      .tab {
+        padding: 3px 8px !important;
+        font-size: 10px !important;
+      }
+      main.viewport {
+        padding: 6px 10px !important;
+      }
+      .panel {
+        gap: 6px !important;
+      }
+      .grid-metrics {
+        gap: 4px !important;
+      }
+      .metric-card {
+        padding: 4px 8px !important;
+      }
+      .metric-label {
+        font-size: 8px !important;
+      }
+      .metric-value {
+        font-size: 10px !important;
+      }
+      .content-card {
+        padding: 6px 10px !important;
+        gap: 4px !important;
+      }
+      .card-title {
+        font-size: 10px !important;
+      }
+      input[type="text"], input[type="password"], input[type="email"] {
+        padding: 4px 8px !important;
+        font-size: 10px !important;
+      }
+      .btn-action, .btn-secondary, .btn-danger {
+        padding: 4px 9px !important;
+        font-size: 10px !important;
+      }
+      #accountDevicesBox {
+        margin-top: 2px !important;
+        padding-top: 4px !important;
+      }
+      #accountDevicesList {
+        max-height: 38px !important;
+      }
+      footer.app-footer {
+        height: 20px !important;
+        padding: 0 10px !important;
+        font-size: 8px !important;
+      }
+    }
+
   </style>
 </head>
 <body>
-  <div id="accountOverlay" hidden style="position:fixed;inset:0;background:#101312f2;z-index:1000;padding:8vh 20px;overflow:auto;">
-    <form id="accountForm" style="max-width:430px;margin:auto;background:var(--panel);padding:28px;border:1px solid var(--line);border-radius:18px;">
-      <h2 style="margin-bottom:12px;">WinKey hesabı</h2>
-      <p style="color:var(--text-muted);margin-bottom:20px;">İlk dəfə hesab yaradın. Digər kompüterlərinizdə də həmin hesabla daxil olun. Telefon üçün giriş QR ilə olacaq.</p>
-      <label for="accountEmail">E-poçt</label>
-      <input id="accountEmail" type="email" autocomplete="username" required maxlength="254" style="display:block;width:100%;margin:8px 0 16px;padding:12px;">
-      <label for="accountPassword">Şifrə (ən azı 10 simvol)</label>
-      <input id="accountPassword" type="password" autocomplete="current-password" required minlength="10" maxlength="256" style="display:block;width:100%;margin:8px 0 16px;padding:12px;">
-      <p id="accountMessage" role="status" aria-live="polite" style="margin:12px 0;line-height:1.5;"></p>
-      <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;">
-        <button id="accountLogin" type="submit" value="login" class="btn-action">Daxil ol</button>
-        <button id="accountRegister" type="submit" value="register" class="btn-secondary">Hesab yarat</button>
-        <button id="accountSkip" type="button" class="btn-secondary" style="margin-left:auto;">İndi deyil (Keç)</button>
-        <button id="accountContinue" hidden type="button" class="btn-action">Davam et</button>
-      </div>
-    </form>
-  </div>
-  <button id="accountOpen" type="button" class="btn-secondary" style="position:fixed;bottom:12px;right:16px;z-index:20;">Hesab</button>
 
-  <header>
-    <div class="brand">
-      <svg class="brand-icon" viewBox="0 0 24 24"><rect width="18" height="11" x="3" y="11" rx="2" ry="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>
-      <span>WinKey Pro</span>
-      <span class="badge-native" id="envBadge">NATIVE TAURI 2</span>
+  <!-- ==========================================================================
+       İSTİFADƏÇİ PROFİLİ / GİRİŞ DRAWER OVERLAY
+       ========================================================================== -->
+  <div id="accountOverlay" class="drawer-overlay" hidden>
+    <div class="drawer-panel">
+      <div style="display:flex;align-items:center;justify-content:space-between;border-bottom:1px solid var(--line);padding-bottom:12px;">
+        <div style="display:flex;align-items:center;gap:8px;">
+          <div class="user-avatar" id="drawerAvatar">🔑</div>
+          <div>
+            <h3 style="font-size:14px;font-weight:700;" id="drawerHeaderTitle">WinKey Hesabı</h3>
+            <span style="font-size:11px;color:var(--text-muted);" id="drawerHeaderSub">Uzaqdan İdarəetmə Girişi</span>
+          </div>
+        </div>
+        <button type="button" class="icon-btn icon-btn-close" id="accountCloseDrawer" aria-label="Bağla" title="Bağla">✕</button>
+      </div>
+
+      <form id="accountForm" style="display:flex;flex-direction:column;gap:12px;flex:1;">
+        <p style="font-size:11px;color:var(--text-muted);line-height:1.5;">
+          İlk dəfə hesab yaradın. Digər kompüterlərinizdə də həmin hesabla daxil olun. Telefon üçün giriş QR ilə olacaq.
+        </p>
+
+        <div style="display:flex;flex-direction:column;gap:4px;">
+          <label for="accountEmail" style="font-size:11px;font-weight:600;color:var(--text-muted);">E-poçt ünvanı</label>
+          <input id="accountEmail" type="email" autocomplete="username" required maxlength="254" placeholder="ad@domain.com">
+        </div>
+
+        <div style="display:flex;flex-direction:column;gap:4px;">
+          <label for="accountPassword" style="font-size:11px;font-weight:600;color:var(--text-muted);">Şifrə (ən azı 10 simvol)</label>
+          <input id="accountPassword" type="password" autocomplete="current-password" required minlength="10" maxlength="256" placeholder="••••••••••">
+        </div>
+
+        <p id="accountMessage" role="status" aria-live="polite" style="font-size:11px;line-height:1.5;min-height:18px;"></p>
+
+        <div style="display:flex;gap:8px;align-items:center;margin-top:auto;padding-top:12px;border-top:1px solid var(--line);">
+          <button id="accountLogin" type="submit" value="login" class="btn-action" style="flex:1;">Daxil ol</button>
+          <button id="accountRegister" type="submit" value="register" class="btn-secondary">Qeydiyyat</button>
+          <button id="accountSkip" type="button" class="btn-secondary" title="Hesabsız davam et">Keç</button>
+          <button id="accountContinue" hidden type="button" class="btn-action" style="flex:1;">Davam et</button>
+        </div>
+      </form>
     </div>
-    <div class="header-actions">
-      <button class="btn-tray" id="btnMinimizeTray" title="Sistem Tepsisinə (Tray) Gizlət">
-        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 5v14M5 12h14"/></svg>
-        <span>Tepsiyə Gizlət</span>
+  </div>
+
+  <!-- ==========================================================================
+       YUXARI YIĞCAM VƏ ZƏRİF NAVBAR
+       ========================================================================== -->
+  <header class="navbar">
+    <div class="nav-brand">
+      <div class="brand-logo">
+        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><rect width="18" height="11" x="3" y="11" rx="2" ry="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>
+      </div>
+      <span>WinKey Pro</span>
+      <span class="brand-tag" id="envBadge">NATIVE TAURI 2</span>
+    </div>
+
+    <!-- Mərkəzi Naviqasiya Keçidləri -->
+    <nav class="nav-tabs" role="tablist" aria-label="Bölmələr">
+      <button class="tab active" id="tab-status" data-tab="status" role="tab" aria-selected="true" aria-controls="panel-status">
+        <svg class="tab-icon" viewBox="0 0 24 24"><rect width="20" height="14" x="2" y="3" rx="2"/><line x1="8" y1="21" x2="16" y2="21"/><line x1="12" y1="17" x2="12" y2="21"/></svg>
+        <span class="tab-title">Cihaz Statusu</span>
       </button>
-      <button class="btn-tray" id="btnCloseSim" title="Pəncərəni Bağla (Tray Davranışı)" style="color: #f7a99b;">
+      <button class="tab" id="tab-security" data-tab="security" role="tab" aria-selected="false" aria-controls="panel-security">
+        <svg class="tab-icon" viewBox="0 0 24 24"><rect width="18" height="11" x="3" y="11" rx="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>
+        <span class="tab-title">Təhlükəsizlik və PIN</span>
+      </button>
+      <button class="tab" id="tab-pairing" data-tab="pairing" role="tab" aria-selected="false" aria-controls="panel-pairing">
+        <svg class="tab-icon" viewBox="0 0 24 24"><rect width="5" height="5" x="3" y="3" rx="1"/><rect width="5" height="5" x="16" y="3" rx="1"/><rect width="5" height="5" x="3" y="16" rx="1"/><path d="M21 16h-3a2 2 0 0 0-2 2v3"/><path d="M21 21v.01"/></svg>
+        <span class="tab-title">Mobil QR</span>
+      </button>
+      <button class="tab" id="tab-support" data-tab="support" role="tab" aria-selected="false" aria-controls="panel-support">
+        <svg class="tab-icon" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><path d="M12 16v-4"/><path d="M12 8h.01"/></svg>
+        <span class="tab-title">Diaqnostika</span>
+      </button>
+    </nav>
+
+    <!-- Sağ İkonlar: Profil, Tray, Bağlama -->
+    <div class="nav-actions">
+      <button class="user-pill-btn" id="accountOpen" type="button" aria-label="İstifadəçi Hesabı və Giriş" title="İstifadəçi Hesabı">
+        <div class="user-avatar" id="navAvatar">?</div>
+        <span class="user-email-text" id="navUserText">Hesab</span>
+      </button>
+
+      <button class="icon-btn" id="btnMinimizeTray" title="Sistem Tepsisinə (Tray) Gizlət" aria-label="Sistem Tepsisinə Gizlət">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 5v14M5 12h14"/></svg>
+      </button>
+      <button class="icon-btn icon-btn-close" id="btnCloseSim" title="Pəncərəni Bağla" aria-label="Pəncərəni Bağla">
         ✕
       </button>
     </div>
   </header>
 
-  <div class="container">
-    <div class="tabs">
-      <button class="tab active" id="tab-status" data-tab="status">Cihaz Statusu</button>
-      <button class="tab" id="tab-security" data-tab="security">Təhlükəsizlik və PIN</button>
-      <button class="tab" id="tab-pairing" data-tab="pairing">Mobil QR Cütləşmə</button>
-      <button class="tab" id="tab-support" data-tab="support">Dəstək və Loqlar</button>
-    </div>
+  <!-- ==========================================================================
+       ƏSAS VIEWPORT
+       ========================================================================== -->
+  <main class="viewport">
 
-    <!-- TAB 1: STATUS -->
-    <div class="panel" id="panel-status">
-      <div class="panel-title">
-        <span>Windows Kompüter Statusu</span>
-      </div>
-      <div class="form-group" style="padding:16px;border:1px solid var(--line);border-radius:12px;">
-        <label>Versiya və yenilənmə</label>
-        <div class="grid">
-          <div><div class="card-label">Proqram versiyası</div><strong id="lblDesktopVersion">—</strong></div>
-          <div><div class="card-label">Xidmət versiyası</div><strong id="lblWorkerVersion">—</strong></div>
-          <div><div class="card-label">Serverdə son versiya</div><strong id="lblLatestVersion">Yoxlanmayıb</strong></div>
+    <!-- ==================== BÖLMƏ 1: CİHAZ STATUSU ==================== -->
+    <div class="panel active" id="panel-status" role="tabpanel" aria-labelledby="tab-status">
+      <!-- 4 Yığcam Metrik Kartı -->
+      <div class="grid-metrics">
+        <div class="metric-card">
+          <div class="metric-label">Kompüter Adı</div>
+          <div class="metric-value" id="lblPcName">Windows-PC</div>
         </div>
-        <div class="input-row" style="margin-top:12px;align-items:center;">
-          <button class="btn-secondary" id="btnCheckUpdate">Yenilənməni yoxla</button>
-          <span id="lblUpdateMessage" role="status" aria-live="polite">Yenilənmə vəziyyəti yoxlanmayıb.</span>
-        </div>
-        <div class="card-label" id="lblUpdateChecked" style="margin-top:8px;"></div>
-      </div>
-      <div class="grid">
-        <div class="card">
-          <div class="card-label">Kompüter Adı</div>
-          <div class="card-val" id="lblPcName">Windows-PC</div>
-        </div>
-        <div class="card">
-          <div class="card-label">Windows Xidməti</div>
-          <div class="card-val">
+        <div class="metric-card">
+          <div class="metric-label">Windows Xidməti</div>
+          <div class="metric-value">
             <span class="status-dot" id="dotService"></span>
             <span id="lblServiceStatus">İşləyir (Running)</span>
           </div>
         </div>
-        <div class="card">
-          <div class="card-label">Server Qeydiyyatı</div>
-          <div class="card-val">
+        <div class="metric-card">
+          <div class="metric-label">Server Qeydiyyatı</div>
+          <div class="metric-value">
             <span class="status-dot" id="dotReg"></span>
             <span id="lblRegStatus">Təsdiqləndi</span>
           </div>
         </div>
-        <div class="card">
-          <div class="card-label">Yerli DPAPI PIN</div>
-          <div class="card-val">
+        <div class="metric-card">
+          <div class="metric-label">Yerli DPAPI PIN</div>
+          <div class="metric-value">
             <span class="status-dot" id="dotPin"></span>
             <span id="lblPinStatus">Qorunur (Hazırdır)</span>
           </div>
         </div>
       </div>
 
-      <div class="form-group">
-        <label for="txtPcName">Kompüter Adını Dəyişdir:</label>
-        <div class="input-row">
-          <input type="text" id="txtPcName" value="Nesib-Workstation">
-          <button class="btn-action" id="btnSavePcName">Adı Saxla</button>
+      <!-- İki Sütunlu Bölmə -->
+      <div class="split-row">
+        <!-- Sol: Versiyalar və Yenilənmə Yoxlaması -->
+        <div class="content-card">
+          <div>
+            <div class="card-header-sm">
+              <span class="card-title">
+                <svg viewBox="0 0 24 24"><path d="M21 12a9 9 0 0 0-9-9 9.75 9.75 0 0 0-6.74 2.74L3 8"/><path d="M3 3v5h5"/><path d="M3 12a9 9 0 0 0 9 9 9.75 9.75 0 0 0 6.74-2.74L21 16"/><path d="M16 21h5v-5"/></svg>
+                Versiya və Yenilənmə Vəziyyəti
+              </span>
+              <button class="btn-secondary" id="btnCheckUpdate" style="padding:4px 10px;font-size:11px;">Yoxla</button>
+            </div>
+            <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin-top:10px;">
+              <div>
+                <div class="metric-label">Desktop Proqram</div>
+                <strong id="lblDesktopVersion" style="font-size:12px;">—</strong>
+              </div>
+              <div>
+                <div class="metric-label">Worker Xidməti</div>
+                <strong id="lblWorkerVersion" style="font-size:12px;">—</strong>
+              </div>
+              <div>
+                <div class="metric-label">Serverdə Son</div>
+                <strong id="lblLatestVersion" style="font-size:12px;">Yoxlanmayıb</strong>
+              </div>
+            </div>
+          </div>
+
+          <div>
+            <div style="background:var(--card);border:1px solid var(--line);border-radius:var(--radius-sm);padding:8px 10px;font-size:11px;color:var(--text-muted);" id="lblUpdateMessage" role="status" aria-live="polite">
+              Yenilənmə vəziyyəti yoxlanmayıb.
+            </div>
+            <div class="metric-label" id="lblUpdateChecked" style="margin-top:4px;"></div>
+          </div>
+
+          <!-- Gateway Server Origin Konfiqurasiyası -->
+          <div style="border-top:1px solid var(--line-subtle);padding-top:10px;">
+            <label for="txtGatewayOrigin" style="font-size:11px;color:var(--text-muted);display:block;margin-bottom:4px;">Gateway Server Ünvanı (Origin):</label>
+            <div class="input-group">
+              <input type="text" id="txtGatewayOrigin" placeholder="http://158.101.172.228:8080">
+              <button class="btn-secondary" id="btnSaveGateway">Saxla</button>
+            </div>
+            <div id="toastGateway" class="toast"></div>
+          </div>
+        </div>
+
+        <!-- Sağ: Kompüter Adı və Mobil Nəzarət -->
+        <div class="content-card">
+          <div>
+            <div class="card-header-sm">
+              <span class="card-title">
+                <svg viewBox="0 0 24 24"><path d="M12 20h9"/><path d="M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4L16.5 3.5z"/></svg>
+                Kompüter Adı Tənzimləməsi
+              </span>
+            </div>
+            <div style="margin-top:10px;">
+              <label for="txtPcName" style="font-size:11px;color:var(--text-muted);display:block;margin-bottom:4px;">Kompüterin Adı:</label>
+              <div class="input-group">
+                <input type="text" id="txtPcName" value="Nesib-Workstation">
+                <button class="btn-action" id="btnSavePcName">Saxla</button>
+              </div>
+              <div id="toastPc" class="toast"></div>
+            </div>
+          </div>
+
+          <!-- Uzaqdan Mobil İdarə Nəzarəti -->
+          <div style="border-top:1px solid var(--line-subtle);padding-top:10px;">
+            <div class="card-title" style="margin-bottom:6px;">
+              <svg viewBox="0 0 24 24"><rect width="14" height="20" x="5" y="2" rx="2"/><line x1="12" y1="18" x2="12.01" y2="18"/></svg>
+              Uzaqdan Mobil İdarə (Service Control)
+            </div>
+            <div style="display:flex;align-items:center;justify-content:space-between;gap:8px;">
+              <span style="font-size:11px;color:var(--text-muted);" id="lblPauseDesc">
+                Vəziyyət: <b id="lblPauseState" style="color:var(--green);">AKTİV</b>
+              </span>
+              <button class="btn-secondary" id="btnTogglePause" style="font-size:11px;padding:5px 10px;">İdarəni Dayandır</button>
+            </div>
+          </div>
+
+          <!-- Hesaba Bağlı Cihazlar Qutusu -->
+          <div id="accountDevicesBox" style="border-top:1px solid var(--line-subtle);padding-top:10px;">
+            <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:6px;">
+              <span style="font-size:11px;font-weight:600;color:var(--text);display:flex;align-items:center;gap:4px;">
+                💻 Hesaba Bağlı Cihazlar
+              </span>
+              <button type="button" class="btn-secondary" id="btnAddNewDeviceNav" style="font-size:10px;padding:2px 8px;">+ Əlavə Et</button>
+            </div>
+            <div id="accountDevicesList" style="display:flex;flex-direction:column;gap:4px;max-height:85px;overflow-y:auto;">
+              <div style="font-size:11px;color:var(--text-muted);padding:6px 10px;background:var(--card);border-radius:var(--radius-sm);">
+                Hesaba daxil olunduqda cihazlarınız burada görünəcək.
+              </div>
+            </div>
+          </div>
         </div>
       </div>
-      <div id="toastPc" class="toast" style="display: none;"></div>
+    </div>
 
-      <!-- Xidmət və Mobil İdarəetmə Nəzarəti -->
-      <div class="form-group" style="margin-top: 16px; padding-top: 16px; border-top: 1px solid var(--line);">
-        <label>Uzaqdan Mobil İdarə Nəzarəti (Service Control):</label>
-        <div class="input-row" style="align-items: center; justify-content: space-between;">
-          <span style="font-size: 13px; color: var(--text-muted);" id="lblPauseDesc">
-            Vəziyyət: <b id="lblPauseState" style="color: var(--green);">AKTİV (Mobil əmrlər qəbul edilir)</b>
+    <!-- ==================== BÖLMƏ 2: TƏHLÜKƏSİZLİK VƏ PIN ==================== -->
+    <div class="panel" id="panel-security" role="tabpanel" aria-labelledby="tab-security">
+      <div class="split-row">
+        <!-- Sol: PIN Daxiletmə və Saxlama Forması -->
+        <div class="content-card">
+          <div>
+            <div class="card-header-sm">
+              <span class="card-title">
+                <svg viewBox="0 0 24 24"><rect width="18" height="11" x="3" y="11" rx="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>
+                Masaüstü Açılış PIN-i (DPAPI Broker)
+              </span>
+            </div>
+            <p style="font-size:11px;color:var(--text-muted);line-height:1.5;margin-top:10px;">
+              Daxil etdiyiniz PIN heç vaxt serverə və ya loqlara ötürülmür. Windows DPAPI (CryptProtectData) vasitəsilə yalnız bu kompüterin yerli yaddaşında şifrələnir və dərhal təmizlənir (zeroize).
+            </p>
+          </div>
+
+          <form onsubmit="return false;" style="display:flex;flex-direction:column;gap:10px;">
+            <div id="pinSavedState" role="status" style="font-size:11px;font-weight:600;padding:8px 12px;background:var(--card);border-radius:var(--radius-sm);border:1px solid var(--line);">
+              PIN vəziyyəti yoxlanılır…
+            </div>
+            <input type="text" name="username" value="windows_user" autocomplete="username" style="display:none;">
+            <div>
+              <label for="txtPin" style="font-size:11px;color:var(--text-muted);display:block;margin-bottom:4px;">Yeni Açılış PIN-i daxil edin:</label>
+              <div class="input-group">
+                <input type="password" id="txtPin" placeholder="••••••" maxlength="32" autocomplete="current-password">
+                <button type="button" class="btn-secondary" id="btnShowPin" aria-pressed="false" aria-label="Yazılan PIN-i göstər">Göstər</button>
+                <button type="button" class="btn-action" id="btnSavePin">PIN-i Saxla</button>
+              </div>
+            </div>
+            <div id="toastPin" class="toast"></div>
+          </form>
+        </div>
+
+        <!-- Sağ: Təhlükəsizlik Zəmanətləri və Təcrid Sərhədi -->
+        <div class="content-card">
+          <div class="card-header-sm">
+            <span class="card-title">
+              <svg viewBox="0 0 24 24"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg>
+              Təhlükəsizlik və Məxfilik Arxitekturası
+            </span>
+          </div>
+
+          <div style="display:flex;flex-direction:column;gap:8px;font-size:11px;color:var(--text-muted);">
+            <div style="display:flex;gap:8px;align-items:flex-start;">
+              <span style="color:var(--green);font-size:13px;">✓</span>
+              <div>
+                <strong style="color:var(--text);">Sıfır Bulud Saxlanması:</strong>
+                Windows PIN və istifadəçi parolları heç vaxt uzaq serverlərdə saxlanılmır.
+              </div>
+            </div>
+            <div style="display:flex;gap:8px;align-items:flex-start;">
+              <span style="color:var(--green);font-size:13px;">✓</span>
+              <div>
+                <strong style="color:var(--text);">İzolyasiya Edilmiş Session Helper:</strong>
+                Windows Logon və masaüstü kilid açılışı təcrid olunmuş hüquqlu proses tərəfindən idarə edilir.
+              </div>
+            </div>
+            <div style="display:flex;gap:8px;align-items:flex-start;">
+              <span style="color:var(--green);font-size:13px;">✓</span>
+              <div>
+                <strong style="color:var(--text);">Kriptoqrafik Ed25519 İmzası:</strong>
+                Mobil cihazla hər bir əlaqə unikal birdəfəlik şifrə ilə təsdiqlənir.
+              </div>
+            </div>
+          </div>
+
+          <div style="background:var(--green-dark);border:1px solid var(--green-border);border-radius:var(--radius-sm);padding:10px 12px;font-size:11px;color:var(--green);">
+            💡 <strong>Tövsiyə:</strong> Kompüterinizin adını telefonda rahat tanıya biləcəyiniz şəkildə qeyd edin (məsələn: "Ev", "Ofis").
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ==================== BÖLMƏ 3: MOBİL QR CÜTLƏŞMƏ ==================== -->
+    <div class="panel" id="panel-pairing" role="tabpanel" aria-labelledby="tab-pairing">
+      <div class="content-card" style="flex:1;">
+        <!-- QOŞULMA REJİMİ SEÇİMİ (DUAL MODE) -->
+        <div style="display:flex;gap:8px;flex-shrink:0;">
+          <button type="button" class="btn-secondary" id="btnModeWifi" style="flex:1;border-color:var(--green);background:var(--green-dark);color:var(--green);">
+            <span>📶 Eyni Wi-Fi (Lokal Rejim)</span>
+          </button>
+          <button type="button" class="btn-secondary" id="btnModeCloud" style="flex:1;">
+            <span>🌐 İnternet (Bulud Server)</span>
+          </button>
+        </div>
+
+        <div id="lblModeBanner" style="background:var(--card);border:1px solid var(--line);padding:7px 12px;border-radius:var(--radius-sm);font-size:11px;color:var(--green);display:flex;align-items:center;gap:6px;flex-shrink:0;">
+          <span>✓ <strong>Lokal Rejim:</strong> Telefon kompüterlə eyni Wi-Fi şəbəkəsində olmalıdır. İnternet tələb olunmur.</span>
+        </div>
+
+        <!-- KOMPÜTERİN ADI VƏ QR VITRINI -->
+        <div class="qr-showcase" style="flex:1;">
+          <div style="text-align:center;">
+            <div class="qr-frame">
+              <div id="qrSvgWrapper" style="display:flex;align-items:center;justify-content:center;width:140px;height:140px;">
+                <img id="imgQrVisual" width="140" height="140" alt="QR Kodu" style="display:none;" />
+              </div>
+            </div>
+            <div style="font-size:10px;color:var(--text-muted);margin-top:6px;" id="lblQrTimer">Qalan vaxt: 120 saniyə</div>
+          </div>
+
+          <div style="display:flex;flex-direction:column;gap:8px;min-width:0;">
+            <div>
+              <label for="txtPairPcName" style="font-size:11px;font-weight:600;color:var(--green);display:block;margin-bottom:4px;">
+                Bu Kompüterin Adı (Telefonda görünəcək):
+              </label>
+              <div class="input-group">
+                <input type="text" id="txtPairPcName" placeholder="Məsələn: Ofis, Ev, PC 2...">
+                <button type="button" class="btn-action" id="btnApplyPairPcName">Təsdiqlə və QR Yarat</button>
+              </div>
+            </div>
+
+            <div style="display:flex;align-items:center;justify-content:space-between;background:var(--panel);border:1px solid var(--line);border-radius:var(--radius-sm);padding:8px 12px;">
+              <div>
+                <div style="font-size:10px;color:var(--text-muted);text-transform:uppercase;">Qoşulma Kodu:</div>
+                <div style="font-size:14px;font-weight:800;color:var(--green);letter-spacing:1px;" id="lblPairCode">WK-DEMO-2026</div>
+              </div>
+              <div style="display:flex;gap:6px;">
+                <button class="btn-secondary" id="btnRefreshQr" style="padding:5px 10px;font-size:11px;">Yeni QR</button>
+                <button class="btn-danger" id="btnRevokePair" style="padding:5px 10px;font-size:11px;">Ləğv Et</button>
+              </div>
+            </div>
+
+            <div style="font-size:11px;color:var(--text-muted);line-height:1.4;" id="qrStatus" role="status">
+              QR hazırdır. Telefonun kamerası ilə skan edin.
+            </div>
+            <div style="font-family:monospace;font-size:10px;color:var(--text-faint);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;" id="lblQrPayload">
+              Serverdən QR gözlənilir…
+            </div>
+            <div id="toastPair" class="toast"></div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ==================== BÖLMƏ 4: DƏSTƏK VƏ DİAQNOSTİKA ==================== -->
+    <div class="panel" id="panel-support" role="tabpanel" aria-labelledby="tab-support">
+      <div class="grid-metrics">
+        <div class="metric-card">
+          <div class="metric-label">Əməliyyat Sistemi</div>
+          <div class="metric-value" id="lblDiagOs">Windows 11 / 10 x64</div>
+        </div>
+        <div class="metric-card">
+          <div class="metric-label">Sessiya ID (Process / Konsol)</div>
+          <div class="metric-value" id="lblDiagSession">Process: 1 / Console: 1</div>
+        </div>
+        <div class="metric-card">
+          <div class="metric-label">DPAPI / Xidmət Sərhədi</div>
+          <div class="metric-value">Təcrid Olunmuş (Session Helper)</div>
+        </div>
+        <div class="metric-card">
+          <div class="metric-label">Tətbiq Versiyası</div>
+          <div class="metric-value">v0.1.11</div>
+        </div>
+      </div>
+
+      <div class="content-card" style="flex:1;">
+        <div class="card-header-sm">
+          <span class="card-title">
+            <svg viewBox="0 0 24 24"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/></svg>
+            Sistem Diaqnostikası və Texniki Hadisə Jurnalı
           </span>
-          <button class="btn-secondary" id="btnTogglePause" style="min-width: 190px;">Mobil İdarəni Dayandır</button>
+          <button class="btn-secondary" id="btnCopyDiag" style="padding:4px 10px;font-size:11px;">
+            Məlumatı Kopyala (Redacted)
+          </button>
         </div>
-      </div>
 
-      <!-- Gateway Server Origin Konfiqurasiyası -->
-      <div class="form-group" style="margin-top: 16px; padding-top: 16px; border-top: 1px solid var(--line);">
-        <label for="txtGatewayOrigin">Gateway Server Ünvanı (Origin):</label>
-        <div class="input-row">
-          <input type="text" id="txtGatewayOrigin" placeholder="http://158.101.172.228:8080">
-          <button class="btn-secondary" id="btnSaveGateway">Serveri Saxla</button>
-        </div>
-        <span style="font-size: 11px; color: var(--text-muted);">
-          Manual JSON edit etmədən birbaşa bu sahədən Gateway ünvanını konfiqurasiya edə bilərsiniz.
-        </span>
-      </div>
-      <div id="toastGateway" class="toast" style="display: none;"></div>
-
-      <!-- HESABA BAĞLI CİHAZLAR SİYAHISI -->
-      <div id="accountDevicesBox" style="margin-top: 18px; padding-top: 16px; border-top: 1px solid var(--line);">
-        <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 10px;">
-          <label style="font-size: 13px; font-weight: 600; color: var(--text); display: flex; align-items: center; gap: 6px;">
-            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-              <rect x="2" y="3" width="20" height="14" rx="2" ry="2"></rect>
-              <line x1="8" y1="21" x2="16" y2="21"></line>
-              <line x1="12" y1="17" x2="12" y2="21"></line>
-            </svg>
-            Hesabınıza Bağlı Kompüterlər (Cihazlarınız):
-          </label>
-          <button type="button" class="btn-secondary" id="btnAddNewDeviceNav" style="font-size: 11px; padding: 4px 10px;">+ Yeni Cihaz Əlavə Et</button>
-        </div>
-        <div id="accountDevicesList" style="display: flex; flex-direction: column; gap: 6px;">
-          <div style="font-size: 12px; color: var(--text-muted); padding: 8px 12px; background: #101412; border-radius: 6px;">
-            Hesaba daxil olunduqda bütün cihazlarınız burada görünəcək.
+        <div style="background:var(--card);border:1px solid var(--line);border-radius:var(--radius-sm);padding:10px 12px;font-family:Consolas, Monaco, monospace;font-size:11px;color:var(--text-muted);flex:1;overflow:hidden;display:flex;flex-direction:column;justify-content:space-between;">
+          <div style="display:flex;flex-direction:column;gap:4px;">
+            <div><span style="color:var(--green);">[OK]</span> Windows SCM Service: WinKeyService əlaqəsi aktivdir.</div>
+            <div><span style="color:var(--green);">[OK]</span> IPC Named Pipe: \\.\pipe\WinKey_Service_IPC əlçatandır.</div>
+            <div><span style="color:var(--green);">[OK]</span> Slot A Verifier: Ed25519 imza bütövlüyü təsdiqlənib.</div>
+            <div><span style="color:var(--green);">[OK]</span> DPAPI Secret Broker: Yalnız interaktiv sessiyada işləyir.</div>
+          </div>
+          <div style="font-size:10px;color:var(--text-faint);border-top:1px solid var(--line-subtle);padding-top:6px;">
+            Şəxsi açarlar və PIN loqlarda görünmür; yalnız təhlükəsiz meta-məlumat saxlanılır.
           </div>
         </div>
+        <div id="toastDiag" class="toast"></div>
       </div>
     </div>
 
-    <!-- TAB 2: TƏHLÜKƏSİZLİK VƏ PIN -->
-    <div class="panel" id="panel-security" style="display: none;">
-      <div class="panel-title">
-        <span>Masaüstü Açılış PIN-i (DPAPI Broker)</span>
-      </div>
-      <p style="font-size: 12px; color: var(--text-muted); line-height: 1.6; margin-bottom: 16px;">
-        Daxil etdiyiniz PIN qətiyyən veb brauzerə, serverə və ya loqlara ötürülmür. Windows DPAPI (CryptProtectData) vasitəsilə yalnız bu kompüterin yerli yaddaşında şifrələnir və dərhal native yaddaşdan silinir (zeroize). Renderer tərəfində daxil edilən simvollar yadda saxlanılmır və dərhal təmizlənir.
-      </p>
-
-      <form onsubmit="return false;" class="form-group">
-        <div id="pinSavedState" role="status" style="margin-bottom:12px;">PIN vəziyyəti yoxlanılır…</div>
-        <input type="text" name="username" value="windows_user" autocomplete="username" style="display:none;">
-        <label for="txtPin">Yeni Açılış PIN-i daxil edin:</label>
-        <div class="input-row">
-          <input type="password" id="txtPin" placeholder="••••••" maxlength="32" autocomplete="current-password">
-          <button type="button" class="btn-secondary" id="btnShowPin" aria-pressed="false" aria-label="Yazılan PIN-i göstər">Göstər</button>
-          <button type="button" class="btn-action" id="btnSavePin">PIN-i DPAPI ilə Saxla</button>
-        </div>
-      </form>
-      <div id="toastPin" class="toast" style="display: none;"></div>
-    </div>
-
-    <!-- TAB 3: MOBIL QR CÜTLƏŞMƏ -->
-    <div class="panel" id="panel-pairing" style="display: none;">
-      <div class="panel-title">
-        <span>Mobil Cihazla Təhlükəsiz Cütləşmə (Ed25519 QR)</span>
-      </div>
-
-      <!-- QOŞULMA REJİMİ SEÇİMİ (DUAL MODE) -->
-      <div style="display: flex; gap: 10px; margin-bottom: 12px;">
-        <button type="button" class="btn-mode active" id="btnModeWifi" style="flex: 1; padding: 10px 14px; border-radius: 8px; border: 1px solid var(--green); background: #13241b; color: var(--green); font-size: 13px; font-weight: 600; cursor: pointer; display: flex; align-items: center; justify-content: center; gap: 8px;">
-          <span>📶 Eyni Wi-Fi (Lokal)</span>
-        </button>
-        <button type="button" class="btn-mode" id="btnModeCloud" style="flex: 1; padding: 10px 14px; border-radius: 8px; border: 1px solid var(--line); background: #181c1a; color: var(--text-muted); font-size: 13px; font-weight: 500; cursor: pointer; display: flex; align-items: center; justify-content: center; gap: 8px;">
-          <span>🌐 İnternet (Bulud Server)</span>
-        </button>
-      </div>
-
-      <div id="lblModeBanner" style="background: #111a14; border: 1px solid #1f3325; padding: 10px 14px; border-radius: 8px; font-size: 12px; color: var(--green); margin-bottom: 16px; display: flex; align-items: center; gap: 8px;">
-        <span>✓ <strong>Lokal Rejim:</strong> Telefon kompüterlə eyni Wi-Fi şəbəkəsində olmalıdır. İnternet bağlantısı tələb olunmur.</span>
-      </div>
-
-      <!-- KOMPÜTERİN ADI VƏ QR CÜTLƏŞDİRMƏ -->
-      <div style="background: #141716; border: 1px solid var(--line); border-radius: 10px; padding: 14px 16px; margin-bottom: 16px;">
-        <label for="txtPairPcName" style="display: block; font-size: 12px; font-weight: 600; color: var(--green); margin-bottom: 6px;">
-          🖥️ Bu Kompüterin Adı (Telefonda "Kompüter seç" menyusunda görünəcək ad):
-        </label>
-        <div style="display: flex; gap: 8px;">
-          <input type="text" id="txtPairPcName" placeholder="Məsələn: Ofis, Ev, PC 2, Kafe..." style="flex: 1; padding: 10px 14px; background: #0c0f0d; border: 1px solid var(--line); border-radius: 6px; color: var(--text); font-size: 13px; font-weight: 500;">
-          <button type="button" class="btn-action" id="btnApplyPairPcName" style="white-space: nowrap;">Adı Təsdiqlə və QR Yarat</button>
-        </div>
-        <span style="font-size: 11px; color: var(--text-muted); display: block; margin-top: 6px;">
-          💡 Telefonunuz bu QR kodunu kamerası ilə oxudan kimi kompüter avtomatik bu adla qeyd olunacaq.
-        </span>
-      </div>
-
-      <p style="font-size: 12px; color: var(--text-muted); line-height: 1.6; margin-bottom: 16px;">
-        Telefonunuzun kamerasını açaraq aşağıdakı birdəfəlik təhlükəsiz QR kodunu skan edin. Hər QR kodu 120 saniyə ərzində etibarlıdır və yalnız tək bir cihaz tərəfindən bağlana bilər.
-      </p>
-
-      <div class="qr-box">
-        <div style="background: white; padding: 12px; border-radius: 8px; display: inline-flex; align-items: center; justify-content: center; min-width: 164px; min-height: 164px;">
-          <div id="qrSvgWrapper" style="display: flex; align-items: center; justify-content: center; width: 140px; height: 140px;">
-            <img id="imgQrVisual" width="140" height="140" alt="QR Kodu" style="display: none;" />
-          </div>
-        </div>
-        <div class="qr-text" id="lblQrPayload">Serverdən QR gözlənilir…</div>
-        <div id="qrStatus" role="status" style="max-width:460px; white-space:normal;">Qoşulma yoxlanılır…</div>
-        <div style="font-size: 13px; font-weight: 700; color: var(--green);" id="lblPairCode">Qoşulma Kodu: ----</div>
-        <div style="font-size: 11px; color: var(--text-muted);" id="lblQrTimer"></div>
-        <div style="display: flex; gap: 8px;">
-          <button class="btn-secondary" id="btnRefreshQr">Yeni QR Yarat</button>
-          <button class="btn-secondary" id="btnRevokePair" style="color: var(--red);">Cütləşməni Ləğv Et</button>
-        </div>
-      </div>
-      <div id="toastPair" class="toast" style="display: none;"></div>
-    </div>
-
-    <!-- TAB 4: DƏSTƏK VƏ LOQLAR -->
-    <div class="panel" id="panel-support" style="display: none;">
-      <div class="panel-title">
-        <span>Texniki Diaqnostika və Loqlar</span>
-      </div>
-      <div class="grid">
-        <div class="card">
-          <div class="card-label">Əməliyyat Sistemi</div>
-          <div class="card-val" id="lblDiagOs">Windows 11 / 10 x64</div>
-        </div>
-        <div class="card">
-          <div class="card-label">Sessiya ID (Process / Konsol)</div>
-          <div class="card-val" id="lblDiagSession">Process: 1 / Console: 1</div>
-        </div>
-        <div class="card">
-          <div class="card-label">DPAPI / Xidmət Sərhədi</div>
-          <div class="card-val">Təcrid Olunmuş (Session Helper)</div>
-        </div>
-        <div class="card">
-          <div class="card-label">Tətbiq Versiyası</div>
-          <div class="card-val">v0.1.0-pilot</div>
-        </div>
-      </div>
-      <div style="margin-top: 14px;">
-        <button class="btn-secondary" id="btnCopyDiag">Diaqnostika Məlumatını Kopyala (Redacted)</button>
-      </div>
-      <div id="toastDiag" class="toast" style="display: none;"></div>
-    </div>
-  </div>
+  </main>
 
   <!-- Tray Simulyasiyası Modalı -->
-  <div class="tray-modal" id="trayModal">
-    <div class="tray-card">
-      <h3>Sistem Tepsisinə Gizləndi</h3>
-      <p>
+  <div class="tray-modal" id="trayModal" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,0.85);z-index:300;align-items:center;justify-content:center;padding:20px;">
+    <div style="background:var(--panel);border:1px solid var(--green-border);border-radius:var(--radius-lg);max-width:400px;width:100%;padding:24px;text-align:center;box-shadow:0 10px 30px rgba(0,0,0,0.6);">
+      <h3 style="color:var(--green);font-size:16px;margin-bottom:8px;">Sistem Tepsisinə Gizləndi</h3>
+      <p style="font-size:12px;color:var(--text-muted);line-height:1.5;margin-bottom:16px;">
         WinKey Pro pəncərəsi arxa plana keçdi. Windows xidməti aktivdir və uzaqdan açılış əmrlərini qəbul etməyə davam edir.
       </p>
       <button class="btn-action" id="btnRestoreWindow">Pəncərəni Bərpa Et</button>
     </div>
   </div>
 
-  <footer>
-    <span>WinKey Pro v0.1.0 · Təhlükəsiz Windows Masaüstü Girişi</span>
-    <span>Yalnız yerli DPAPI qoruması · Sıfır bulud saxlanması</span>
+  <!-- ==========================================================================
+       YIĞCAM VƏ ZƏRİF FOOTER
+       ========================================================================== -->
+  <footer class="app-footer">
+    <div class="footer-security">
+      <span class="footer-dot"></span>
+      <span>WinKey Pro v0.1.11 · Yerli DPAPI Qoruması</span>
+    </div>
+    <span>Sıfır Bulud Saxlanması · Uzaqdan Təhlükəsiz Giriş</span>
   </footer>
 
   <script src="app.js"></script>
