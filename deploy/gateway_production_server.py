@@ -1476,6 +1476,23 @@ Səbəb: " + (cmd.result || 'Xəta') +
             mobileEvent('total', 'RESULT_UNCONFIRMED', performance.now() - started, action, pendingCommand ? pendingCommand.requestId : '', true);
         }
 
+        
+        async function deleteDev(devId) {
+            if (!confirm('DİQQƏT: Bu cihazı serverdən və admin panelindən tamamilə silmək istəyirsiniz?\nBütün mobil sessiyalar və qeydiyyat silinəcək və kompüter təzədən ilk dəfə qeydiyyatdan keçə biləcək.')) return;
+            try {
+                await fetch('/admin/delete', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'X-Owner-Admin-Secret': adminSecret
+                    },
+                    body: JSON.stringify({ device_id: devId })
+                });
+                loadDashboard();
+            } catch(e) {
+                alert('Silinmə xətası: ' + e);
+            }
+        }
         async function revokeDevice() {
             if (authToken) {
                 try {
@@ -1752,13 +1769,24 @@ def get_admin_html() -> str:
                     <td>${d.locked ? '🔒 Bəli' : '🔓 Xeyr'}</td>
                     <td>${d.pin_ready ? '✅ Hazır' : '⏳ Yoxdur'}</td>
                     <td>${new Date(d.last_seen_at * 1000).toLocaleTimeString()}</td>
-                    <td><button class="btn btn-danger" data-device-id="${escapeHtml(d.device_id)}" data-action="${d.status === 'ACTIVE' ? 'revoke' : 'activate'}">${d.status === 'ACTIVE' ? 'Ləğv Et' : 'Yenidən aktivləşdir'}</button></td>
+                    <td>
+                        <div style="display:flex; gap:6px; align-items:center;">
+                            <button class="btn btn-danger" data-device-id="${escapeHtml(d.device_id)}" data-action="${d.status === 'ACTIVE' ? 'revoke' : 'activate'}">${d.status === 'ACTIVE' ? 'Ləğv Et' : 'Aktivləşdir'}</button>
+                            <button class="btn btn-danger" style="background:#5c1d1d; border-color:#822727; color:#fca5a5;" data-device-id="${escapeHtml(d.device_id)}" data-action="delete">Sil</button>
+                        </div>
+                    </td>
                 </tr>`;
             }
             html += '</table>';
             document.getElementById('devices-container').innerHTML = html;
             document.querySelectorAll('#devices-container button[data-device-id]').forEach(button => {
-                button.addEventListener('click', () => revokeDev(button.dataset.deviceId, button.dataset.action));
+                button.addEventListener('click', () => {
+                    if (button.dataset.action === 'delete') {
+                        deleteDev(button.dataset.deviceId);
+                    } else {
+                        revokeDev(button.dataset.deviceId, button.dataset.action);
+                    }
+                });
             });
         }
 
@@ -1797,6 +1825,23 @@ def get_admin_html() -> str:
             document.getElementById('telemetry-container').innerHTML = html;
         }
 
+        
+        async function deleteDev(devId) {
+            if (!confirm('DİQQƏT: Bu cihazı serverdən və admin panelindən tamamilə silmək istəyirsiniz?\nBütün mobil sessiyalar və qeydiyyat silinəcək və kompüter təzədən ilk dəfə qeydiyyatdan keçə biləcək.')) return;
+            try {
+                await fetch('/admin/delete', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'X-Owner-Admin-Secret': adminSecret
+                    },
+                    body: JSON.stringify({ device_id: devId })
+                });
+                loadDashboard();
+            } catch(e) {
+                alert('Silinmə xətası: ' + e);
+            }
+        }
         async function revokeDev(devId, action = 'revoke') {
             if (!confirm(action === 'activate' ? 'PC-ni yenidən aktivləşdirək? Köhnə telefon sessiyaları bərpa edilmir; yeni QR lazımdır.' : 'Cihazı ləğv etmək istədiyinizə əminsiniz?')) return;
             await fetch(action === 'activate' ? '/admin/activate' : '/admin/revoke', {
@@ -2501,6 +2546,40 @@ class GatewayHandler(BaseHTTPRequestHandler):
             return
 
         # 9. Owner-Only Admin Cihaz Revoke (/admin/revoke)
+                # 9.1. Owner-Only Admin Cihaz Silmə (/admin/delete)
+        if path == "/admin/delete":
+            admin_sec = self.headers.get("X-Owner-Admin-Secret")
+            if not admin_sec or admin_sec != get_admin_secret():
+                self._send_json(403, {"error": "E_ADMIN_UNAUTHORIZED", "message": "Yalnız sahib admin icazəlidir"})
+                return
+
+            target_dev = data.get("device_id")
+            if not target_dev:
+                self._send_json(400, {"error": "E_MISSING_DEVICE_ID"})
+                return
+
+            with self.db.get_conn() as conn:
+                conn.execute("DELETE FROM devices WHERE device_id = ?", (target_dev,))
+                conn.execute("DELETE FROM mobile_sessions WHERE device_id = ?", (target_dev,))
+                conn.execute("DELETE FROM commands WHERE device_id = ?", (target_dev,))
+                conn.execute("DELETE FROM challenges WHERE device_id = ?", (target_dev,))
+                conn.commit()
+
+            self._send_json(200, {"success": True, "device_id": target_dev, "status": "DELETED"})
+            return
+
+        # 9.2. Cihazın Özünü Serverdən Tam Ayırması (/devices/unregister)
+        if path == "/devices/unregister":
+            target_dev = data.get("device_id")
+            if target_dev:
+                with self.db.get_conn() as conn:
+                    conn.execute("DELETE FROM devices WHERE device_id = ?", (target_dev,))
+                    conn.execute("DELETE FROM mobile_sessions WHERE device_id = ?", (target_dev,))
+                    conn.execute("DELETE FROM commands WHERE device_id = ?", (target_dev,))
+                    conn.commit()
+            self._send_json(200, {"success": True, "message": "Cihaz serverdən tam silindi"})
+            return
+
         if path in ("/admin/revoke", "/admin/activate"):
             admin_sec = self.headers.get("X-Owner-Admin-Secret")
             if not admin_sec or admin_sec != get_admin_secret():

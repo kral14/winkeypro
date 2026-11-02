@@ -493,3 +493,28 @@ class GatewayService:
             conn.commit()
 
         return 200, {'device_id': device_id, 'status': target_status}
+    def admin_delete_device(self, device_id: str, admin_sec: Optional[str]) -> Tuple[int, Dict[str, Any]]:
+        if not admin_sec or admin_sec != self.get_admin_secret():
+            return 403, {"error": "E_ADMIN_UNAUTHORIZED"}
+
+        with self.db.get_conn() as conn:
+            conn.execute("DELETE FROM devices WHERE device_id = ?", (device_id,))
+            conn.execute("DELETE FROM mobile_sessions WHERE device_id = ?", (device_id,))
+            conn.execute("DELETE FROM commands WHERE device_id = ?", (device_id,))
+            conn.execute("DELETE FROM challenges WHERE device_id = ?", (device_id,))
+            conn.commit()
+
+        return 200, {"success": True, "device_id": device_id, "status": "DELETED"}
+
+    def unregister_device(self, device_id: str) -> Tuple[int, Dict[str, Any]]:
+        if not device_id:
+            return 400, {"error": "E_MISSING_DEVICE_ID"}
+
+        with self.db.get_conn() as conn:
+            conn.execute("DELETE FROM devices WHERE device_id = ?", (device_id,))
+            conn.execute("DELETE FROM mobile_sessions WHERE device_id = ?", (device_id,))
+            conn.execute("DELETE FROM commands WHERE device_id = ?", (device_id,))
+            conn.commit()
+
+        return 200, {"success": True, "message": "Cihaz uğurla ayrıldı və silindi"}
+

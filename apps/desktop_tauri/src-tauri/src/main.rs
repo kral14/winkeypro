@@ -1079,22 +1079,44 @@ fn generate_qr_pairing(mode: Option<String>) -> Result<PairingPayloadDto, String
 // 5. Cütləşmənin ləğv edilməsi (Revoke)
 #[tauri::command]
 fn revoke_pairing() -> Result<String, String> {
-    let cfg_file = get_app_data_dir().join("config.json");
+    let data_dir = get_app_data_dir();
+    let cfg_file = data_dir.join("config.json");
     if cfg_file.exists() {
         if let Ok(raw) = fs::read_to_string(&cfg_file) {
             if let Ok(val) = serde_json::from_str::<serde_json::Value>(&raw) {
-                let origin = val.get("gateway_origin").and_then(|v| v.as_str());
+                let origin = val.get("gateway_origin").and_then(|v| v.as_str())
+                    .or_else(|| val.get("cloud_gateway_origin").and_then(|v| v.as_str()));
                 let dev_id = val.get("device_id").and_then(|v| v.as_str());
                 if let (Some(orig), Some(did)) = (origin, dev_id) {
-                    let _ = ureq::post(&format!("{}/devices/revoke", orig))
+                    let clean_orig = orig.trim_end_matches('/');
+                    // 1. Serverdən cihazı və admin panelindən qeydiyyatı tam silirik
+                    let _ = ureq::post(&format!("{}/devices/unregister", clean_orig))
+                        .timeout(std::time::Duration::from_secs(3))
+                        .send_json(serde_json::json!({ "device_id": did }));
+                    // 2. Mobil sessiyaları ləğv edirik
+                    let _ = ureq::post(&format!("{}/devices/revoke", clean_orig))
                         .timeout(std::time::Duration::from_secs(3))
                         .send_json(serde_json::json!({ "device_id": did }));
                 }
             }
         }
-        let _ = fs::remove_file(cfg_file);
+        let _ = fs::remove_file(&cfg_file);
     }
-    Ok("REVOKED".to_string())
+
+    // Kompüterdəki köhnə açar və secret-ləri təmizləyirik ki, yeni QR yaradılanda tərtəmiz yeni cihaz kimi qeydiyyatdan keçsin:
+    let _ = fs::remove_file(data_dir.join("device_key.dpapi"));
+    let _ = fs::remove_file(data_dir.join("device_secret.dpapi"));
+    let _ = fs::remove_file(data_dir.join("active_pair.json"));
+    if let Ok(entries) = fs::read_dir(&data_dir) {
+        for entry in entries.flatten() {
+            let name = entry.file_name().to_string_lossy().to_string();
+            if name.starts_with("device_secret_") && name.ends_with(".dpapi") {
+                let _ = fs::remove_file(entry.path());
+            }
+        }
+    }
+
+    Ok("REVOKED_AND_UNREGISTERED".to_string())
 }
 
 // 6. Pəncərəni tepsiyə (tray) gizlətmə

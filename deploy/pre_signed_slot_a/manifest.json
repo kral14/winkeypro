@@ -2,12 +2,12 @@
   "files": [
     {
       "path": "winkey_service.exe",
-      "sha256": "17801643702f773509c96d1d640ff231f0ef34b8d2a63df5c893420b7a831b50",
-      "size": 4420173
+      "sha256": "667ce669481c1b98208827797f858799cff8c7ec95746579dc6219656d1eea76",
+      "size": 4421960
     },
     {
       "path": "winkey_helper.exe",
-      "sha256": "96a241302bc081486293d8f2e46c50dfdcc6afc3b69f71340efe391a5834000d",
+      "sha256": "4b5afc1518df466376fcd8d0f32c96e7f78bf3da3bd2a80f1c1ab3f921a3f759",
       "size": 1866671
     },
     {
@@ -62,7 +62,7 @@
     },
     {
       "path": "helper_runtime/base_library.zip",
-      "sha256": "3114b9c5955d0ec3a3b40379d06e20bca8e0d88881759f9aa1ab6a7ae14363c6",
+      "sha256": "f57be822543f076653507a8c4adfe92d9883bde59c6d9d8a80c17978d4ee25d3",
       "size": 1333717
     },
     {
@@ -116,6 +116,6 @@
       "size": 49776
     }
   ],
-  "timestamp": 1793605798.7744675,
-  "version": "0.1.5"
+  "timestamp": 1793610511.09151,
+  "version": "0.1.6"
 }

@@ -434,6 +434,32 @@ def build_asgi_app(service: GatewayService, dashboard_html_path: Optional[str] =
             await hub.disconnect_device(device_id)
         return _json_resp(status, data, start)
 
+
+    async def handle_admin_delete(request: Request) -> Response:
+        start = time.monotonic()
+        try:
+            body = await request.json()
+        except Exception:
+            body = {}
+        device_id = body.get("device_id", "")
+        admin_sec = request.headers.get("x-owner-admin-secret")
+        status, data = await asyncio.to_thread(service.admin_delete_device, device_id, admin_sec)
+        if status == 200:
+            await hub.disconnect_device(device_id)
+        return _json_resp(status, data, start)
+
+    async def handle_device_unregister(request: Request) -> Response:
+        start = time.monotonic()
+        try:
+            body = await request.json()
+        except Exception:
+            body = {}
+        device_id = request.path_params.get("device_id") or body.get("device_id", "")
+        status, data = await asyncio.to_thread(service.unregister_device, device_id)
+        if status == 200:
+            await hub.disconnect_device(device_id)
+        return _json_resp(status, data, start)
+
     # --- WEBSOCKET HANDLER ---
 
     async def ws_endpoint(ws: WebSocket):
@@ -800,6 +826,8 @@ def build_asgi_app(service: GatewayService, dashboard_html_path: Optional[str] =
         Route("/admin/telemetry", handle_admin_telemetry, methods=["GET"]),
         Route("/admin/revoke", handle_admin_status_change, methods=["POST"]),
         Route("/admin/activate", handle_admin_status_change, methods=["POST"]),
+        Route("/admin/delete", handle_admin_delete, methods=["POST"]),
+        Route("/devices/unregister", handle_device_unregister, methods=["POST"]),
 
         # Device & Command Status
         Route("/devices/{device_id}/status", handle_device_status, methods=["GET"]),
