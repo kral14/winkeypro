@@ -3,6 +3,15 @@ use serde_json::{json, Value};
 use sha2::{Digest, Sha256};
 
 fn origin() -> Result<String, String> {
+    #[cfg(debug_assertions)]
+    if let Ok(value) = std::env::var("WINKEY_DEV_ACCOUNT_ORIGIN") {
+        let value = super::gateway_config::normalize(&value)?;
+        let url = tauri::Url::parse(&value).map_err(|_| "E_ACCOUNT_ORIGIN")?;
+        if matches!(url.host_str(), Some("127.0.0.1") | Some("localhost") | Some("[::1]")) {
+            return Ok(value);
+        }
+        return Err("E_DEV_ACCOUNT_ORIGIN: yalnız localhost qəbul edilir".into());
+    }
     let cfg: Value = fs::read(super::get_app_data_dir().join("config.json")).ok()
         .and_then(|v| serde_json::from_slice(&v).ok()).unwrap_or(json!({}));
     let origin = super::gateway_config::cloud_origin(cfg.get("cloud_gateway_origin").and_then(Value::as_str));

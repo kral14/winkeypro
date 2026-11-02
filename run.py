@@ -19,7 +19,10 @@ import subprocess
 import webbrowser
 import urllib.parse
 import io
-import qrcode
+try:
+    import qrcode
+except ModuleNotFoundError:
+    qrcode = None
 from http.server import SimpleHTTPRequestHandler, HTTPServer
 import threading
 from pathlib import Path
@@ -52,6 +55,25 @@ def stop_owned_dev_process(proc):
             proc.kill()
             proc.wait(timeout=5)
 
+
+def dev_client_environment(lan_ip, port, base_env=None):
+    env = dict(os.environ if base_env is None else base_env)
+    env['WINKEY_GATEWAY_ORIGIN'] = f'http://{lan_ip}:{port}'
+    env['WINKEY_DEV_GATEWAY_ORIGIN'] = f'http://{lan_ip}:{port}'
+    # Account passwords stay on this PC's loopback interface in debug mode.
+    env['WINKEY_DEV_ACCOUNT_ORIGIN'] = f'http://127.0.0.1:{port}'
+    return env
+
+
+def check_run_dependencies():
+    import importlib.util
+    missing = [name for name in ('qrcode', 'PIL', 'cryptography') if importlib.util.find_spec(name) is None]
+    if missing:
+        print('[XƏTA] Çatışmayan paketlər: ' + ', '.join(missing))
+        print(f'Quraşdırmaq üçün: "{sys.executable}" -m pip install -r requirements-dev.txt')
+        return False
+    print('[PASS] Run üçün Python paketləri hazırdır.')
+    return True
 if hasattr(sys.stdout, 'reconfigure'):
     sys.stdout.reconfigure(encoding='utf-8')
 if hasattr(sys.stderr, 'reconfigure'):
@@ -242,6 +264,15 @@ def lock_command_poller():
 
 def main():
     global GATEWAY_PORT
+    if '--help' in sys.argv or '-h' in sys.argv:
+        print('python run.py             — native dev proqramını başlat')
+        print('python run.py --check     — asılılıqları yoxla, heç nə başlatma')
+        print('python run.py --browser-only — yalnız brauzer önizləməsi')
+        return 0
+    if not check_run_dependencies():
+        return 1
+    if '--check' in sys.argv:
+        return 0
     print("==================================================================")
 
     # Always compile the current UI/Rust sources before launching native dev.
@@ -320,8 +351,7 @@ exit 0
     if tauri_exe and "--browser-only" not in sys.argv:
         print(f"[...] Yeni compile olunmuş Tauri dev pəncərəsi açılır: {os.path.basename(tauri_exe)}")
 
-        env = os.environ.copy()
-        env["WINKEY_GATEWAY_ORIGIN"] = f"http://{lan_ip}:{GATEWAY_PORT}"
+        env = dev_client_environment(lan_ip, GATEWAY_PORT)
         if not os.path.exists(r"\\.\pipe\WinKey_Service_IPC"):
             worker_exe = os.path.join(ROOT_DIR, "apps", "winkey_service", "target", "release", "winkey_service.exe")
             if os.path.isfile(worker_exe):

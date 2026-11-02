@@ -13,6 +13,10 @@ pub fn normalize(origin: &str) -> Result<String, String> {
 }
 
 pub fn cloud_origin(saved: Option<&str>) -> String {
+    #[cfg(debug_assertions)]
+    if let Ok(value) = std::env::var("WINKEY_DEV_GATEWAY_ORIGIN") {
+        if let Ok(origin) = normalize(&value) { return origin; }
+    }
     saved.and_then(|value| normalize(value).ok())
         .filter(|value| value != LEGACY_ORIGIN)
         .unwrap_or_else(|| CLOUD_ORIGIN.to_string())

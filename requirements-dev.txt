@@ -1,0 +1,3 @@
+# Local run.py QR generation and the shared gateway.
+qrcode[pil]>=8.2,<9
+cryptography>=46.0.3

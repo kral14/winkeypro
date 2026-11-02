@@ -26,6 +26,17 @@ Gündəlik yalnız `run.py` və `build.py` istifadə olunur. Cari quraşdırıc�
 `dist/WinKeySetup.exe`. Tam yol xəritəsi: [docs/PROJECT_LAYOUT.md](docs/PROJECT_LAYOUT.md).
 Cari Gemini işi: [plan/GEMINI_WEBSOCKET_BATCH.md](plan/GEMINI_WEBSOCKET_BATCH.md).
 
+Yerli Windows dev başlanğıcı:
+
+```powershell
+python -m pip install -r requirements-dev.txt
+python run.py --check
+python run.py
+```
+
+`run.py` yerli gateway-ni başladır. Debug proqramının qeydiyyat sorğuları yalnız
+bu kompüterin localhost ünvanına gedir; release/setup üçün HTTPS tələbi qalır.
+
 - `apps/desktop_tauri` — Windows Tauri interfeysi.
 - `apps/winkey_service` — Windows native xidməti və helper komponentləri.
 - `deploy` — gateway, Docker VM konfiqurasiyası və SQL.

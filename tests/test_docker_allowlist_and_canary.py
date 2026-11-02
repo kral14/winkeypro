@@ -93,6 +93,11 @@ import deploy.gateway_service
 import deploy.asgi_app
 import deploy.websocket_hub
 import deploy.postgres_database
+import deploy.account_service
+import deploy.mobile_install
+from pathlib import Path
+for asset in ('devices.js', 'jsQR.js', 'jsQR-LICENSE.txt', 'icon.png'):
+    assert (Path('/app/deploy/static') / asset).is_file(), asset
 import server
 print('RUNTIME_IMPORTS_OK')
 """)

@@ -7,6 +7,14 @@ deploy/**
 !deploy/websocket_hub.py
 !deploy/postgres_database.py
 !deploy/update_repository.py
+!deploy/account_service.py
+!deploy/mobile_install.py
+!deploy/static/
+deploy/static/**
+!deploy/static/devices.js
+!deploy/static/jsQR.js
+!deploy/static/jsQR-LICENSE.txt
+!deploy/static/icon.png
 !deploy/windows_release/
 deploy/windows_release/**
 !deploy/windows_release/WinKeyUpdate.zip
