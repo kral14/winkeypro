@@ -38,18 +38,44 @@ try {
             & sc.exe stop WinKeyService | Out-Null
             try {
                 $service.WaitForStatus([ServiceProcess.ServiceControllerStatus]::Stopped, [TimeSpan]::FromSeconds(15))
-            } catch {}
+            } catch {
+                Write-Output '[UPGRADE] SCM dayanma müddəti bitdi; yalnız təsdiqlənmiş WinKey prosesləri yoxlanılır.'
+            }
         }
     }
     # Never terminate by image name alone; preserve dev and unrelated copies.
     Get-CimInstance Win32_Process | Where-Object { $names -contains $_.Name.ToLowerInvariant() } | ForEach-Object {
         $pPath = $_.ExecutablePath
-        if ((-not $pPath) -or (Test-WinKeyBinaryPath $pPath)) {
+        if ($pPath -and (Test-WinKeyBinaryPath $pPath)) {
             Write-Output ('[UPGRADE] Quraşdırılmış proses dayandırılır PID=' + $_.ProcessId)
             & taskkill.exe /F /PID $_.ProcessId 2>$null | Out-Null
+            $killResult = $LASTEXITCODE
+            $remaining = Get-Process -Id $_.ProcessId -ErrorAction SilentlyContinue
+            if ($remaining) {
+                if ($killResult -ne 0) { throw ('E_UPGRADE_PROCESS_STOP_FAILED: PID=' + $_.ProcessId) }
+                $remaining.WaitForExit(5000) | Out-Null
+                if (-not $remaining.HasExited) { throw ('E_UPGRADE_PROCESS_EXIT_TIMEOUT: PID=' + $_.ProcessId) }
+            }
         }
     }
-    [System.Threading.Thread]::Sleep(500)
+    # A successful taskkill/SCM request is not proof that the loader released
+    # its image. Do not let NSIS overwrite anything until every image is writable.
+    $deadline = [DateTime]::UtcNow.AddSeconds(15)
+    do {
+        $blocked = @()
+        foreach ($name in ($names + @('WebView2Loader.dll'))) {
+            $file = Join-Path $InstallDir $name
+            if (Test-Path -LiteralPath $file -PathType Leaf) {
+                try {
+                    $stream = [IO.File]::Open($file, [IO.FileMode]::Open, [IO.FileAccess]::ReadWrite, [IO.FileShare]::None)
+                    $stream.Dispose()
+                } catch { $blocked += $name }
+            }
+        }
+        if ($blocked.Count -eq 0) { break }
+        if ([DateTime]::UtcNow -ge $deadline) { throw ('E_UPGRADE_FILES_LOCKED: ' + ($blocked -join ', ')) }
+        [System.Threading.Thread]::Sleep(250)
+    } while ($true)
     Write-Output '[UPGRADE] Quraşdırılmış proseslər dayandırıldı; faylların çıxarılması davam edə bilər.'
     exit 0
 } catch {
