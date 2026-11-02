@@ -21,22 +21,26 @@ try {
     $principal = [Security.Principal.WindowsPrincipal][Security.Principal.WindowsIdentity]::GetCurrent()
     if (-not $principal.IsInRole([Security.Principal.WindowsBuiltInRole]::Administrator)) { throw 'E_ADMIN_REQUIRED' }
     $service = Get-Service -Name WinKeyService -ErrorAction SilentlyContinue
-    if ($service -and $service.Status -ne 'Stopped') {
-        Write-Output '[UPGRADE] Stopping WinKeyService before replacing binaries...'
-        & sc.exe stop WinKeyService | Out-Null
-        $service.WaitForStatus([ServiceProcess.ServiceControllerStatus]::Stopped, [TimeSpan]::FromSeconds(20))
+    if ($service) {
+        Write-Output '[UPGRADE] Disabling SCM auto-restart failure actions...'
+        & sc.exe failure WinKeyService reset= 0 actions= "" 2>$null | Out-Null
+        if ($service.Status -ne 'Stopped') {
+            Write-Output '[UPGRADE] Stopping WinKeyService before replacing binaries...'
+            & sc.exe stop WinKeyService | Out-Null
+            try {
+                $service.WaitForStatus([ServiceProcess.ServiceControllerStatus]::Stopped, [TimeSpan]::FromSeconds(15))
+            } catch {}
+        }
     }
     # Never terminate by image name alone; preserve dev and unrelated copies.
     Get-CimInstance Win32_Process | Where-Object { $names -contains $_.Name.ToLowerInvariant() } | ForEach-Object {
-        if (Test-WinKeyBinaryPath $_.ExecutablePath) {
-            $process = Get-Process -Id $_.ProcessId -ErrorAction SilentlyContinue
-            if ($process -and (Test-WinKeyBinaryPath $process.Path)) {
-                Write-Output ('[UPGRADE] Closing installed process PID=' + $process.Id)
-                $process.Kill()
-                if (-not $process.WaitForExit(10000)) { throw 'E_UPGRADE_PROCESS_STOP_TIMEOUT' }
-            }
+        $pPath = $_.ExecutablePath
+        if ((-not $pPath) -or (Test-WinKeyBinaryPath $pPath)) {
+            Write-Output ('[UPGRADE] Closing installed process PID=' + $_.ProcessId)
+            & taskkill.exe /F /PID $_.ProcessId 2>$null | Out-Null
         }
     }
+    [System.Threading.Thread]::Sleep(500)
     Write-Output '[UPGRADE] Installed binaries are stopped; extraction may proceed.'
     exit 0
 } catch {

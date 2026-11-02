@@ -36,7 +36,7 @@ def main():
             assert result.returncode == 0, result.stdout + result.stderr
         for flag in ('--check-focus-resource', '--check-input-abi'):
             assert run(helper, flag).returncode == 0
-        dll = slot / 'helper_runtime/python313.dll'
+        dll = next((slot / 'helper_runtime').glob('python3*.dll'))
         original = dll.read_bytes()
         dll.write_bytes(original[:-1] + bytes([original[-1] ^ 1]))
         assert run(svc, '--validate-slot', slot).returncode != 0
