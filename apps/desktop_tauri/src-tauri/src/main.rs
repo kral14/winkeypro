@@ -37,7 +37,8 @@ mod win32_pipe {
     pub const PIPE_MIN_USER_CHANNEL_MASK: u32 = 0x0012008B;
     pub const SECURITY_SQOS_PRESENT: u32 = 0x00100000;
     pub const SECURITY_IDENTIFICATION: u32 = 0x00010000;
-    pub const FLAGS_SECURITY: u32 = SECURITY_SQOS_PRESENT | SECURITY_IDENTIFICATION;
+    pub const SECURITY_IMPERSONATION: u32 = 0x00020000;
+    pub const FLAGS_SECURITY: u32 = SECURITY_SQOS_PRESENT | SECURITY_IMPERSONATION;
     pub const OPEN_EXISTING: u32 = 3;
     pub const PROCESS_QUERY_LIMITED_INFORMATION: u32 = 0x1000;
     pub const TOKEN_QUERY: u32 = 0x0008;
@@ -130,6 +131,109 @@ pub fn get_current_user_sid() -> Result<String, String> {
     }
 }
 
+fn verify_scm_service_pid(srv_pid: u32) -> bool {
+    unsafe {
+        let scm = OpenSCManagerW(null_mut(), null_mut(), SC_MANAGER_CONNECT);
+        if scm.is_null() { return false; }
+        let svc_name_u16: Vec<u16> = "WinKeyService\0".encode_utf16().collect();
+        let svc = OpenServiceW(scm, svc_name_u16.as_ptr(), SERVICE_QUERY_STATUS);
+        if svc.is_null() {
+            CloseServiceHandle(scm);
+            return false;
+        }
+
+        #[repr(C)]
+        #[allow(non_snake_case)]
+        struct SERVICE_STATUS_PROCESS {
+            dwServiceType: u32,
+            dwCurrentState: u32,
+            dwControlsAccepted: u32,
+            dwWin32ExitCode: u32,
+            dwServiceSpecificExitCode: u32,
+            dwCheckPoint: u32,
+            dwWaitHint: u32,
+            dwProcessId: u32,
+            dwServiceFlags: u32,
+        }
+        extern "system" {
+            fn QueryServiceStatusEx(
+                hService: *mut c_void,
+                InfoLevel: u32,
+                lpBuffer: *mut u8,
+                cbBufSize: u32,
+                pcbBytesNeeded: *mut u32,
+            ) -> i32;
+        }
+
+        let mut ssp: SERVICE_STATUS_PROCESS = std::mem::zeroed();
+        let mut needed = 0u32;
+        let ok = QueryServiceStatusEx(
+            svc,
+            0,
+            &mut ssp as *mut _ as *mut u8,
+            std::mem::size_of::<SERVICE_STATUS_PROCESS>() as u32,
+            &mut needed,
+        );
+        CloseServiceHandle(svc);
+        CloseServiceHandle(scm);
+
+        if ok == 0 || ssp.dwCurrentState != SERVICE_RUNNING {
+            return false;
+        }
+
+        if ssp.dwProcessId == srv_pid {
+            return true;
+        }
+
+        #[repr(C)]
+        #[allow(non_snake_case)]
+        struct PROCESSENTRY32W {
+            dwSize: u32,
+            cntUsage: u32,
+            th32ProcessID: u32,
+            th32DefaultHeapID: usize,
+            th32ModuleID: u32,
+            cntThreads: u32,
+            th32ParentProcessID: u32,
+            pcPriClassBase: i32,
+            dwFlags: u32,
+            szExeFile: [u16; 260],
+        }
+        extern "system" {
+            fn CreateToolhelp32Snapshot(dwFlags: u32, th32ProcessID: u32) -> *mut c_void;
+            fn Process32FirstW(hSnapshot: *mut c_void, lppe: *mut PROCESSENTRY32W) -> i32;
+            fn Process32NextW(hSnapshot: *mut c_void, lppe: *mut PROCESSENTRY32W) -> i32;
+        }
+
+        let snap = CreateToolhelp32Snapshot(0x00000002, 0);
+        if snap.is_null() || snap as isize == -1 {
+            return false;
+        }
+
+        let mut pe: PROCESSENTRY32W = std::mem::zeroed();
+        pe.dwSize = std::mem::size_of::<PROCESSENTRY32W>() as u32;
+
+        let mut matched = false;
+        if Process32FirstW(snap, &mut pe) != 0 {
+            loop {
+                if pe.th32ProcessID == srv_pid {
+                    let exe_name = String::from_utf16_lossy(&pe.szExeFile);
+                    let clean_exe = exe_name.trim_matches('\0').to_lowercase();
+                    if clean_exe.ends_with("winkey_service.exe") && pe.th32ParentProcessID == ssp.dwProcessId {
+                        matched = true;
+                    }
+                    break;
+                }
+                if Process32NextW(snap, &mut pe) == 0 {
+                    break;
+                }
+            }
+        }
+        win32_pipe::CloseHandle(snap);
+        matched
+    }
+}
+
 // REM-027: B.2b Client-Tərəfli Pre-Transfer Server Autentifikasiyası (Fail-Closed)
 pub fn verify_trusted_service_server(h_pipe: *mut c_void) -> Result<u32, String> {
     unsafe {
@@ -146,7 +250,13 @@ pub fn verify_trusted_service_server(h_pipe: *mut c_void) -> Result<u32, String>
         // Open server process handle for limited query
         let h_proc = win32_pipe::OpenProcess(win32_pipe::PROCESS_QUERY_LIMITED_INFORMATION, 0, srv_pid);
         if h_proc.is_null() || h_proc as isize == -1 {
-            return Err(format!("E_CANNOT_OPEN_SERVER_PROCESS: Server prosesi açıla bilmədi (WinError={})", GetLastError()));
+            let err = GetLastError();
+            // If Access Denied (5), the server is running in Session 0 as LocalSystem.
+            // Verify via SCM that WinKeyService is running and matches srv_pid.
+            if err == 5 && verify_scm_service_pid(srv_pid) {
+                return Ok(srv_pid);
+            }
+            return Err(format!("E_CANNOT_OPEN_SERVER_PROCESS: Server prosesi açıla bilmədi (WinError={})", err));
         }
 
         // 1. Check executable image path (must end with winkey_service.exe)
@@ -635,16 +745,11 @@ fn save_credential_dpapi(mut pin: String) -> Result<String, String> {
     // REM-024: Heç bir plaintext credential sızmır!
     // Only the service can confirm a credential usable in its SYSTEM context.
     let ipc_res = store_user_credential_to_service_ipc(&pin);
-    let success = match ipc_res {
-        Ok(ref resp) if resp.contains("Ack") || resp.contains("PIN_STORED") => true,
-        _ => false,
-    };
     pin.zeroize();
-
-    if success {
-        Ok("DPAPI_SUCCESS".to_string())
-    } else {
-        Err("E_SERVICE_PIN_SAVE_FAILED: PIN xidmətə yazılmadı. Xidmətin işlədiyini yoxlayın və yenidən saxlayın.".to_string())
+    match ipc_res {
+        Ok(ref resp) if resp.contains("Ack") || resp.contains("PIN_STORED") => Ok("DPAPI_SUCCESS".to_string()),
+        Ok(resp) => Err(format!("E_SERVICE_PIN_SAVE_FAILED: {}", resp)),
+        Err(e) => Err(format!("E_SERVICE_PIN_SAVE_FAILED: {}", e)),
     }
 }
 
