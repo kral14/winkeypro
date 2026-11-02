@@ -10,7 +10,7 @@ pub fn verified_release_version(data: &serde_json::Value) -> Result<String,Strin
     for (i,b) in signature_bytes.iter_mut().enumerate() {
         *b=u8::from_str_radix(&signature[i*2..i*2+2],16).map_err(|_|"E_UPDATE_SIGNATURE")?;
     }
-    let pin="4c7fa3c7a37b79b840e939741138f0748087ae0f06fa94e728557ec2a558fc54";
+    let pin="56524c1040e3a8309e938332037d0a0167cc2da30761abcfb77c93a899ad61da";
     let mut key=[0u8;32];
     for (i,b) in key.iter_mut().enumerate() {*b=u8::from_str_radix(&pin[i*2..i*2+2],16).map_err(|_|"E_UPDATE_KEY")?;}
     ed25519_dalek::VerifyingKey::from_bytes(&key).map_err(|_|"E_UPDATE_KEY")?
@@ -29,7 +29,7 @@ pub fn version_tuple(version:&str)->Result<Vec<u64>,String> {
 }
 
 pub fn active_desktop(base: &Path) -> Option<PathBuf> {
-    active_desktop_with_key(base, "4c7fa3c7a37b79b840e939741138f0748087ae0f06fa94e728557ec2a558fc54")
+    active_desktop_with_key(base, "56524c1040e3a8309e938332037d0a0167cc2da30761abcfb77c93a899ad61da")
 }
 
 fn active_desktop_with_key(base: &Path, key_hex: &str) -> Option<PathBuf> {

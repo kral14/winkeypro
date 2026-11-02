@@ -71,7 +71,13 @@ FunctionEnd
 !insertmacro MUI_PAGE_FINISH
 
 Function LaunchApp
-    ExecShell "" "$INSTDIR\winkey_desktop.exe"
+    InitPluginsDir
+    File /oname=$PLUGINSDIR\launch_desktop_user.ps1 "..\scripts\launch_desktop_user.ps1"
+    nsExec::ExecToLog '"$WINDIR\Sysnative\WindowsPowerShell\v1.0\powershell.exe" -NoProfile -NonInteractive -STA -ExecutionPolicy Bypass -WindowStyle Hidden -File "$PLUGINSDIR\launch_desktop_user.ps1" -Executable "$INSTDIR\winkey_desktop.exe"'
+    Pop $0
+    ${If} $0 != 0
+        MessageBox MB_ICONEXCLAMATION|MB_OK "WinKey avtomatik acilmadi. Setup-u baglayin ve Start menyusundan WinKey Pro proqramini acin." /SD IDOK
+    ${EndIf}
 FunctionEnd
 
 ; Uninstaller sehifeleri

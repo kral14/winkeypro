@@ -10,7 +10,7 @@ import tempfile
 import zipfile
 from cryptography.hazmat.primitives.asymmetric.ed25519 import Ed25519PublicKey
 
-PINNED_PUBLIC_KEY = bytes.fromhex('4c7fa3c7a37b79b840e939741138f0748087ae0f06fa94e728557ec2a558fc54')
+PINNED_PUBLIC_KEY = bytes.fromhex('56524c1040e3a8309e938332037d0a0167cc2da30761abcfb77c93a899ad61da')
 MAX_PACKAGE = 256 * 1024 * 1024
 
 

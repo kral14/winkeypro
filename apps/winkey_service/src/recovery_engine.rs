@@ -16,7 +16,7 @@ pub const MAX_ALLOWED_CRASH_COUNT: u32 = 3;
 
 // Rəsmi Pinned Release Ed25519 İctimai Açarı (deploy/keys/prod_release_ed25519_pub.hex)
 pub const DEFAULT_PINNED_RELEASE_PUBKEY_HEX: &str =
-    "4c7fa3c7a37b79b840e939741138f0748087ae0f06fa94e728557ec2a558fc54";
+    "56524c1040e3a8309e938332037d0a0167cc2da30761abcfb77c93a899ad61da";
 
 extern "system" {
     fn MoveFileExW(lpExistingFileName: *const u16, lpNewFileName: *const u16, dwFlags: u32) -> i32;
