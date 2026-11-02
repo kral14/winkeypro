@@ -21,6 +21,9 @@ RequestExecutionLevel admin
 !ifndef OUTPUT_FILE
 !define OUTPUT_FILE "..\dist\WinKeySetup.exe"
 !endif
+!ifndef MANIFEST_DIR
+!define MANIFEST_DIR "..\deploy\pre_signed_slot_a"
+!endif
 OutFile "${OUTPUT_FILE}"
 InstallDir "$PROGRAMFILES64\WinKey Pro"
 InstallDirRegKey HKLM "${PRODUCT_DIR_REGKEY}" ""
@@ -141,8 +144,8 @@ Section "MainSection" SEC01
     SetOutPath "$INSTDIR\helper_runtime"
     File /r "..\apps\winkey_service\target\release\helper_runtime\*.*"
     SetOutPath "$INSTDIR"
-    File "..\deploy\pre_signed_slot_a\manifest.json"
-    File "..\deploy\pre_signed_slot_a\manifest.sig"
+    File "${MANIFEST_DIR}\manifest.json"
+    File "${MANIFEST_DIR}\manifest.sig"
     File "..\scripts\service_installer.ps1"
     File "..\scripts\service_uninstaller.ps1"
     File /oname=TELIMAT.md "..\docs\USER_GUIDE.md"

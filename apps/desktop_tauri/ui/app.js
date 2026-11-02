@@ -502,20 +502,23 @@ async function loadUpdateStatus() {
     document.getElementById('lblWorkerVersion').textContent = status.worker_version ? 'v' + status.worker_version : 'Bildirilməyib';
     document.getElementById('lblLatestVersion').textContent = status.latest_version ? 'v' + status.latest_version : 'Məlum deyil';
     const messages = {
-      up_to_date: '✓ Ən son versiya quraşdırılıb.',
+      up_to_date: '✓ Ən son versiya quraşdırılıb və təsdiqlənib.',
       ahead: 'Yerli versiya serverdəki buraxılışdan yenidir; downgrade edilmir.',
       dev: 'Dev build işləyir. Quraşdırılmış versiya kimi müqayisə edilmir və xidmət yenilənməsi başladılmır.',
       service_unknown: 'Proqram versiyası yoxlandı, amma xidmət versiyası təsdiqlənmədi.',
       requested: 'Yeni versiya var. Xidmətə yenilənmə sorğusu göndərildi; əməliyyat bitəndə tətbiq ediləcək.',
       service_unavailable: 'Yeni versiya var, amma xidmət sorğunu qəbul etmədi. Xidmətin vəziyyətini yoxlayın.',
+      setup_required: 'Yeni versiya üçün proqram quraşdırıcısının (Setup.exe) yenilənməsi tələb olunur.',
       no_release: 'Serverdə yenilənmə paketi yayımlanmayıb.',
       unreachable: 'Serverə qoşulmaq alınmadı. Son versiya təsdiqlənmədi.'
     };
     const phases = {
-      PROBATION: 'Yeni xidmət versiyası sağlamlıq yoxlamasındadır; tamamlanması gözlənilir.',
-      STAGING: 'Yeni paket hazırlanır; yenilənmə hələ tamamlanmayıb.',
-      PENDING_ACTIVATION: 'Yeni paket hazırdır; təhlükəsiz keçid gözlənilir.',
-      ROLLED_BACK: 'Xidmət əvvəlki işləyən versiyaya qayıdıb. Yenilənmə loqlarını yoxlayın.'
+      STAGING: 'Yeni paket yüklənir və bütövlüyü yoxlanılır…',
+      PENDING_ACTIVATION: 'Yeni versiya paketi uğurla endirildi və hazırlandı; xidmət təhlükəsiz keçidi gözləyir.',
+      PROBATION: 'Yeni versiya aktivləşdirilib sağlamlıq sınağındadır (təsdiq gözlənilir).',
+      COMMITTED: '✓ Yenilənmə tam təsdiqləndi. Ən son versiya işləyir.',
+      SETUP_REQUIRED: 'Yeni versiya üçün proqram quraşdırıcısının (Setup.exe) yenilənməsi tələb olunur.',
+      ROLLED_BACK: 'Xidmət əvvəlki işləyən versiyaya qayıtdı (Rollback). Yenilənmə loqlarını yoxlayın.'
     };
     message.textContent = phases[status.phase] || messages[status.status] || 'Yenilənmə vəziyyəti məlum deyil.';
   } catch (error) {

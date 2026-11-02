@@ -13,6 +13,21 @@ use sha2::{Digest, Sha256};
 use crate::storage::apply_restricted_file_acl;
 
 pub const MAX_ALLOWED_CRASH_COUNT: u32 = 3;
+pub fn normalize_crlf(bytes: &[u8]) -> Vec<u8> {
+    let mut out = Vec::with_capacity(bytes.len());
+    let mut i = 0;
+    while i < bytes.len() {
+        if bytes[i] == b'\r' && i + 1 < bytes.len() && bytes[i + 1] == b'\n' {
+            out.push(b'\n');
+            i += 2;
+        } else {
+            out.push(bytes[i]);
+            i += 1;
+        }
+    }
+    out
+}
+
 
 // Rəsmi Pinned Release Ed25519 İctimai Açarı (deploy/keys/prod_release_ed25519_pub.hex)
 pub const DEFAULT_PINNED_RELEASE_PUBKEY_HEX: &str =
@@ -91,9 +106,14 @@ fn current_timestamp() -> f64 {
         .unwrap_or(0.0)
 }
 
+pub const HOST_PROTOCOL_VERSION: u64 = 1;
+
 pub fn get_pinned_public_key_bytes() -> Result<[u8; 32], String> {
+    #[cfg(debug_assertions)]
     let hex_str = std::env::var("WINKEY_RELEASE_PUBKEY_HEX")
         .unwrap_or_else(|_| DEFAULT_PINNED_RELEASE_PUBKEY_HEX.to_string());
+    #[cfg(not(debug_assertions))]
+    let hex_str = DEFAULT_PINNED_RELEASE_PUBKEY_HEX.to_string();
     let hex_clean = hex_str.trim();
     if hex_clean.len() != 64 {
         return Err(format!("Etibarsız public key hex uzunluğu: {}", hex_clean.len()));
@@ -212,7 +232,12 @@ pub fn validate_slot(slot_dir: &Path, expected_pubkey: Option<&[u8; 32]>) -> Slo
     };
 
     let signature = Signature::from_bytes(&sig_64);
-    if let Err(e) = verifying_key.verify(&manifest_bytes, &signature) {
+    let mut verify_res = verifying_key.verify(&manifest_bytes, &signature);
+    if verify_res.is_err() && manifest_bytes.windows(2).any(|w| w == b"\r\n") {
+        let normalized = normalize_crlf(&manifest_bytes);
+        verify_res = verifying_key.verify(&normalized, &signature);
+    }
+    if let Err(e) = verify_res {
         return SlotValidationResult {
             is_valid: false,
             version: None,
@@ -713,6 +738,118 @@ pub fn compare_semver(v1: &str, v2: &str) -> std::cmp::Ordering {
 }
 
 /// Native Auto-Update Staging Pipeline (Downgrade qoruması, Karantin və Interrupted Download müdafiəsi ilə)
+
+pub fn normalize_path_for_compare(p: &Path) -> String {
+    let s = p.to_string_lossy().replace('/', "\\").to_lowercase();
+    if let Some(stripped) = s.strip_prefix("\\\\?\\unc\\") {
+        format!("\\\\{}", stripped)
+    } else if let Some(stripped) = s.strip_prefix("\\\\?\\") {
+        stripped.to_string()
+    } else {
+        s
+    }
+}
+
+pub fn clean_lingering_slot_processes(
+    target_dir: &Path,
+    active_slot: Option<&str>,
+    lkg_slot: Option<&str>,
+) -> Result<(), String> {
+    #[cfg(windows)]
+    {
+        use std::os::windows::fs::MetadataExt;
+        if let Ok(meta) = fs::symlink_metadata(target_dir) {
+            const FILE_ATTRIBUTE_REPARSE_POINT: u32 = 0x400;
+            if meta.file_attributes() & FILE_ATTRIBUTE_REPARSE_POINT != 0 {
+                return Err("E_TARGET_DIR_IS_REPARSE_POINT_PROHIBITED: Reparse point və ya qovluq keçidi qadağandır".to_string());
+            }
+        }
+    }
+
+    let canonical = match fs::canonicalize(target_dir) {
+        Ok(p) => p,
+        Err(_) => target_dir.to_path_buf(),
+    };
+    let norm_target = normalize_path_for_compare(&canonical);
+    let trimmed = norm_target.trim_end_matches('\\');
+    if trimmed.is_empty() || trimmed.len() <= 3 || trimmed.ends_with(':') {
+        return Err("E_TARGET_DIR_IS_ROOT_PROHIBITED: Kök qovluğu təmizləmək qadağandır".to_string());
+    }
+    if trimmed.contains("\\windows") || trimmed.contains("\\system32") {
+        return Err("E_TARGET_DIR_IS_SYSTEM_PROHIBITED: Sistem qovluğunu təmizləmək qadağandır".to_string());
+    }
+
+    if let Some(act) = active_slot {
+        let norm_act = normalize_path_for_compare(Path::new(act));
+        if trimmed.ends_with(&format!("\\{}", act)) || trimmed == act || trimmed == norm_act {
+            return Err(format!("E_CANNOT_TOUCH_ACTIVE_SLOT: Aktiv slot ({}) dayandırıla və ya dəyişdirilə bilməz", act));
+        }
+    }
+    if let Some(lkg) = lkg_slot {
+        let norm_lkg = normalize_path_for_compare(Path::new(lkg));
+        if trimmed.ends_with(&format!("\\{}", lkg)) || trimmed == lkg || trimmed == norm_lkg {
+            return Err(format!("E_CANNOT_TOUCH_LKG_SLOT: LKG slotu ({}) dayandırıla və ya dəyişdirilə bilməz", lkg));
+        }
+    }
+
+    #[cfg(windows)]
+    unsafe {
+        use windows_sys::Win32::System::Diagnostics::ToolHelp::{
+            CreateToolhelp32Snapshot, Process32FirstW, Process32NextW, PROCESSENTRY32W, TH32CS_SNAPPROCESS,
+        };
+        use windows_sys::Win32::System::Threading::{OpenProcess, PROCESS_QUERY_LIMITED_INFORMATION};
+        use windows_sys::Win32::Foundation::CloseHandle;
+
+        let target_prefix = format!("{}\\", trimmed);
+
+        let snapshot = CreateToolhelp32Snapshot(TH32CS_SNAPPROCESS, 0);
+        if snapshot == windows_sys::Win32::Foundation::INVALID_HANDLE_VALUE {
+            return Err("E_CREATE_PROCESS_SNAPSHOT_FAILED".to_string());
+        }
+
+        let mut entry: PROCESSENTRY32W = std::mem::zeroed();
+        entry.dwSize = std::mem::size_of::<PROCESSENTRY32W>() as u32;
+
+        let mut has_next = Process32FirstW(snapshot, &mut entry);
+        let current_pid = std::process::id();
+
+        while has_next != 0 {
+            if entry.th32ProcessID != current_pid && entry.th32ProcessID != 0 {
+                let h_proc = OpenProcess(PROCESS_QUERY_LIMITED_INFORMATION, 0, entry.th32ProcessID);
+                if !h_proc.is_null() {
+                    let mut path_buf = [0u16; 1024];
+                    let mut size = 1024u32;
+                    if windows_sys::Win32::System::Threading::QueryFullProcessImageNameW(
+                        h_proc,
+                        0,
+                        path_buf.as_mut_ptr(),
+                        &mut size,
+                    ) != 0 {
+                        let raw_path = String::from_utf16_lossy(&path_buf[..size as usize]);
+                        let norm_proc = normalize_path_for_compare(Path::new(&raw_path));
+
+                        if norm_proc.starts_with(&target_prefix) {
+                            let bin_name = Path::new(&norm_proc)
+                                .file_name()
+                                .map(|s| s.to_string_lossy().to_string())
+                                .unwrap_or_default();
+
+                            eprintln!("[SLOT_IN_USE] Hədəf slotda işləyən proses aşkarlandı: PID={} binar={} yol={}", entry.th32ProcessID, bin_name, norm_proc);
+                            CloseHandle(h_proc);
+                            CloseHandle(snapshot);
+                            return Err(format!("E_TARGET_SLOT_IN_USE: Inaktiv slotda işləyən proses var (PID={} binar={}), yeniləmə təxirə salınır", entry.th32ProcessID, bin_name));
+                        }
+                    }
+                    CloseHandle(h_proc);
+                }
+            }
+            has_next = Process32NextW(snapshot, &mut entry);
+        }
+        CloseHandle(snapshot);
+    }
+    Ok(())
+}
+
 pub fn stage_native_update_bundle(
     base_dir: &Path,
     manifest_bytes: &[u8],
@@ -737,7 +874,12 @@ pub fn stage_native_update_bundle(
         return Err("E_INVALID_SIG_LEN".to_string());
     }
     let sig = Signature::from_bytes(&sig_64);
-    if let Err(e) = ver_key.verify(manifest_bytes, &sig) {
+    let mut verify_res = ver_key.verify(manifest_bytes, &sig);
+    if verify_res.is_err() && manifest_bytes.windows(2).any(|w| w == b"\r\n") {
+        let normalized = normalize_crlf(manifest_bytes);
+        verify_res = ver_key.verify(&normalized, &sig);
+    }
+    if let Err(e) = verify_res {
         return Err(format!("E_INVALID_SIGNATURE: {}", e));
     }
 
@@ -748,8 +890,17 @@ pub fn stage_native_update_bundle(
 
     let candidate_ver = manifest.version.clone();
 
-    // 2. Jurnal Oxunuşu və Karantin / Downgrade Yoxlanışı
+    // 2. Jurnal Oxunuşu və Karantin / Downgrade / LKG Qorunması Yoxlanışı
     let (mut journal, _) = read_or_recover_journal(base_dir, Some(&pubkey));
+
+    // LKG Qorunması: PROBATION, STAGING və ya PENDING_ACTIVATION vəziyyətində təkrar staging qadağandır!
+    // Bu vəziyyətlərdə inaktiv slotda cari LKG nüsxəsi yerləşir; onu silmək rollback təhlükəsizliyini məhv edir.
+    if journal.state == "PROBATION" || journal.state == "STAGING" || journal.state == "PENDING_ACTIVATION" {
+        return Err(format!(
+            "E_UPDATE_IN_PROGRESS: Cari yenilənmə hələ təsdiqlənməyib (vəziyyət: {}). LKG qorunması üçün yeni staging bloklandı.",
+            journal.state
+        ));
+    }
 
     if journal.quarantined_versions.contains(&candidate_ver) {
         return Err(format!("E_VERSION_QUARANTINED: Versiya {} karantindədir", candidate_ver));
@@ -770,8 +921,39 @@ pub fn stage_native_update_bundle(
     let versions_dir = base_dir.join("versions");
     let target_dir = versions_dir.join(target_slot);
 
-    // Əgər qovluq varsa əvvəlcə təmizlənir
-    let _ = fs::remove_dir_all(&target_dir);
+    // Host protokol versiyası yoxlanışı (min_host_protocol_version)
+    if let Ok(manifest_val) = serde_json::from_slice::<serde_json::Value>(manifest_bytes) {
+        if let Some(min_proto_val) = manifest_val.get("min_host_protocol_version") {
+            let min_proto = match min_proto_val.as_u64() {
+                Some(p) => p,
+                None => {
+                    return Err("E_INVALID_PROTOCOL_VERSION_TYPE: min_host_protocol_version müsbət tam ədəd olmalıdır".to_string());
+                }
+            };
+            if min_proto > HOST_PROTOCOL_VERSION {
+                journal.state = "SETUP_REQUIRED".to_string();
+                let _ = save_journal_atomic(base_dir, &journal);
+                return Err(format!(
+                    "E_HOST_UPGRADE_REQUIRED: Bu versiya minimum host protokol v{} tələb edir (cari: {}). Quraşdırıcı (Setup.exe) ilə yeniləyin.",
+                    min_proto, HOST_PROTOCOL_VERSION
+                ));
+            }
+        }
+    }
+
+    // Əgər əvvəlki ardıcıl yenilənmədən qalan proseslər varsa dayandırılır
+    clean_lingering_slot_processes(&target_dir, Some(&journal.current_slot), Some(&journal.last_known_good_slot))?;
+    let mut cleared = false;
+    for _ in 0..3 {
+        if !target_dir.exists() || fs::remove_dir_all(&target_dir).is_ok() {
+            cleared = true;
+            break;
+        }
+        std::thread::sleep(std::time::Duration::from_millis(150));
+    }
+    if !cleared && target_dir.exists() {
+        return Err(format!("E_TARGET_SLOT_LOCKED: Hədəf slot ({}) faylları kilidlidir, təmizlənə bilmədi", target_slot));
+    }
     if let Err(e) = fs::create_dir_all(&target_dir) {
         return Err(format!("E_CREATE_TARGET_DIR_FAILED: {}", e));
     }
@@ -1001,6 +1183,71 @@ mod tests {
         assert!(!res.is_valid);
         let err = res.error.unwrap();
         assert!(err.contains("SHA-256 hash uyğunsuzluğu") || err.contains("Ölçü uyğunsuzluğu"));
+    }
+
+    #[test]
+    fn test_stage_blocked_during_probation_preserves_lkg() {
+        let (signer, pubkey) = generate_test_keypair();
+        let temp_dir = TempTestDir::new("probation_lkg_guard");
+        let versions = temp_dir.path.join("versions");
+        let slot_a = versions.join("slot_a");
+        let slot_b = versions.join("slot_b");
+
+        // LKG slot_a v1.0.0
+        create_signed_test_slot(&slot_a, "1.0.0", b"lkg_stable_service_payload", true, &signer);
+        let lkg_bytes_before = fs::read(slot_a.join("winkey_service.exe")).unwrap();
+        let mut hasher_before = Sha256::new();
+        hasher_before.update(&lkg_bytes_before);
+        let lkg_sha_before = format!("{:x}", hasher_before.finalize());
+
+        // Namizəd slot_b v1.1.0 probation vəziyyətindədir
+        create_signed_test_slot(&slot_b, "1.1.0", b"candidate_probation_payload", true, &signer);
+        let journal = UpdateJournal {
+            schema_version: 1,
+            current_slot: "slot_b".to_string(),
+            last_known_good_slot: "slot_a".to_string(),
+            state: "PROBATION".to_string(),
+            active_version: Some("1.0.0".to_string()),
+            candidate_version: Some("1.1.0".to_string()),
+            quarantined_versions: vec![],
+            crash_count: 0,
+            last_checkpoint: Some("PROBATION".to_string()),
+            last_update_ts: 123456.0,
+        };
+        save_journal_atomic(&temp_dir.path, &journal).unwrap();
+
+        // Növbəti v1.2.0 yenilənməsini staging etməyə cəhd edirik
+        
+        let dummy_manifest = SlotManifest {
+            version: "1.2.0".to_string(),
+            timestamp: 123456789.0,
+            files: vec![ManifestFileEntry {
+                path: "winkey_service.exe".to_string(),
+                sha256: "0000000000000000000000000000000000000000000000000000000000000000".to_string(),
+                size: 10,
+            }],
+        };
+        let m_bytes = serde_json::to_vec_pretty(&dummy_manifest).unwrap();
+        let sig = signer.sign(&m_bytes);
+
+        let res = stage_native_update_bundle(
+            &temp_dir.path,
+            &m_bytes,
+            &sig.to_bytes(),
+            &[("winkey_service.exe".to_string(), b"MZ_payload".to_vec())],
+            Some(&pubkey),
+        );
+
+        assert!(res.is_err(), "PROBATION zamanı staging bloklanmalıdır");
+        let err = res.err().unwrap();
+        assert!(err.contains("E_UPDATE_IN_PROGRESS"), "Gözlənilməyən xəta: {}", err);
+
+        // LKG slot_a faylının toxunulmaz qaldığını təsdiqləyirik
+        let lkg_bytes_after = fs::read(slot_a.join("winkey_service.exe")).unwrap();
+        let mut hasher_after = Sha256::new();
+        hasher_after.update(&lkg_bytes_after);
+        let lkg_sha_after = format!("{:x}", hasher_after.finalize());
+        assert_eq!(lkg_sha_before, lkg_sha_after, "LKG hash-i toxunulmaz qalmalıdır!");
     }
 
     #[test]

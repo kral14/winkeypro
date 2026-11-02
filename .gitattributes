@@ -1,0 +1,7 @@
+# WinKey Pro Kriptoqrafik Fayllar v? İmzalar
+# Manifest v? imzalar byte-by-byte eyni qalmaldr, CRLF evrilm?si qadaandr
+*manifest.json text eol=lf
+*.sig binary
+*.bin binary
+*.hex text eol=lf
+

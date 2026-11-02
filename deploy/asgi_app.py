@@ -31,10 +31,20 @@ from deploy.websocket_hub import (
     MAX_FRAME_BYTES
 )
 
+def is_newer_semver(candidate_ver: str, active_ver: str) -> bool:
+    try:
+        def parse(v):
+            return tuple(int(re.match(r'^\d+', part).group(0)) if re.match(r'^\d+', part) else 0 for part in str(v).split('.'))
+        return parse(candidate_ver) > parse(active_ver)
+    except Exception:
+        return True
+
 def build_asgi_app(service: GatewayService, dashboard_html_path: Optional[str] = None) -> Starlette:
     from deploy.update_repository import UpdateRepository, MAX_PACKAGE
     repository = UpdateRepository()
     publication_lock = asyncio.Lock()
+
+
 
     async def broadcast_release(release):
         if not release:
@@ -43,6 +53,9 @@ def build_asgi_app(service: GatewayService, dashboard_html_path: Optional[str] =
         for connections in list(hub._agents.values()):
             for connection in list(connections):
                 if connection.is_active:
+                    agent_ver = connection.metadata.get('version')
+                    if agent_ver and not is_newer_semver(release['version'], agent_ver):
+                        continue
                     connection.enqueue(payload)
 
     async def handle_update_latest(request):
@@ -564,7 +577,8 @@ def build_asgi_app(service: GatewayService, dashboard_html_path: Optional[str] =
                     await ws.close(code=4401, reason="UNAUTHORIZED_AGENT")
                     return
 
-                client_conn = ClientConnection(ws, "agent", device_id, {"device_id": device_id, "device_secret": token})
+                agent_ver = str(auth_data.get("version", "")).strip() or None
+                client_conn = ClientConnection(ws, "agent", device_id, {"device_id": device_id, "device_secret": token, "version": agent_ver})
                 await hub.register_agent(client_conn)
 
                 # Auth uğurlu oldu cavabı
@@ -576,7 +590,11 @@ def build_asgi_app(service: GatewayService, dashboard_html_path: Optional[str] =
                 }))
                 release = await asyncio.to_thread(repository.current)
                 if release:
-                    client_conn.enqueue({'type':'update_available','version':release['version'],'release_id':release['release_id']})
+                    should_send = True
+                    if agent_ver:
+                        should_send = is_newer_semver(release['version'], agent_ver)
+                    if should_send:
+                        client_conn.enqueue({'type':'update_available','version':release['version'],'release_id':release['release_id']})
 
                 # Mövcud gözləyən əmr varsa, atomik DB claim ilə agentə çatdırılır (R2-01)
                 claim_owner = f"ws:{device_id}:{secrets.token_hex(4)}"
@@ -716,6 +734,8 @@ def build_asgi_app(service: GatewayService, dashboard_html_path: Optional[str] =
                         worker_version = msg.get('worker_version')
                         if not isinstance(worker_version,str) or not re.fullmatch(r'\d+\.\d+\.\d+',worker_version):
                             worker_version = None
+                        else:
+                            client_conn.metadata['version'] = worker_version
 
                         def _update_state():
                             with service.db.get_conn() as conn:

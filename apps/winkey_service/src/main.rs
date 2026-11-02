@@ -1,6 +1,8 @@
 // WinKey Pro — Windows Service, SCM Dispatcher & Secure IPC Engine
 #![allow(unsafe_op_in_unsafe_fn, unused_imports, dead_code)]
 
+pub use recovery_engine::HOST_PROTOCOL_VERSION;
+
 mod embedded_gateway;
 mod ipc_engine;
 mod lock_engine;
@@ -767,6 +769,33 @@ fn check_and_apply_native_gateway_update(origin: &str, data_dir: &std::path::Pat
     let version = verified.get("version").and_then(|v| v.as_str()).ok_or("E_RELEASE_VERSION")?;
     let journal = fs::read(data_dir.join("update_journal.json")).ok()
         .and_then(|v| serde_json::from_slice::<serde_json::Value>(&v).ok());
+
+    if let Some(state) = journal.as_ref().and_then(|j| j.get("state")).and_then(|v| v.as_str()) {
+        if state == "PROBATION" || state == "STAGING" || state == "PENDING_ACTIVATION" {
+            diagnostics::stage(data_dir, "UPDATE_DEFERRED", &format!("state={}", state));
+            return Err(format!("E_UPDATE_IN_PROGRESS: Cari yenilənmə hələ təsdiqlənməyib (vəziyyət: {}).", state));
+        }
+    }
+
+    if let Some(proto_val) = verified.get("min_host_protocol_version") {
+        let min_proto = match proto_val.as_u64() {
+            Some(p) => p,
+            None => {
+                diagnostics::stage(data_dir, "UPDATE_REJECTED", "E_INVALID_PROTOCOL_VERSION_TYPE");
+                return Err("E_INVALID_PROTOCOL_VERSION_TYPE: min_host_protocol_version müsbət tam ədəd olmalıdır".to_string());
+            }
+        };
+        if min_proto > HOST_PROTOCOL_VERSION {
+            let err = format!("E_HOST_UPGRADE_REQUIRED: Yeni buraxılış üçün proqram quraşdırıcısının (WinKeySetup.exe) yenilənməsi tələb olunur (tələb: {}, cari: {})", min_proto, HOST_PROTOCOL_VERSION);
+            diagnostics::stage(data_dir, "UPDATE_REJECTED", "E_HOST_UPGRADE_REQUIRED");
+            let (mut j, _) = recovery_engine::read_or_recover_journal(data_dir, None);
+            {
+                j.state = "SETUP_REQUIRED".to_string();
+                let _ = recovery_engine::save_journal_atomic(data_dir, &j);
+            }
+            return Err(err);
+        }
+    }
     if let Some(active) = journal.as_ref().and_then(|j| j.get("active_version")).and_then(|v| v.as_str()) {
         if recovery_engine::compare_semver(version,active) != std::cmp::Ordering::Greater {
             return Err("E_NO_NEWER_RELEASE".into());
@@ -775,7 +804,10 @@ fn check_and_apply_native_gateway_update(origin: &str, data_dir: &std::path::Pat
     if files_arr.len() > 4096 || files_arr.iter().try_fold(0u64, |sum,f| sum.checked_add(f.get("size")?.as_u64()?)).unwrap_or(u64::MAX) > 256*1024*1024 {
         return Err("E_RELEASE_LIMIT".into());
     }
+    let rel_id = format!("rel_{}", version);
+    let active_ver = journal.as_ref().and_then(|j| j.get("active_version")).and_then(|v| v.as_str()).unwrap_or("none");
     let mut payload_files = Vec::new();
+    let t_dl = Instant::now();
 
     for f_entry in files_arr {
         let fname = f_entry.get("path").and_then(|v| v.as_str()).ok_or("E_MISSING_FILE_PATH")?;
@@ -796,7 +828,23 @@ fn check_and_apply_native_gateway_update(origin: &str, data_dir: &std::path::Pat
         payload_files.push((fname.to_string(), content));
     }
 
-    recovery_engine::stage_native_update_bundle(data_dir, &manifest_bytes, &sig_bytes, &payload_files, None)
+    let dl_dur = t_dl.elapsed().as_millis() as u64;
+    diagnostics::stage(data_dir, "UPDATE_DOWNLOAD_DONE", &format!("rel_id={} prev_ver={} new_ver={} dur_ms={}", rel_id, active_ver, version, dl_dur));
+
+    let t_stage = Instant::now();
+    let res = recovery_engine::stage_native_update_bundle(data_dir, &manifest_bytes, &sig_bytes, &payload_files, None);
+    let stage_dur = t_stage.elapsed().as_millis() as u64;
+    if res.is_ok() {
+        diagnostics::stage(data_dir, "UPDATE_STAGE_DONE", &format!("rel_id={} prev_ver={} new_ver={} dur_ms={}", rel_id, active_ver, version, stage_dur));
+    } else if let Err(ref e) = res {
+        if e.starts_with("E_TARGET_SLOT_IN_USE") || e.starts_with("E_TARGET_SLOT_LOCKED") {
+            diagnostics::stage(data_dir, "UPDATE_DEFERRED", &format!("rel_id={} prev_ver={} new_ver={} reason={}", rel_id, active_ver, version, e));
+            eprintln!("[HOST_UPDATE_DEFERRED] Hədəf slot istifadədədir və ya kilidlidir, yeniləmə sonrakı dövrə təxirə salındı: {}", e);
+        } else {
+            diagnostics::stage(data_dir, "UPDATE_STAGE_FAILED", &format!("rel_id={} prev_ver={} new_ver={} err={}", rel_id, active_ver, version, e));
+        }
+    }
+    res
 }
 
 fn run_gateway_poller_loop(stop_signal: Arc<AtomicBool>, is_mock: bool, data_dir: PathBuf) {
@@ -1005,8 +1053,13 @@ fn run_host_lifecycle(data_dir: PathBuf, is_scm: bool, timeout_sec: Option<u64>)
                             println!("[HOST_UPDATE_DEFERRED] Cari emeliyyat bitdikden sonra yeniden yoxlanacaq");
                             continue;
                         }
+                        let t_act = Instant::now();
                         match recovery_engine::activate_pending_update(&data_dir, None) {
                             Ok((j, new_slot)) => {
+                                let act_dur = t_act.elapsed().as_millis() as u64;
+                                let cand_v = j.candidate_version.as_deref().unwrap_or("unknown");
+                                let rel_id = format!("rel_{}", cand_v);
+                                diagnostics::stage(&data_dir, "UPDATE_ACTIVATE_DONE", &format!("rel_id={} slot={} ver={} dur_ms={}", rel_id, new_slot, cand_v, act_dur));
                                 println!("[HOST_AUTO_UPDATE_ACTIVATED] Yeni slot aktivləşdirildi: {} (ver={:?}). Köhnə worker dayandırılır...", new_slot, j.candidate_version);
                                 let old_pid = active_child.as_ref().map(|c| c.id());
                                 let _ = send_control_command_to_worker(old_pid, "STOP");
@@ -1116,12 +1169,17 @@ fn run_host_lifecycle(data_dir: PathBuf, is_scm: bool, timeout_sec: Option<u64>)
 
             if !switched_to_lkg {
                 println!("[HOST_RECOVERY_TRIGGER] Qəza aşkarlandı. Rollback və LKG bərpası qiymətləndirilir...");
+                let t_roll = Instant::now();
                 match recovery_engine::record_candidate_crash_and_rollback(
                     &data_dir,
                     None,
                     "Namizəd slot worker prosesi sınaq müddətində qəzaya uğradı",
                 ) {
                     Ok((rec_journal, rec_action)) => {
+                        let roll_dur = t_roll.elapsed().as_millis() as u64;
+                        let q_ver = rec_journal.quarantined_versions.last().map(|s| s.as_str()).unwrap_or("unknown");
+                        let rel_id = format!("rel_{}", q_ver);
+                        diagnostics::stage(&data_dir, "UPDATE_ROLLBACK_DONE", &format!("rel_id={} restored_slot={} dur_ms={}", rel_id, rec_journal.current_slot, roll_dur));
                         println!("[HOST_RECOVERY_RESULT] Nəticə: {:?}, LKG slot: {}", rec_action, rec_journal.last_known_good_slot);
                         let lkg_slot = rec_journal.last_known_good_slot.clone();
                         let lkg_bin = recovery_engine::get_slot_executable_path(&data_dir, &lkg_slot);
@@ -1165,12 +1223,20 @@ fn run_host_lifecycle(data_dir: PathBuf, is_scm: bool, timeout_sec: Option<u64>)
                     // YALNIZ child canlı olduqda VƏ actual health probe təsdiqləndikdə commit edilir!
                     let child_pid = active_child.as_ref().map(|c| c.id());
                     if probe_worker_health(child_pid) {
+                        let t_commit = Instant::now();
                         match recovery_engine::mark_boot_healthy(&data_dir, None) {
                             Ok(new_j) => {
                                 committed = true;
+                                let commit_dur = t_commit.elapsed().as_millis() as u64;
+                                let prob_dur = start_instant.elapsed().as_millis() as u64;
+                                let act_v = new_j.active_version.as_deref().unwrap_or("unknown");
+                                let rel_id = format!("rel_{}", act_v);
+                                diagnostics::stage(&data_dir, "UPDATE_PROBATION_PASSED", &format!("rel_id={} ver={} dur_ms={}", rel_id, act_v, prob_dur));
+                                diagnostics::stage(&data_dir, "UPDATE_COMMIT_DONE", &format!("rel_id={} slot={} ver={} dur_ms={}", rel_id, new_j.last_known_good_slot, act_v, commit_dur));
                                 println!("[HOST_PROBATION_PASSED] 5 saniyəlik child probation və actual health check təsdiqləndi. LKG commit edildi: slot={}", new_j.last_known_good_slot);
                             }
                             Err(e) => {
+                                diagnostics::stage(&data_dir, "UPDATE_COMMIT_FAILED", &format!("err={}", e));
                                 eprintln!("[HOST_COMMIT_ERR] mark_boot_healthy xətası: {}", e);
                             }
                         }
@@ -1325,6 +1391,39 @@ fn main() {
         }
     }
 
+        if let Some(pos) = args.iter().position(|a| a == "--clean-slot") {
+        if let Some(target) = args.get(pos + 1) {
+            match recovery_engine::clean_lingering_slot_processes(&PathBuf::from(target), None, None) {
+                Ok(()) => {
+                    println!("PASS_SLOT_CLEANED");
+                    println!("PASS_SLOT_IDLE");
+                    std::process::exit(0);
+                }
+                Err(e) => {
+                    eprintln!("FAIL_SLOT_CLEAN: {}", e);
+                    std::process::exit(1);
+                }
+            }
+        }
+    }
+
+    if args.iter().any(|a| a == "--record-crash") {
+        let data_dir = if let Some(pos) = args.iter().position(|a| a == "--data-dir") {
+            args.get(pos + 1).map(PathBuf::from).unwrap_or_else(get_app_data_dir)
+        } else {
+            get_app_data_dir()
+        };
+        match recovery_engine::record_candidate_crash_and_rollback(&data_dir, None, "Sınaq qəzası təqlidi") {
+            Ok((j, _action)) => {
+                println!("PASS_CRASH_RECORDED: to_slot={} state={}", j.current_slot, j.state);
+                std::process::exit(0);
+            }
+            Err(e) => {
+                eprintln!("FAIL_CRASH_RECORD: {}", e);
+                std::process::exit(1);
+            }
+        }
+    }
     if args.iter().any(|a| a == "--mark-healthy") {
         let data_dir = if let Some(pos) = args.iter().position(|a| a == "--data-dir") {
             args.get(pos + 1).map(PathBuf::from).unwrap_or_else(get_app_data_dir)

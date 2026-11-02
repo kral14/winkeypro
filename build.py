@@ -112,6 +112,343 @@ def run_cmd(cmd, desc):
             raise RuntimeError(f'{desc}: exit={code}. Loq: {BUILD_LOG}. Fayl kilidlidirsə həmin build exe-sini bağlayın; quraşdırılmış xidmətə toxunulmur.')
     print(f"✓ {desc} uğurla tamamlandı.")
 
+
+STAGING_PRE_SIGNED_DIR = Path(ROOT_DIR, "build", "staging_pre_signed_slot_a")
+
+def sync_project_metadata(version: str) -> dict:
+    backups = {}
+    targets = [
+        Path(SERVICE_CARGO),
+        Path(SERVICE_CARGO).parent / 'Cargo.lock',
+        Path(DESKTOP_CARGO),
+        Path(DESKTOP_CARGO).parent / 'Cargo.lock',
+        Path(ROOT_DIR, 'apps', 'desktop_tauri', 'src-tauri', 'tauri.conf.json'),
+        Path(ROOT_DIR, 'Cargo.lock'),
+    ]
+    try:
+        for p in targets:
+            if p.is_file():
+                backups[p] = p.read_bytes()
+
+        svc_cargo = Path(SERVICE_CARGO)
+        if svc_cargo.is_file():
+            text = backups[svc_cargo].decode('utf-8')
+            new_text = re.sub(r'(?m)^version\s*=\s*"[^"]+"', f'version = "{version}"', text, count=1)
+            svc_cargo.write_bytes(new_text.replace('\r\n', '\n').encode('utf-8'))
+
+        dsk_cargo = Path(DESKTOP_CARGO)
+        if dsk_cargo.is_file():
+            text = backups[dsk_cargo].decode('utf-8')
+            new_text = re.sub(r'(?m)^version\s*=\s*"[^"]+"', f'version = "{version}"', text, count=1)
+            dsk_cargo.write_bytes(new_text.replace('\r\n', '\n').encode('utf-8'))
+
+        tauri_conf = Path(ROOT_DIR, 'apps', 'desktop_tauri', 'src-tauri', 'tauri.conf.json')
+        if tauri_conf.is_file():
+            text = backups[tauri_conf].decode('utf-8')
+            data = json.loads(text)
+            data['version'] = version
+            tauri_conf.write_text(json.dumps(data, indent=2), encoding='utf-8')
+    except Exception as e:
+        restore_project_metadata(backups)
+        raise RuntimeError(f"E_METADATA_SYNC_FAILED: {e}") from e
+    return backups
+
+def restore_project_metadata(backups: dict):
+    restore_errors = []
+    for path, content in backups.items():
+        try:
+            path.write_bytes(content)
+            current = path.read_bytes()
+            if current != content:
+                restore_errors.append(f"{path}: restore verification failed (bytes mismatch)")
+        except Exception as ex:
+            restore_errors.append(f"{path}: {ex}")
+    if restore_errors:
+        raise RuntimeError("E_METADATA_RESTORE_FAILED: " + "; ".join(restore_errors))
+
+RUNTIME_PINNED_PUBKEY_HEX = "56524c1040e3a8309e938332037d0a0167cc2da30761abcfb77c93a899ad61da"
+
+OFFICIAL_RELEASE_PUBKEYS = [
+    # Server (deploy/update_repository.py), Service (recovery_engine.rs) və Desktop (slot_update.rs) rəsmi public key
+    RUNTIME_PINNED_PUBKEY_HEX,
+    # Build sistemi və deploy/keys/prod_release_ed25519_pub.hex yerli imzalama public key
+    "4c7fa3c7a37b79b840e939741138f0748087ae0f06fa94e728557ec2a558fc54"
+]
+
+def check_signing_key_consistency():
+    """
+    Kriptoqrafik təhlükəsizlik yoxlanışı:
+    Build sisteminin imzalama açarı ilə runtime komponentlərində (Service, Desktop, Server)
+    pinned olan ictimai açar mütləq eyni olmalıdır.
+    Fərqlilik olarsa, build warning vermir, dərhal dayandırılır (fail-closed).
+    """
+    # Test environment must never change the trust anchor of a production build.
+    expected = RUNTIME_PINNED_PUBKEY_HEX.lower()
+
+    if not os.path.exists(PROD_KEY_PATH):
+        raise RuntimeError(f"E_KEY_MISSING: İmzalama açarı tapılmadı: {PROD_KEY_PATH}")
+
+    from cryptography.hazmat.primitives.asymmetric import ed25519
+    from cryptography.hazmat.primitives import serialization
+    with open(PROD_KEY_PATH, "rb") as f:
+        priv_bytes = f.read()
+    if len(priv_bytes) != 32:
+        raise RuntimeError("E_KEY_INVALID_LENGTH: İmzalama açarı 32 bayt olmalıdır.")
+
+    priv = ed25519.Ed25519PrivateKey.from_private_bytes(priv_bytes)
+    actual_pub = priv.public_key().public_bytes(
+        serialization.Encoding.Raw, serialization.PublicFormat.Raw
+    ).hex().lower()
+
+    # Hex faylı ilə yoxlanış
+    pub_file = Path(ROOT_DIR) / 'deploy' / 'keys' / 'prod_release_ed25519_pub.hex'
+    if pub_file.is_file():
+        file_pub = pub_file.read_text(encoding='ascii').strip().lower()
+        if actual_pub != file_pub:
+            raise RuntimeError(
+                f"E_KEY_MISMATCH: Yerli private key ({actual_pub[:16]}...) "
+                f"prod_release_ed25519_pub.hex ({file_pub[:16]}...) ilə uyğun deyil!"
+            )
+
+    # Runtime pinned açarla yoxlanış
+    if actual_pub != expected:
+        raise RuntimeError(
+            f"E_KEY_MISMATCH: Yerli imzalama açarı ({actual_pub[:16]}...) "
+            f"runtime pinned ictimai açarla ({expected[:16]}...) uyğun deyil! "
+            f"Paket buraxılışı dayandırıldı (xidmət və desktop tərəfindən rədd ediləcək paket hazırlana bilməz)."
+        )
+    return actual_pub
+
+def is_pre_signed_dir_or_recovery(dir_path: Path) -> bool:
+    try:
+        resolved = Path(dir_path).resolve()
+        for base in [Path(PRE_SIGNED_DIR).resolve(), Path(STAGING_PRE_SIGNED_DIR).resolve()]:
+            if resolved == base or resolved == base.parent / (base.name + ".candidate") or resolved == base.parent / (base.name + ".backup"):
+                return True
+    except Exception:
+        pass
+    return False
+
+def get_candidate_public_keys(pub_key_hex: str = None) -> list:
+    # Açıq test injection arqumenti verildikdə yalnız həmin test açarı yoxlanılır
+    if pub_key_hex:
+        return [bytes.fromhex(pub_key_hex.strip())]
+
+    # Açıq test injection mühiti (unit test izolyasiyası üçün)
+    test_env_key = os.environ.get("WINKEY_RELEASE_PUBKEY_HEX")
+    if test_env_key:
+        return [bytes.fromhex(test_env_key.strip())]
+
+    # Production doğrulaması: yalnız rəsmi təsdiqlənmiş etibar lövbəri (trust anchor)
+    keys = [bytes.fromhex(RUNTIME_PINNED_PUBKEY_HEX)]
+    pub_file = Path(ROOT_DIR) / 'deploy' / 'keys' / 'prod_release_ed25519_pub.hex'
+    if pub_file.is_file():
+        try:
+            kh = bytes.fromhex(pub_file.read_text(encoding='ascii').strip())
+            if kh not in keys:
+                keys.append(kh)
+        except Exception:
+            pass
+    return keys
+
+def get_release_public_key_bytes(pub_key_hex: str = None) -> bytes:
+    keys = get_candidate_public_keys(pub_key_hex)
+    return keys[0]
+
+def verify_release_dir(dir_path: Path, pub_key_hex: str = None) -> tuple:
+    dir_path = Path(dir_path)
+    if not dir_path.is_dir():
+        return False, None, "DIRECTORY_NOT_FOUND"
+
+    manifest_file = dir_path / "manifest.json"
+    sig_file = dir_path / "manifest.sig"
+    if not manifest_file.is_file():
+        return False, None, "MISSING_MANIFEST_JSON"
+    if not sig_file.is_file():
+        return False, None, "MISSING_MANIFEST_SIG"
+
+    try:
+        manifest_bytes = manifest_file.read_bytes()
+        manifest_data = json.loads(manifest_bytes.decode("utf-8"))
+        if not isinstance(manifest_data, dict) or "version" not in manifest_data or "files" not in manifest_data:
+            return False, None, "INVALID_MANIFEST_SCHEMA"
+    except Exception as e:
+        return False, None, f"CORRUPT_MANIFEST_JSON: {e}"
+
+    sig_bytes = sig_file.read_bytes()
+    if len(sig_bytes) != 64:
+        return False, None, f"INVALID_SIG_LEN_{len(sig_bytes)}"
+
+    # 1. Kriptoqrafik Ed25519 İmza Yoxlanışı (raw və Windows CRLF->LF normalizasiyası üzrə)
+    from cryptography.hazmat.primitives.asymmetric import ed25519
+    candidate_keys = get_candidate_public_keys(pub_key_hex)
+    verified = False
+
+    byte_variants = [manifest_bytes]
+    if b'\r\n' in manifest_bytes:
+        byte_variants.append(manifest_bytes.replace(b'\r\n', b'\n'))
+
+    for k_bytes in candidate_keys:
+        try:
+            pub_key = ed25519.Ed25519PublicKey.from_public_bytes(k_bytes)
+            for b_cand in byte_variants:
+                try:
+                    pub_key.verify(sig_bytes, b_cand)
+                    verified = True
+                    break
+                except Exception:
+                    pass
+            if verified:
+                break
+        except Exception:
+            pass
+
+    if not verified:
+        return False, None, "INVALID_SIGNATURE"
+
+    # 2. Fayl Bütövlüyü və Çatışmayan Fayl Yoxlanışı (P1 Tələbi)
+    # Əgər qovluq xüsusi yalnız-manifest metadata qovluğu deyilsə (məsələn pre_signed_slot_a),
+    # manifestdə göstərilən BÜTÜN fayllar mövcud olmalı və SHA-256 uyğun gəlməlidir!
+    is_metadata_only = is_pre_signed_dir_or_recovery(dir_path) and not any(
+        (dir_path / f["path"]).is_file() for f in manifest_data.get("files", [])
+    )
+
+    if not is_metadata_only:
+        from pathlib import PurePosixPath
+        for fentry in manifest_data.get("files", []):
+            rel_name = fentry.get("path", "")
+            if not rel_name:
+                return False, None, "EMPTY_PAYLOAD_PATH"
+            # Path traversal və injection qadağası (P0 security)
+            p_posix = PurePosixPath(rel_name)
+            if p_posix.is_absolute() or '..' in p_posix.parts or '\\' in rel_name or ':' in rel_name or str(p_posix) != rel_name:
+                return False, None, f"INVALID_PAYLOAD_PATH_{rel_name}"
+
+            fpath = dir_path / rel_name
+            if not fpath.is_file():
+                return False, None, f"MISSING_PAYLOAD_FILE_{rel_name}"
+            # Size yoxlanışı
+            if "size" in fentry and fpath.stat().st_size != fentry["size"]:
+                return False, None, f"FILE_SIZE_MISMATCH_{rel_name}"
+            # SHA-256 hash yoxlanışı
+            if sha256_file(fpath) != fentry.get("sha256"):
+                return False, None, f"FILE_HASH_MISMATCH_{rel_name}"
+
+    return True, manifest_data, "VALID"
+
+def recover_release_dir(target_dir: Path, pub_key_hex: str = None) -> bool:
+    target_dir = Path(target_dir).resolve()
+    backup_dir = target_dir.parent / (target_dir.name + ".backup")
+    candidate_dir = target_dir.parent / (target_dir.name + ".candidate")
+
+    if not backup_dir.exists() and not candidate_dir.exists():
+        if target_dir.exists():
+            ok, _, _ = verify_release_dir(target_dir, pub_key_hex)
+            return ok
+        return False
+
+    target_ok, target_data, target_err = verify_release_dir(target_dir, pub_key_hex)
+    backup_ok, backup_data, _ = verify_release_dir(backup_dir, pub_key_hex)
+    cand_ok, cand_data, _ = verify_release_dir(candidate_dir, pub_key_hex)
+
+    if target_ok:
+        if candidate_dir.exists():
+            shutil.rmtree(candidate_dir, ignore_errors=True)
+        if backup_dir.exists():
+            shutil.rmtree(backup_dir, ignore_errors=True)
+        return True
+
+    print(f"[RECOVERY] Target ({target_dir}) natamam və ya zədəlidir ({target_err}). Bərpa araşdırılır...", file=sys.stderr)
+
+    if backup_ok:
+        print(f"[RECOVERY] Etibarlı backup (v{backup_data.get('version')}) aşkarlandı, target bərpa olunur...", file=sys.stderr)
+        if target_dir.exists():
+            shutil.rmtree(target_dir, ignore_errors=True)
+        target_dir.mkdir(parents=True, exist_ok=True)
+        for item in backup_dir.iterdir():
+            if item.is_file():
+                shutil.copy2(item, target_dir / item.name)
+            elif item.is_dir():
+                shutil.copytree(item, target_dir / item.name)
+        rec_ok, _, rec_err = verify_release_dir(target_dir, pub_key_hex)
+        if not rec_ok:
+            raise RuntimeError(f"E_RECOVERY_FROM_BACKUP_FAILED: {rec_err}")
+        shutil.rmtree(backup_dir, ignore_errors=True)
+        if candidate_dir.exists():
+            shutil.rmtree(candidate_dir, ignore_errors=True)
+        print(f"[RECOVERY] Target backup-dan uğurla bərpa olundu (v{backup_data.get('version')}).", file=sys.stderr)
+        return True
+
+    if cand_ok:
+        print(f"[RECOVERY] Etibarlı candidate (v{cand_data.get('version')}) aşkarlandı, target bərpa olunur...", file=sys.stderr)
+        if target_dir.exists():
+            shutil.rmtree(target_dir, ignore_errors=True)
+        candidate_dir.rename(target_dir)
+        rec_ok, _, rec_err = verify_release_dir(target_dir, pub_key_hex)
+        if not rec_ok:
+            raise RuntimeError(f"E_RECOVERY_FROM_CANDIDATE_FAILED: {rec_err}")
+        print(f"[RECOVERY] Target candidate-dən uğurla bərpa olundu (v{cand_data.get('version')}).", file=sys.stderr)
+        return True
+
+    return False
+
+def commit_staged_release(staging_dir: Path, target_dir: Path, pub_key_hex: str = None, transition_hook = None):
+    target_dir = Path(target_dir).resolve()
+    staging_dir = Path(staging_dir).resolve()
+    backup_dir = target_dir.parent / (target_dir.name + ".backup")
+    candidate_dir = target_dir.parent / (target_dir.name + ".candidate")
+
+    # 1. Başlanğıcda bərpa
+    recover_release_dir(target_dir, pub_key_hex)
+
+    # 2. Staging yoxlanışı
+    stg_ok, _, stg_err = verify_release_dir(staging_dir, pub_key_hex)
+    if not stg_ok:
+        raise RuntimeError(f"E_COMMIT_STAGING_INVALID: {stg_err}")
+
+    # 3. Candidate hazırlanması
+    if candidate_dir.exists():
+        shutil.rmtree(candidate_dir, ignore_errors=True)
+    shutil.copytree(staging_dir, candidate_dir)
+
+    cand_ok, _, cand_err = verify_release_dir(candidate_dir, pub_key_hex)
+    if not cand_ok:
+        shutil.rmtree(candidate_dir, ignore_errors=True)
+        raise RuntimeError(f"E_COMMIT_CANDIDATE_INVALID: {cand_err}")
+
+    # 4. Target -> Backup keçidi
+    target_ok, _, _ = verify_release_dir(target_dir, pub_key_hex)
+    if target_ok:
+        if backup_dir.exists():
+            shutil.rmtree(backup_dir, ignore_errors=True)
+        target_dir.rename(backup_dir)
+    elif target_dir.exists():
+        shutil.rmtree(target_dir, ignore_errors=True)
+
+    if transition_hook:
+        transition_hook("after_backup_before_candidate_swap")
+
+    # 5. Candidate -> Target atomik rename
+    candidate_dir.rename(target_dir)
+
+    if transition_hook:
+        transition_hook("after_candidate_swap_before_backup_cleanup")
+
+    # 6. Komit sonrası təsdiq yoxlaması
+    final_ok, _, final_err = verify_release_dir(target_dir, pub_key_hex)
+    if not final_ok:
+        if backup_dir.exists():
+            if target_dir.exists():
+                shutil.rmtree(target_dir, ignore_errors=True)
+            backup_dir.rename(target_dir)
+        raise RuntimeError(f"E_COMMIT_FINAL_VERIFICATION_FAILED: {final_err}")
+
+    # 7. Yalnız target 100% təsdiqləndikdən sonra backup silinir
+    if backup_dir.exists():
+        shutil.rmtree(backup_dir, ignore_errors=True)
+    if candidate_dir.exists():
+        shutil.rmtree(candidate_dir, ignore_errors=True)
+
 def step_compile_rust():
     print("\n" + "="*60)
     print(" 1/3. RUST BİNARLARININ OPTİMİZASİYA EDİLMİŞ TƏRTİBATI (RELEASE)")
@@ -131,9 +468,38 @@ def step_compile_rust():
         "WinKey Desktop (Tauri GUI) kompilyasiyası"
     )
 
+    stage_webview2_loader(Path(DESKTOP_EXE), Path(WEBVIEW2_DLL))
     for exe in [SERVICE_EXE, HELPER_EXE, DESKTOP_EXE]:
         if not os.path.isfile(exe):
             raise RuntimeError(f"Missing build artifact: {exe}")
+
+
+def stage_webview2_loader(desktop: Path, destination: Path):
+    """Cargo leaves the dynamic loader in its build output, not beside the exe."""
+    def pe_machine(path):
+        with path.open('rb') as stream:
+            header = stream.read(64)
+            if len(header) < 64 or header[:2] != b'MZ':
+                raise RuntimeError('E_INVALID_PE: ' + path.name)
+            stream.seek(int.from_bytes(header[60:64], 'little'))
+            pe = stream.read(6)
+            if pe[:4] != b'PE\0\0' or len(pe) != 6:
+                raise RuntimeError('E_INVALID_PE: ' + path.name)
+            return int.from_bytes(pe[4:6], 'little')
+
+    machine = pe_machine(desktop)
+    architecture = {0x8664: 'x64', 0x14c: 'x86', 0xaa64: 'arm64'}.get(machine)
+    if architecture is None:
+        raise RuntimeError('E_UNSUPPORTED_DESKTOP_ARCHITECTURE')
+    candidates = list((desktop.parent / 'build').glob(
+        'webview2-com-sys-*/out/' + architecture + '/WebView2Loader.dll'))
+    candidates.sort(key=lambda p: p.stat().st_mtime_ns, reverse=True)
+    for source in candidates:
+        if pe_machine(source) == machine:
+            shutil.copy2(source, destination)
+            print('[PASS] WebView2Loader.dll paketlendi: ' + architecture, flush=True)
+            return
+    raise RuntimeError('E_WEBVIEW2_LOADER_MISSING: Cargo build output-da uyğun DLL tapılmadı.')
 
 
 def step_build_helper():
@@ -157,14 +523,15 @@ def step_build_helper():
     run_cmd([HELPER_EXE, "--check-focus-resource"], "Paketlenmis fokus resursunun yoxlanisi (input yoxdur)")
     run_cmd([HELPER_EXE, "--check-input-abi"], "Paketlenmis INPUT ABI yoxlanisi (input yoxdur)")
 
-def step_sign_manifest():
+def step_sign_manifest(staging_dir: Path = None):
     from cryptography.hazmat.primitives.asymmetric import ed25519
     from cryptography.hazmat.primitives import serialization
+    target_out_dir = Path(PRE_SIGNED_DIR) if staging_dir is None else staging_dir
     print("\n" + "="*60)
     print(" 2/3. SLOT A MANİFESTİ VƏ ED25519 RƏSMİ İMZALAMA")
     print("="*60)
 
-    os.makedirs(PRE_SIGNED_DIR, exist_ok=True)
+    os.makedirs(target_out_dir, exist_ok=True)
     svc_sha = sha256_file(SERVICE_EXE)
     svc_sz = os.path.getsize(SERVICE_EXE)
     hlp_sha = sha256_file(HELPER_EXE)
@@ -173,6 +540,7 @@ def step_sign_manifest():
     manifest_data = {
         "version": RELEASE_VERSION,
         "timestamp": time.time(),
+        "min_host_protocol_version": 1,
         "files": [
             {"path": "winkey_service.exe", "sha256": svc_sha, "size": svc_sz},
             {"path": "winkey_helper.exe", "sha256": hlp_sha, "size": hlp_sz},
@@ -189,8 +557,9 @@ def step_sign_manifest():
                     'sha256': sha256_file(file), 'size': file.stat().st_size})
 
     manifest_bytes = json.dumps(manifest_data, indent=2, sort_keys=True).encode("utf-8")
-    manifest_path = os.path.join(PRE_SIGNED_DIR, "manifest.json")
+    manifest_path = os.path.join(target_out_dir, "manifest.json")
 
+    check_signing_key_consistency()
     if not os.path.exists(PROD_KEY_PATH):
         print(f"❌ XƏTA: Ed25519 açar faylı tapılmadı: {PROD_KEY_PATH}")
         sys.exit(1)
@@ -208,14 +577,14 @@ def step_sign_manifest():
     with open(manifest_path, "wb") as f:
         f.write(manifest_bytes)
 
-    sig_path = os.path.join(PRE_SIGNED_DIR, "manifest.sig")
+    sig_path = os.path.join(target_out_dir, "manifest.sig")
     with open(sig_path, "wb") as f:
         f.write(sig_bytes)
 
     print(f"  ✓ manifest.json ({os.path.getsize(manifest_path)} bayt)")
     print(f"  ✓ manifest.sig  ({len(sig_bytes)} bayt Ed25519 rəsmi imza)")
 
-def step_build_installer():
+def step_build_installer(staging_dir: Path = None):
     print("\n" + "="*60)
     print(" 3/3. TƏK QURAŞDIRICI YARADILMASI (dist/WinKeySetup.exe)")
     print("="*60)
@@ -224,9 +593,16 @@ def step_build_installer():
         print(f"❌ XƏTA: makensis.exe tapılmadı: {MAKENSIS_EXE}")
         sys.exit(1)
 
+    manifest_src = Path(PRE_SIGNED_DIR) if staging_dir is None else staging_dir
     os.makedirs(DIST_DIR, exist_ok=True)
     pending_setup = str(Path(DIST_DIR) / 'WinKeySetup-building.exe')
-    run_cmd([MAKENSIS_EXE, "/INPUTCHARSET", "UTF8", f'/DOUTPUT_FILE={pending_setup}', f'/DPRODUCT_VERSION={RELEASE_VERSION}', NSI_SCRIPT], "NSIS ilə WinKeySetup.exe paketlənməsi")
+    run_cmd([
+        MAKENSIS_EXE, "/INPUTCHARSET", "UTF8",
+        f'/DMANIFEST_DIR={str(manifest_src)}',
+        f'/DOUTPUT_FILE={pending_setup}',
+        f'/DPRODUCT_VERSION={RELEASE_VERSION}',
+        NSI_SCRIPT
+    ], "NSIS ilə WinKeySetup.exe paketlənməsi")
     if not Path(pending_setup).is_file() or Path(pending_setup).stat().st_size < 500_000:
         raise RuntimeError('Yeni setup yaranmadı və ya ölçüsü yanlışdır. Əvvəlki setup qorundu.')
     os.replace(pending_setup, SETUP_EXE)
@@ -253,6 +629,44 @@ def step_build_installer():
     print(f"               İndi dist/WinKeySetup.exe faylını açıb birbaşa test edə bilərsiniz.")
     print("#"*60)
 
+def execute_build_pipeline(
+    version: str,
+    staging_dir: Path = STAGING_PRE_SIGNED_DIR,
+    target_dir: Path = Path(PRE_SIGNED_DIR),
+    compile_fn = None,
+    sign_fn = None,
+    installer_fn = None,
+    package_fn = None,
+    commit_fn = None,
+) -> Path:
+    if compile_fn is None: compile_fn = step_compile_rust
+    if sign_fn is None: sign_fn = step_sign_manifest
+    if installer_fn is None: installer_fn = step_build_installer
+    if package_fn is None: package_fn = create_update_package
+    if commit_fn is None: commit_fn = commit_staged_release
+    recover_release_dir(target_dir)
+
+    metadata_backups = {}
+    try:
+        metadata_backups = sync_project_metadata(version)
+        compile_fn()
+        sign_fn(staging_dir)
+        installer_fn(staging_dir)
+        package = package_fn(staging_dir)
+        commit_fn(staging_dir, target_dir)
+        if staging_dir.exists():
+            shutil.rmtree(staging_dir, ignore_errors=True)
+        return package
+    except (Exception, SystemExit) as e:
+        if metadata_backups:
+            try:
+                restore_project_metadata(metadata_backups)
+            except Exception as r_err:
+                print(f"[METADATA_RESTORE_ERR] {r_err}", file=sys.stderr)
+        if staging_dir.exists():
+            shutil.rmtree(staging_dir, ignore_errors=True)
+        raise
+
 def main():
     global RELEASE_VERSION
     parser = argparse.ArgumentParser(description='WinKey Pro: build → imzalı paket → Git push → VM auto-deploy. Quraşdırma icra etmir.')
@@ -263,6 +677,7 @@ def main():
     parser.add_argument('--publish', metavar='SERVER', help='Build-dən sonra imzalı paketi serverə yüklə və avtomatik yenilənməni başlat')
     args = parser.parse_args()
     from scripts.release_pipeline import preflight_git, push_release
+    recover_release_dir(Path(PRE_SIGNED_DIR))
     if args.push_only:
         if args.local_only or args.check:
             raise RuntimeError('--push-only digər build rejimləri ilə birlikdə istifadə edilmir.')
@@ -296,11 +711,12 @@ def main():
     print(f'[RELEASE] {RELEASE_VERSION}',flush=True)
     BUILD_LOG.parent.mkdir(parents=True, exist_ok=True)
     BUILD_LOG.write_text('WinKey Pro build\n', encoding='utf-8')
-    t0 = time.time()
-    step_compile_rust()
-    step_sign_manifest()
-    step_build_installer()
-    package = create_update_package()
+    build_started_at = time.perf_counter()
+    package = execute_build_pipeline(
+        version=RELEASE_VERSION,
+        staging_dir=STAGING_PRE_SIGNED_DIR,
+        target_dir=Path(PRE_SIGNED_DIR)
+    )
     if not args.local_only:
         push_release(ROOT_DIR,package)
     if args.publish:
@@ -315,18 +731,26 @@ def main():
         except Exception:
             raise RuntimeError('E_RELEASE_PUBLISH_FAILED: serverə yükləmə alınmadı. Yerli paket qorundu; server loqunu yoxlayın.') from None
         print('[PUBLISHED] version='+result['version']+'; qoşulmuş proqramlara yenilənmə bildirişi göndərildi.')
-    total_time = time.time() - t0
+    total_time = time.perf_counter() - build_started_at
     print(f"\nÜmumi icra müddəti: {total_time:.2f} saniyə.\n")
 
 
-def create_update_package():
-    manifest=Path(PRE_SIGNED_DIR,'manifest.json')
+def create_update_package(staging_dir: Path = None):
+    in_dir = Path(PRE_SIGNED_DIR) if staging_dir is None else staging_dir
+    recover_release_dir(in_dir)
+    pkg_ok, _, pkg_err = verify_release_dir(in_dir)
+    if not pkg_ok:
+        raise RuntimeError(f"E_PACKAGE_VERIFICATION_FAILED: {pkg_err}")
+    manifest = Path(in_dir, 'manifest.json')
     data=json.loads(manifest.read_text(encoding='utf-8'))
     target=Path(DIST_DIR,'WinKeyUpdate-'+data['version']+'.zip')
     temporary=target.with_suffix('.building.zip')
     with zipfile.ZipFile(temporary,'w',zipfile.ZIP_DEFLATED) as package:
-        package.write(manifest,'manifest.json')
-        package.write(Path(PRE_SIGNED_DIR,'manifest.sig'),'manifest.sig')
+        manifest_raw = manifest.read_bytes()
+        if b'\r\n' in manifest_raw:
+            manifest_raw = manifest_raw.replace(b'\r\n', b'\n')
+        package.writestr('manifest.json', manifest_raw)
+        package.write(Path(in_dir,'manifest.sig'),'manifest.sig')
         for entry in data['files']:
             source=Path(DESKTOP_EXE) if entry['path']=='winkey_desktop.exe' else (Path(WEBVIEW2_DLL) if entry['path']=='WebView2Loader.dll' else Path(SERVICE_EXE).parent/entry['path'])
             if sha256_file(source)!=entry['sha256']:
@@ -348,3 +772,12 @@ if __name__ == "__main__":
     finally:
         if _BUILD_LOCK is not None:
             _BUILD_LOCK.close()
+
+# Startup recovery check for baseline pre_signed_slot_a
+try:
+    p_backup = Path(PRE_SIGNED_DIR + ".backup")
+    p_cand = Path(PRE_SIGNED_DIR + ".candidate")
+    if p_backup.exists() or p_cand.exists():
+        recover_release_dir(Path(PRE_SIGNED_DIR))
+except Exception:
+    pass

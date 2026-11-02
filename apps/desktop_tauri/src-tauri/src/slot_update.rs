@@ -1,6 +1,21 @@
 //! Desktop follows only committed, pinned-signature-verified update slots.
 use std::{fs,path::{Path,PathBuf}};
 use sha2::{Digest,Sha256};
+fn normalize_crlf(bytes: &[u8]) -> Vec<u8> {
+    let mut out = Vec::with_capacity(bytes.len());
+    let mut i = 0;
+    while i < bytes.len() {
+        if bytes[i] == b'\r' && i + 1 < bytes.len() && bytes[i + 1] == b'\n' {
+            out.push(b'\n');
+            i += 2;
+        } else {
+            out.push(bytes[i]);
+            i += 1;
+        }
+    }
+    out
+}
+
 
 pub fn verified_release_version(data: &serde_json::Value) -> Result<String,String> {
     let raw=data.get("manifest_raw").and_then(|v|v.as_str()).ok_or("E_UPDATE_MANIFEST")?;
@@ -13,9 +28,14 @@ pub fn verified_release_version(data: &serde_json::Value) -> Result<String,Strin
     let pin="56524c1040e3a8309e938332037d0a0167cc2da30761abcfb77c93a899ad61da";
     let mut key=[0u8;32];
     for (i,b) in key.iter_mut().enumerate() {*b=u8::from_str_radix(&pin[i*2..i*2+2],16).map_err(|_|"E_UPDATE_KEY")?;}
-    ed25519_dalek::VerifyingKey::from_bytes(&key).map_err(|_|"E_UPDATE_KEY")?
-        .verify_strict(raw.as_bytes(),&ed25519_dalek::Signature::from_bytes(&signature_bytes))
-        .map_err(|_|"E_UPDATE_SIGNATURE")?;
+    let vk = ed25519_dalek::VerifyingKey::from_bytes(&key).map_err(|_|"E_UPDATE_KEY")?;
+    let sig = ed25519_dalek::Signature::from_bytes(&signature_bytes);
+    let mut v_res = vk.verify_strict(raw.as_bytes(), &sig);
+    if v_res.is_err() && raw.contains("\r\n") {
+        let norm = raw.replace("\r\n", "\n");
+        v_res = vk.verify_strict(norm.as_bytes(), &sig);
+    }
+    v_res.map_err(|_|"E_UPDATE_SIGNATURE")?;
     let manifest:serde_json::Value=serde_json::from_str(raw).map_err(|_|"E_UPDATE_MANIFEST")?;
     let version=manifest.get("version").and_then(|v|v.as_str()).ok_or("E_UPDATE_VERSION")?;
     version_tuple(version)?;
@@ -42,7 +62,13 @@ fn active_desktop_with_key(base: &Path, key_hex: &str) -> Option<PathBuf> {
     let signature=ed25519_dalek::Signature::from_slice(&fs::read(directory.join("manifest.sig")).ok()?).ok()?;
     let mut bytes=[0u8;32];
     for (i,b) in bytes.iter_mut().enumerate() {*b=u8::from_str_radix(&key_hex[i*2..i*2+2],16).ok()?;}
-    ed25519_dalek::VerifyingKey::from_bytes(&bytes).ok()?.verify_strict(&raw,&signature).ok()?;
+    let vk2 = ed25519_dalek::VerifyingKey::from_bytes(&bytes).ok()?;
+    let mut v2_res = vk2.verify_strict(&raw, &signature);
+    if v2_res.is_err() && raw.windows(2).any(|w| w == b"\r\n") {
+        let norm = normalize_crlf(&raw);
+        v2_res = vk2.verify_strict(&norm, &signature);
+    }
+    v2_res.ok()?;
     let manifest:serde_json::Value=serde_json::from_slice(&raw).ok()?;
     let entry=manifest.get("files")?.as_array()?.iter().find(|e|e.get("path").and_then(|v|v.as_str())==Some("winkey_desktop.exe"))?;
     let executable=directory.join("winkey_desktop.exe");

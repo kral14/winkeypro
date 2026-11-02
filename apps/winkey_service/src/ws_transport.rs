@@ -906,7 +906,8 @@ pub fn run_gateway_transport_loop(
                     "type": "auth",
                     "role": "agent",
                     "device_id": did,
-                    "token": sec
+                    "token": sec,
+                    "version": worker_release_version()
                 });
                 if let Err(e) = socket.send(Message::Text(auth_payload.to_string())) {
                     eprintln!("[WS_AUTH_SEND_ERROR] {}", e);

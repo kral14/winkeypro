@@ -26,7 +26,14 @@ class UpdateRepository:
             directory = self.root / 'releases' / release
             raw = (directory / 'manifest.json').read_bytes()
             signature = (directory / 'manifest.sig').read_bytes()
-            Ed25519PublicKey.from_public_bytes(self.public_key).verify(signature, raw)
+            try:
+                Ed25519PublicKey.from_public_bytes(self.public_key).verify(signature, raw)
+            except Exception:
+                if b'\r\n' in raw:
+                    raw = raw.replace(b'\r\n', b'\n')
+                    Ed25519PublicKey.from_public_bytes(self.public_key).verify(signature, raw)
+                else:
+                    raise
             if hashlib.sha256(raw).hexdigest() != release: return None
             manifest = json.loads(raw)
             return {'release_id': release, 'version': manifest['version'], 'manifest': manifest,
@@ -48,7 +55,14 @@ class UpdateRepository:
                 raise ValueError('E_PACKAGE_EXPANSION_LIMIT')
             raw = package.read('manifest.json')
             signature = package.read('manifest.sig')
-            Ed25519PublicKey.from_public_bytes(self.public_key).verify(signature, raw)
+            try:
+                Ed25519PublicKey.from_public_bytes(self.public_key).verify(signature, raw)
+            except Exception:
+                if b'\r\n' in raw:
+                    raw = raw.replace(b'\r\n', b'\n')
+                    Ed25519PublicKey.from_public_bytes(self.public_key).verify(signature, raw)
+                else:
+                    raise
             manifest = json.loads(raw)
             if not re.fullmatch(r'\d+\.\d+\.\d+', manifest['version']):
                 raise ValueError('E_VERSION_FORMAT')
@@ -102,7 +116,15 @@ class UpdateRepository:
         base = self.root / 'releases' / release
         try:
             raw = (base / 'manifest.json').read_bytes()
-            Ed25519PublicKey.from_public_bytes(self.public_key).verify((base / 'manifest.sig').read_bytes(), raw)
+            sig = (base / 'manifest.sig').read_bytes()
+            try:
+                Ed25519PublicKey.from_public_bytes(self.public_key).verify(sig, raw)
+            except Exception:
+                if b'\r\n' in raw:
+                    raw = raw.replace(b'\r\n', b'\n')
+                    Ed25519PublicKey.from_public_bytes(self.public_key).verify(sig, raw)
+                else:
+                    raise
             if hashlib.sha256(raw).hexdigest() != release: return None
             manifest = json.loads(raw)
             if name not in {f['path'] for f in manifest['files']}: return None

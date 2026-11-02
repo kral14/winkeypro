@@ -50,6 +50,8 @@ mod win32_pipe {
     // REM-025: B.2b Dar User-Channel Access Mask (0x0012008B) və SQOS
     pub const PIPE_MIN_USER_CHANNEL_MASK: u32 = 0x0012008B;
     pub const SECURITY_SQOS_PRESENT: u32 = 0x00100000;
+    #[allow(dead_code)]
+
     pub const SECURITY_IDENTIFICATION: u32 = 0x00010000;
     pub const SECURITY_IMPERSONATION: u32 = 0x00020000;
     pub const FLAGS_SECURITY: u32 = SECURITY_SQOS_PRESENT | SECURITY_IMPERSONATION;
@@ -1198,6 +1200,10 @@ async fn get_update_status(check_server: bool) -> Result<serde_json::Value,Strin
             if let Ok(value)=serde_json::from_str::<serde_json::Value>(&raw) {
                 result["worker_version"]=value.get("worker_version").cloned().unwrap_or(serde_json::Value::Null);
                 result["phase"]=value.get("phase").cloned().unwrap_or(serde_json::Value::Null);
+                if value.get("phase").and_then(|p| p.as_str()) == Some("SETUP_REQUIRED") {
+                    result["status"] = serde_json::json!("setup_required");
+                    result["hint"] = serde_json::json!("Setup tələb olunur: Host arxitekturası yenilənməlidir.");
+                }
             }
         }
         if !check_server {return Ok(result);}
@@ -1280,10 +1286,116 @@ fn report_ui_error(kind: String, source: String, line: u32) {
 
 mod slot_update;
 
+
+fn wait_for_process_exit(pid: u32, timeout_ms: u32) -> Result<(), &'static str> {
+    if pid == 0 { return Ok(()); }
+    #[cfg(windows)]
+    unsafe {
+        use windows_sys::Win32::System::Threading::{OpenProcess, WaitForSingleObject};
+        const SYNCHRONIZE: u32 = 0x00100000;
+        const WAIT_OBJECT_0: u32 = 0;
+        const WAIT_TIMEOUT: u32 = 0x00000102;
+        use windows_sys::Win32::Foundation::{CloseHandle, GetLastError, ERROR_ACCESS_DENIED};
+
+        let h_proc = OpenProcess(SYNCHRONIZE, 0, pid);
+        if h_proc.is_null() {
+            let err = GetLastError();
+            if err == ERROR_ACCESS_DENIED {
+                return Err("ACCESS_DENIED");
+            }
+            return Ok(());
+        }
+        let wait_res = WaitForSingleObject(h_proc, timeout_ms);
+        CloseHandle(h_proc);
+        match wait_res {
+            WAIT_OBJECT_0 => Ok(()),
+            WAIT_TIMEOUT => Err("TIMEOUT"),
+            _ => Err("WAIT_FAILED"),
+        }
+    }
+    #[cfg(not(windows))]
+    Ok(())
+}
+
 fn main() {
-    if std::env::args().skip(1).all(|arg| matches!(arg.as_str(),"--minimized"|"-m")) {
-        if let Some(target)=slot_update::different_active_desktop() {
-            if std::process::Command::new(target).args(std::env::args().skip(1)).spawn().is_ok() {return;}
+    let raw_args: Vec<String> = std::env::args().collect();
+    let mut is_gui_launch = true;
+    let mut handover_pid: Option<u32> = None;
+    let mut is_minimized_req = false;
+
+    let mut iter = raw_args.iter().skip(1);
+    while let Some(arg) = iter.next() {
+        match arg.as_str() {
+            "--minimized" | "-m" | "--tray" => {
+                is_minimized_req = true;
+            }
+            "--relaunch-handover" => {
+                if let Some(next_tok) = iter.next() {
+                    if let Ok(pid) = next_tok.parse::<u32>() {
+                        handover_pid = Some(pid);
+                    } else {
+                        is_gui_launch = false;
+                        break;
+                    }
+                } else {
+                    is_gui_launch = false;
+                    break;
+                }
+            }
+            a if a.starts_with("--relaunch-handover=") => {
+                let pid_str = &a["--relaunch-handover=".len()..];
+                if let Ok(pid) = pid_str.parse::<u32>() {
+                    handover_pid = Some(pid);
+                } else {
+                    is_gui_launch = false;
+                    break;
+                }
+            }
+            _ => {
+                is_gui_launch = false;
+                break;
+            }
+        }
+    }
+
+    if let Some(old_pid) = handover_pid {
+        println!("[HANDOVER] Əvvəlki desktop prosesinin (PID {}) çıxışı gözlənilir...", old_pid);
+        let mut waited = false;
+        for attempt in 1..=3 {
+            match wait_for_process_exit(old_pid, 2000) {
+                Ok(()) => {
+                    println!("[HANDOVER] Əvvəlki desktop prosesinin (PID {}) çıxışı təsdiqləndi.", old_pid);
+                    waited = true;
+                    break;
+                }
+                Err("TIMEOUT") => {
+                    eprintln!("[HANDOVER_WARN] Sələf proses hələ aktivdir (cəhd {}/3, PID {})...", attempt, old_pid);
+                }
+                Err(err) => {
+                    eprintln!("[HANDOVER_FAIL] Sələf proses çıxışı gözlənilərkən xəta: {} (PID {}). Fail-closed çıxış edilir.", err, old_pid);
+                    std::process::exit(1);
+                }
+            }
+        }
+        if !waited {
+            eprintln!("[HANDOVER_FAIL] Sələf proses 6000ms ərzində çıxış etmədi (PID {}). Fail-closed çıxılır.", old_pid);
+            std::process::exit(1);
+        }
+    }
+
+    if is_gui_launch {
+        if let Some(target) = slot_update::different_active_desktop() {
+            let mut fwd_args: Vec<String> = Vec::new();
+            if is_minimized_req {
+                fwd_args.push("--minimized".to_string());
+            }
+            if let Some(old_pid) = handover_pid {
+                fwd_args.push("--relaunch-handover".to_string());
+                fwd_args.push(old_pid.to_string());
+            }
+            if std::process::Command::new(target).args(&fwd_args).spawn().is_ok() {
+                return;
+            }
         }
     }
     std::panic::set_hook(Box::new(|info| {
@@ -1504,10 +1616,33 @@ fn main() {
     let mutex_name: Vec<u16> = format!("Local\\WinKeyPro_Desktop_SingleInstance_{}{}\0", instance_scope, sess).encode_utf16().collect();
     let event_name: Vec<u16> = format!("Local\\WinKeyPro_Desktop_ShowRestore_{}{}\0", instance_scope, sess).encode_utf16().collect();
 
-    let h_mutex = unsafe {
-        CreateMutexW(null_mut(), 1, mutex_name.as_ptr())
-    };
-    let last_err = unsafe { GetLastError() };
+
+
+    #[allow(unused_assignments)]
+    let mut h_mutex = null_mut();
+    #[allow(unused_assignments)]
+    let mut last_err = 0;
+    let mutex_start = std::time::Instant::now();
+    loop {
+        h_mutex = unsafe {
+            CreateMutexW(null_mut(), 1, mutex_name.as_ptr())
+        };
+        if h_mutex.is_null() {
+            eprintln!("[SINGLETON_FAIL_CLOSED] CreateMutexW uğursuz oldu (null handle). Fail-closed çıxılır.");
+            std::process::exit(1);
+        }
+        last_err = unsafe { GetLastError() };
+        if last_err != 183 {
+            break;
+        }
+        if handover_pid.is_some() && mutex_start.elapsed() < std::time::Duration::from_millis(1500) {
+            unsafe { windows_sys::Win32::Foundation::CloseHandle(h_mutex); }
+            std::thread::sleep(std::time::Duration::from_millis(50));
+            continue;
+        }
+        break;
+    }
+
     if last_err == 183 { // ERROR_ALREADY_EXISTS = 183
         println!("[SINGLETON] WinKey Pro artıq bu sessiyada (Session {}) işləyir. Mövcud pəncərə bərpa edilir...", sess);
         let h_event = unsafe {
@@ -1550,13 +1685,18 @@ fn main() {
             get_update_status,
         ])
         .setup(move |app| {
-            let update_handle=app.handle().clone();
             std::thread::spawn(move || loop {
                 std::thread::sleep(std::time::Duration::from_secs(15));
-                if slot_update::different_active_desktop().is_some() {
-                    // Tauri restarts this executable; its startup delegates to the
-                    // verified committed slot. Existing PIN/config storage is shared.
-                    update_handle.restart();
+                if let Some(target) = slot_update::different_active_desktop() {
+                    let cur_pid = std::process::id();
+                    let mut fwd = vec!["--relaunch-handover".to_string(), cur_pid.to_string()];
+                    if std::env::args().any(|a| a == "--minimized" || a == "-m" || a == "--tray") {
+                        fwd.push("--minimized".to_string());
+                    }
+                    if std::process::Command::new(&target).args(&fwd).spawn().is_ok() {
+                        println!("[SLOT_RELAUNCH] Yeni desktop aktivləşdirildi: PID={} target={:?}. Köhnə proses bağlanır.", cur_pid, target);
+                        std::process::exit(0);
+                    }
                 }
             });
             let app_handle = app.handle().clone();

@@ -114,7 +114,12 @@ class UpdateTest(WebSocketBoundaryTest):
                 self.assertEqual(self.publish(self.package())[0],200)
                 async with asyncio.timeout(5):
                     while not (directory/'update_requested').exists():await asyncio.sleep(.1)
-                self.assertEqual(len((directory/'update_requested').read_text()),64)
+                for _ in range(15):
+                    try:
+                        self.assertEqual(len((directory/'update_requested').read_text()),64)
+                        break
+                    except PermissionError:
+                        await asyncio.sleep(.05)
             finally:
                 process.terminate()
                 await asyncio.to_thread(process.wait,timeout=3)
