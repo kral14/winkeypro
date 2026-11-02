@@ -43,6 +43,7 @@ DESKTOP_CARGO = os.path.join(ROOT_DIR, "apps", "desktop_tauri", "src-tauri", "Ca
 SERVICE_EXE = os.path.join(ROOT_DIR, "apps", "winkey_service", "target", "release", "winkey_service.exe")
 HELPER_EXE = os.path.join(ROOT_DIR, "apps", "winkey_service", "target", "release", "winkey_helper.exe")
 DESKTOP_EXE = os.path.join(ROOT_DIR, "apps", "desktop_tauri", "src-tauri", "target", "release", "winkey_desktop.exe")
+WEBVIEW2_DLL = os.path.join(ROOT_DIR, "apps", "desktop_tauri", "src-tauri", "target", "release", "WebView2Loader.dll")
 
 PRE_SIGNED_DIR = os.path.join(ROOT_DIR, "deploy", "pre_signed_slot_a")
 PROD_KEY_PATH = os.path.join(ROOT_DIR, "deploy", "keys", "prod_release_ed25519_key.bin")
@@ -74,7 +75,7 @@ def preflight():
     missing = []
     if not shutil.which('cargo'):
         missing.append('Rust cargo (MSVC toolchain və Visual Studio C++ Build Tools)')
-    for module, package in [('cryptography', 'cryptography'), ('PyInstaller', 'pyinstaller')]:
+    for module, package in [('cryptography', 'cryptography'), ('PyInstaller', 'pyinstaller'), ('psutil', 'psutil')]:
         if importlib.util.find_spec(module) is None:
             missing.append(f'{package}: "{sys.executable}" -m pip install {package}')
     for path in [MAKENSIS_EXE, NSI_SCRIPT, SERVICE_CARGO, DESKTOP_CARGO,
@@ -175,7 +176,8 @@ def step_sign_manifest():
         "files": [
             {"path": "winkey_service.exe", "sha256": svc_sha, "size": svc_sz},
             {"path": "winkey_helper.exe", "sha256": hlp_sha, "size": hlp_sz},
-            {"path": "winkey_desktop.exe", "sha256": sha256_file(DESKTOP_EXE), "size": os.path.getsize(DESKTOP_EXE)}
+            {"path": "winkey_desktop.exe", "sha256": sha256_file(DESKTOP_EXE), "size": os.path.getsize(DESKTOP_EXE)},
+            {"path": "WebView2Loader.dll", "sha256": sha256_file(WEBVIEW2_DLL), "size": os.path.getsize(WEBVIEW2_DLL)}
         ]
     }
     runtime = Path(HELPER_EXE).parent / 'helper_runtime'
@@ -326,7 +328,7 @@ def create_update_package():
         package.write(manifest,'manifest.json')
         package.write(Path(PRE_SIGNED_DIR,'manifest.sig'),'manifest.sig')
         for entry in data['files']:
-            source=Path(DESKTOP_EXE) if entry['path']=='winkey_desktop.exe' else Path(SERVICE_EXE).parent/entry['path']
+            source=Path(DESKTOP_EXE) if entry['path']=='winkey_desktop.exe' else (Path(WEBVIEW2_DLL) if entry['path']=='WebView2Loader.dll' else Path(SERVICE_EXE).parent/entry['path'])
             if sha256_file(source)!=entry['sha256']:
                 raise RuntimeError('E_PACKAGE_CHANGED_DURING_BUILD')
             package.write(source,entry['path'])

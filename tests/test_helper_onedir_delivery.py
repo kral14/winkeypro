@@ -23,7 +23,11 @@ def main():
         for entry in data['files']:
             dest = slot / entry['path']
             dest.parent.mkdir(parents=True, exist_ok=True)
-            shutil.copy2(RELEASE / entry['path'], dest)
+            if entry['path'] in ('winkey_desktop.exe', 'WebView2Loader.dll'):
+                src = ROOT / 'apps/desktop_tauri/src-tauri/target/release' / entry['path']
+            else:
+                src = RELEASE / entry['path']
+            shutil.copy2(src, dest)
         for name in ('manifest.json', 'manifest.sig'):
             shutil.copy2(manifest / name, slot / name)
         svc, helper = slot / 'winkey_service.exe', slot / 'winkey_helper.exe'

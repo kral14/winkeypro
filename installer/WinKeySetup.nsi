@@ -112,6 +112,7 @@ Section "MainSection" SEC01
 
     DetailPrint "Komponentler cixarilir..."
     File "..\apps\desktop_tauri\src-tauri\target\release\winkey_desktop.exe"
+    File "..\apps\desktop_tauri\src-tauri\target\release\WebView2Loader.dll"
     File "..\apps\winkey_service\target\release\winkey_service.exe"
     File "..\apps\winkey_service\target\release\winkey_helper.exe"
     SetOutPath "$INSTDIR\helper_runtime"
@@ -198,6 +199,7 @@ Section "Uninstall"
 
     ; Qurasdirilmis fayllari sil
     Delete "$INSTDIR\winkey_desktop.exe"
+    Delete "$INSTDIR\WebView2Loader.dll"
     Delete "$INSTDIR\winkey_service.exe"
     Delete "$INSTDIR\winkey_helper.exe"
     Delete "$INSTDIR\manifest.json"

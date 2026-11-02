@@ -262,11 +262,16 @@ if (-not (Test-Path $SourceDir)) {
 $svcSrc = Join-Path $SourceDir "winkey_service.exe"
 $hlpSrc = Join-Path $SourceDir "winkey_helper.exe"
 $dskSrc = Join-Path $SourceDir "winkey_desktop.exe"
+$wv2Src = Join-Path $SourceDir "WebView2Loader.dll"
 
 # Əgər desktop eyni qovluqda yoxdursa, desktop tauri target-dən axtar
 if (-not (Test-Path $dskSrc)) {
     $altDsk = Join-Path $PSScriptRoot "..\apps\desktop_tauri\src-tauri\target\release\winkey_desktop.exe"
     if (Test-Path $altDsk) { $dskSrc = (Resolve-Path $altDsk).Path }
+}
+if (-not (Test-Path $wv2Src)) {
+    $altWv2 = Join-Path $PSScriptRoot "..\apps\desktop_tauri\src-tauri\target\release\WebView2Loader.dll"
+    if (Test-Path $altWv2) { $wv2Src = (Resolve-Path $altWv2).Path }
 }
 
 Write-Host "[INFO] Qaynaq Qovluğu: $SourceDir" -ForegroundColor Yellow
@@ -517,6 +522,12 @@ try {
             Copy-Item -Path $dskSrc -Destination $destDsk -Force
         }
     }
+    if (Test-Path $wv2Src) {
+        $destWv2 = Join-Path $InstallDir "WebView2Loader.dll"
+        if (-not (Test-Path $destWv2) -or ([System.IO.Path]::GetFullPath($wv2Src) -ne [System.IO.Path]::GetFullPath($destWv2))) {
+            Copy-Item -Path $wv2Src -Destination $destWv2 -Force
+        }
+    }
     # Supervisor və Update Engine skriptlərinin kopyalanması (Boot Recovery üçün)
     $supSrc = $null
     $updSrc = $null
@@ -617,6 +628,9 @@ try {
     Copy-Item -Path $hlpSrc -Destination (Join-Path $slotADir "winkey_helper.exe") -Force
     if (Test-Path (Join-Path $SourceDir "winkey_desktop.exe")) {
         Copy-Item -LiteralPath (Join-Path $SourceDir "winkey_desktop.exe") -Destination (Join-Path $slotADir "winkey_desktop.exe") -Force
+    }
+    if (Test-Path (Join-Path $SourceDir "WebView2Loader.dll")) {
+        Copy-Item -LiteralPath (Join-Path $SourceDir "WebView2Loader.dll") -Destination (Join-Path $slotADir "WebView2Loader.dll") -Force
     }
     if (Test-Path (Join-Path $SourceDir "helper_runtime")) {
         Copy-Item -LiteralPath (Join-Path $SourceDir "helper_runtime") -Destination $slotADir -Recurse -Force
