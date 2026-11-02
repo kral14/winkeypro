@@ -259,6 +259,39 @@ fn send_control_command_to_worker(expected_pid: Option<u32>, cmd: &str) -> bool 
     }
 }
 
+fn is_system_supervisor_peer(peer: &IpcPeerIdentity) -> bool {
+    peer.is_impersonation_successful
+        && peer.os_client_session_id == 0
+        && peer.os_client_sid == "S-1-5-18"
+}
+
+fn supervisor_control_allowed(request: &str) -> bool {
+    matches!(request.trim(), "STATUS" | "PAUSE" | "RESUME" | "STOP")
+}
+
+#[cfg(test)]
+mod supervisor_channel_tests {
+    use super::*;
+    #[test]
+    fn system_control_is_narrow_and_requires_os_identity() {
+        let mut peer = IpcPeerIdentity { os_client_pid: 1, os_client_session_id: 0,
+            os_client_sid: "S-1-5-18".into(), is_impersonation_successful: true };
+        assert!(is_system_supervisor_peer(&peer));
+        for cmd in ["STATUS\n", "PAUSE", "RESUME", "STOP"] { assert!(supervisor_control_allowed(cmd)); }
+        for cmd in ["UPDATE_STATUS", "CHECK_UPDATE", "PROVISION", "UNLOCK", "STOP extra", "{\"action\":\"unlock\"}"] {
+            assert!(!supervisor_control_allowed(cmd));
+        }
+        peer.is_impersonation_successful = false;
+        assert!(!is_system_supervisor_peer(&peer));
+        peer.is_impersonation_successful = true;
+        peer.os_client_sid = "S-1-5-21-123".into();
+        assert!(!is_system_supervisor_peer(&peer));
+        peer.os_client_sid = "S-1-5-18".into();
+        peer.os_client_session_id = 4;
+        assert!(!is_system_supervisor_peer(&peer));
+    }
+}
+
 fn probe_worker_health(expected_pid: Option<u32>) -> bool {
     let h_pipe = match open_secure_overlapped_pipe_client(expected_pid) {
         Ok(h) => h,
@@ -473,10 +506,11 @@ fn run_ipc_worker_loop(stop_signal: Arc<AtomicBool>, is_mock: bool, data_dir: Pa
             if is_connected {
                 // Exact Client Identity Yoxlanışı
                 let client_ident = extract_os_client_identity(h_pipe);
+                let is_supervisor = client_ident.as_ref().map(is_system_supervisor_peer).unwrap_or(false);
                 let is_authorized = match client_ident {
                     Ok(ref id) => {
                         println!("[IPC_AUTH] Müştəri təsdiqləndi: PID={}, Sessiya={}, SID={}", id.os_client_pid, id.os_client_session_id, id.os_client_sid);
-                        policy.validate_os_peer_identity(id).is_ok()
+                        policy.validate_os_peer_identity(id).is_ok() || is_supervisor
                     }
                     Err(ref err) => {
                         eprintln!("[IPC_AUTH_REJECT] Müştəri kimliyi alına bilmədi: {err}");
@@ -512,6 +546,13 @@ fn run_ipc_worker_loop(stop_signal: Arc<AtomicBool>, is_mock: bool, data_dir: Pa
 
                     if read_success && read_bytes > 0 {
                         let req_str = String::from_utf8_lossy(&buf[..read_bytes as usize]);
+                        // Session 0 supervisor gets control-only access, never user
+                        // provisioning, credentials, pairing or input commands.
+                        if is_supervisor && !supervisor_control_allowed(&req_str) {
+                            win32::DisconnectNamedPipe(h_pipe);
+                            win32::CloseHandle(h_pipe);
+                            continue;
+                        }
                         let response_dto = if req_str.contains("PING") {
                             serde_json::to_string(&IpcResponse::Ack).unwrap()
                         } else if req_str.trim() == "CREDENTIAL_READY" {
