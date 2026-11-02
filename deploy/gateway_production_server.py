@@ -803,25 +803,24 @@ def get_mobile_html() -> str:
 </head>
 <body>
     <div class="mobile-wrapper">
-        <section aria-label="Kompüterlər" style="padding:16px;background:var(--card-bg);border-radius:16px;margin-bottom:16px;">
-            <label for="deviceSelect">Kompüter seç</label>
-            <select id="deviceSelect" style="display:block;width:100%;padding:12px;margin:8px 0;color:var(--text-main);background:var(--card-bg);border:1px solid var(--card-border);border-radius:8px;"></select>
-            <button class="action-pill-btn" id="deviceAdd" type="button">＋ Yeni cihaz əlavə et</button>
-            <button class="action-pill-btn" id="prepareInstall" type="button" style="margin-top:8px;">iPhone üçün tətbiqi hazırla</button>
-            <p id="deviceMessage" role="status" style="font-size:.85rem;line-height:1.5;margin:12px 0;"></p>
-            <div id="deviceAddPanel" hidden>
-              <form id="deviceAddForm">
-                <label for="deviceName">Kompüterin adı</label>
-                <input id="deviceName" required maxlength="80" placeholder="PC 1, Ofis 2…" style="display:block;width:100%;padding:12px;margin:8px 0;">
-                <button class="action-pill-btn" id="deviceScan" type="button">Kamera ilə QR oxut</button>
-                <video id="deviceCamera" hidden playsinline muted style="width:100%;margin:8px 0;"></video>
-                <label for="devicePhoto" style="display:block;margin-top:12px;">QR şəklini seç / çək</label>
-                <input id="devicePhoto" type="file" accept="image/*" capture="environment" style="max-width:100%;margin:8px 0;">
-                <label for="devicePairCode" style="display:block;">Qoşulma kodu və ya QR linki</label>
-                <input id="devicePairCode" required autocomplete="off" style="display:block;width:100%;padding:12px;margin:8px 0;">
-                <button class="action-pill-btn" id="deviceAddConfirm" type="submit">Əlavə et</button>
-                <button class="action-pill-btn" id="deviceAddCancel" type="button">Ləğv et</button>
-              </form>
+        <section aria-label="Kompüter Seçimi" style="padding:14px 16px;background:var(--card-bg);border-radius:14px;margin-bottom:16px;border:1px solid var(--card-border);">
+            <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:6px;">
+                <label for="deviceSelect" style="font-size:0.85rem;font-weight:600;color:var(--accent-green);display:flex;align-items:center;gap:6px;">
+                    <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <rect x="2" y="3" width="20" height="14" rx="2" ry="2"></rect>
+                        <line x1="8" y1="21" x2="16" y2="21"></line>
+                        <line x1="12" y1="17" x2="12" y2="21"></line>
+                    </svg>
+                    Kompüter seç:
+                </label>
+                <span id="deviceCountBadge" style="font-size:0.75rem;padding:2px 8px;background:rgba(34,197,94,0.15);color:var(--accent-green);border-radius:10px;font-weight:600;">1 Cihaz</span>
+            </div>
+            <select id="deviceSelect" style="display:block;width:100%;padding:10px 12px;color:var(--text-main);background:#101412;border:1px solid var(--card-border);border-radius:8px;font-size:0.9rem;font-weight:500;outline:none;cursor:pointer;"></select>
+            <p id="deviceMessage" role="status" style="font-size:.8rem;line-height:1.4;margin:6px 0 0;color:var(--text-dim);"></p>
+            <div style="display:none;">
+                <button id="deviceAdd"></button>
+                <button id="prepareInstall"></button>
+                <div id="deviceAddPanel"><form id="deviceAddForm"><input id="deviceName"><button id="deviceScan"></button><video id="deviceCamera"></video><input id="devicePhoto"><input id="devicePairCode"><button id="deviceAddConfirm"></button><button id="deviceAddCancel"></button></form></div>
             </div>
         </section>
         <!-- Header -->

@@ -1,5 +1,18 @@
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
 
+fn url_encode_comp_name(input: &str) -> String {
+    let mut encoded = String::with_capacity(input.len() * 3);
+    for b in input.bytes() {
+        if b.is_ascii_alphanumeric() || b == b'-' || b == b'_' || b == b'.' || b == b'~' {
+            encoded.push(b as char);
+        } else {
+            encoded.push_str(&format!("%{:02X}", b));
+        }
+    }
+    encoded
+}
+
+
 use std::ffi::c_void;
 use std::fs;
 use std::path::PathBuf;
@@ -1045,12 +1058,13 @@ fn generate_qr_pairing(mode: Option<String>) -> Result<PairingPayloadDto, String
         }
     }
     // Dual-Mode Mobil URL generasiyası (Lokal Wi-Fi LAN IP vs Bulud HTTPS)
+    let name_enc = url_encode_comp_name(&computer_name);
     let pairing_url = if origin.contains("127.0.0.1") || origin.contains("localhost") {
         let lan_ip = get_local_lan_ip().unwrap_or_else(|| "127.0.0.1".to_string());
         let mobile_origin = origin.replace("127.0.0.1", &lan_ip).replace("localhost", &lan_ip);
-        format!("{}/remote?device={}&code={}", mobile_origin, device_id, pair_code)
+        format!("{}/remote?device={}&code={}&name={}", mobile_origin, device_id, pair_code, name_enc)
     } else {
-        format!("{}/mobile?device={}&code={}", origin, device_id, pair_code)
+        format!("{}/mobile?device={}&code={}&name={}", origin, device_id, pair_code, name_enc)
     };
 
     let qr_code = qrcode::QrCode::new(pairing_url.as_bytes())

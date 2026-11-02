@@ -10,6 +10,11 @@ import subprocess
 import shutil
 from pathlib import Path
 
+if hasattr(sys.stdout, 'reconfigure'):
+    sys.stdout.reconfigure(encoding='utf-8', errors='replace')
+if hasattr(sys.stderr, 'reconfigure'):
+    sys.stderr.reconfigure(encoding='utf-8', errors='replace')
+
 # Terminal rəngləri (ANSI)
 GREEN = "\033[92m"
 YELLOW = "\033[93m"

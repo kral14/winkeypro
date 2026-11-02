@@ -42,7 +42,19 @@ class AccountService:
             row = conn.execute('''SELECT a.account_id, a.email FROM account_sessions s
                 JOIN user_accounts a ON a.account_id=s.account_id
                 WHERE s.token_hash=? AND s.expires_at>?''', (self.digest(token), time.time())).fetchone()
-            return dict(row) if row else None
+            if not row:
+                return None
+            res = dict(row)
+            try:
+                device_rows = conn.execute('''SELECT d.device_id, d.computer_name, d.status, d.last_seen, d.locked
+                    FROM account_devices ad
+                    JOIN devices d ON d.device_id = ad.device_id
+                    WHERE ad.account_id = ?
+                    ORDER BY d.created_at ASC''', (row['account_id'],)).fetchall()
+                res['devices'] = [dict(d) for d in device_rows]
+            except Exception:
+                res['devices'] = []
+            return res
 
     def authenticate(self, action, body):
         email, password = body.get('email'), body.get('password')

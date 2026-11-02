@@ -195,7 +195,7 @@ class GatewayService:
                 owner_b = conn.execute('SELECT account_id FROM account_devices WHERE device_id=?', (device_id,)).fetchone()
                 if (owner_a or owner_b) and (not owner_a or not owner_b or owner_a['account_id'] != owner_b['account_id']):
                     return 403, {'error': 'E_DIFFERENT_ACCOUNT', 'message': 'Yeni kompüterdə də eyni hesabla daxil olun.'}
-            dev = conn.execute("SELECT status FROM devices WHERE device_id = ?", (device_id,)).fetchone()
+            dev = conn.execute("SELECT status, computer_name FROM devices WHERE device_id = ?", (device_id,)).fetchone()
             if not dev or dev["status"] != "ACTIVE":
                 return 403, {"error": "E_DEVICE_NOT_ACTIVE", "message": "Cihaz aktiv deyil və ya ləğv edilib"}
 
@@ -213,10 +213,13 @@ class GatewayService:
             )
             conn.commit()
 
+        comp_name = dev["computer_name"] if dev and "computer_name" in dev.keys() else "Kompüter"
         return 200, {
             "success": True,
             "session_token": session_token,
             "device_id": device_id,
+            "computer_name": comp_name,
+            "name": comp_name,
             "expires_in": None,
             "persistent": True
         }
@@ -363,7 +366,7 @@ class GatewayService:
             if not self.authenticate_agent(conn, device_id, bearer_token):
                 return 401, {"error": "E_UNAUTHORIZED_AGENT", "message": "Agent autentifikasiyası (Bearer device_secret) uğursuz oldu"}
 
-            dev = conn.execute("SELECT status FROM devices WHERE device_id = ?", (device_id,)).fetchone()
+            dev = conn.execute("SELECT status, computer_name FROM devices WHERE device_id = ?", (device_id,)).fetchone()
             if not dev or dev["status"] != "ACTIVE":
                 return 403, {"error": "E_DEVICE_NOT_ACTIVE", "message": "Cihaz deaktiv edilib"}
 

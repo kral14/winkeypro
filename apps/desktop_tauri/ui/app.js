@@ -178,6 +178,8 @@ async function loadStatus() {
       if (versionLabel) versionLabel.textContent = isTauri ? 'v' + s.version : 'Önizləmə';
       if (document.getElementById('lblPcName')) document.getElementById('lblPcName').textContent = s.computer_name;
       if (document.getElementById('txtPcName')) document.getElementById('txtPcName').value = s.computer_name;
+      if (document.getElementById('txtPairPcName')) document.getElementById('txtPairPcName').value = s.computer_name;
+      window.currentDeviceId = s.device_id || '';
       if (s.cloud_gateway_origin) configuredCloudOrigin = s.cloud_gateway_origin;
       if (window.applyConnectionMode) window.applyConnectionMode(s.connection_mode === 'wifi' ? 'wifi' : 'cloud');
       if (document.getElementById('txtGatewayOrigin')) {
@@ -217,9 +219,43 @@ function initButtons() {
       try {
         await callNative('set_computer_name', { name });
         document.getElementById('lblPcName').textContent = name;
+        if (document.getElementById('txtPairPcName')) document.getElementById('txtPairPcName').value = name;
         showToast('toastPc', '✓ Kompüter adı uğurla saxlanıldı: ' + name);
       } catch (err) {
         showToast('toastPc', 'Xəta: ' + err);
+      }
+    });
+  }
+
+  var btnApplyPairPcName = document.getElementById('btnApplyPairPcName');
+  if (btnApplyPairPcName) {
+    btnApplyPairPcName.addEventListener('click', async () => {
+      const pairInput = document.getElementById('txtPairPcName');
+      const name = pairInput ? pairInput.value.trim() : '';
+      if (!name) {
+        showToast('toastPair', 'Zəhmət olmasa bu kompüter üçün bir ad daxil edin.');
+        return;
+      }
+      try {
+        await callNative('set_computer_name', { name });
+        if (document.getElementById('lblPcName')) document.getElementById('lblPcName').textContent = name;
+        if (document.getElementById('txtPcName')) document.getElementById('txtPcName').value = name;
+        showToast('toastPair', '✓ Kompüter adı "' + name + '" olaraq qeyd edildi. Yeni QR generasiya olunur...');
+        await refreshQrForCurrentMode();
+      } catch (err) {
+        showToast('toastPair', 'Xəta: ' + err);
+      }
+    });
+  }
+
+  var btnAddNewDeviceNav = document.getElementById('btnAddNewDeviceNav');
+  if (btnAddNewDeviceNav) {
+    btnAddNewDeviceNav.addEventListener('click', () => {
+      if (window.switchTab) window.switchTab('pairing');
+      const input = document.getElementById('txtPairPcName');
+      if (input) {
+        input.focus();
+        input.select();
       }
     });
   }
@@ -513,3 +549,39 @@ if (document.readyState === 'loading') {
 }
 })();
 
+
+
+window.renderAccountDevices = function(devices, currentId) {
+  const list = document.getElementById('accountDevicesList');
+  if (!list) return;
+  list.innerHTML = '';
+  if (!Array.isArray(devices) || devices.length === 0) {
+    list.innerHTML = '<div style="font-size:12px;color:var(--text-muted);padding:8px 12px;background:#101412;border-radius:6px;">Hesabınızda hələ heç bir əlavə cihaz yoxdur. "+ Yeni Cihaz Əlavə Et" ilə digər kompüterlərinizi də bağlaya bilərsiniz.</div>';
+    return;
+  }
+  const curr = currentId || window.currentDeviceId || '';
+  devices.forEach(d => {
+    const item = document.createElement('div');
+    item.style.cssText = 'display:flex;align-items:center;justify-content:space-between;background:#141716;border:1px solid var(--line);border-radius:8px;padding:10px 14px;';
+    const isCurrent = Boolean(curr && d.device_id === curr);
+    const isLocked = Boolean(d.locked);
+    item.innerHTML = `
+      <div style="display:flex;align-items:center;gap:10px;">
+        <span style="font-size:18px;">💻</span>
+        <div>
+          <div style="font-size:13px;font-weight:600;color:var(--text);display:flex;align-items:center;gap:6px;">
+            ${d.computer_name || 'Kompüter'}
+            ${isCurrent ? '<span style="font-size:10px;padding:1px 6px;border-radius:4px;background:var(--green-dark);color:var(--green);font-weight:700;">Bu PC</span>' : ''}
+          </div>
+          <div style="font-size:11px;color:var(--text-muted);font-family:monospace;">${d.device_id || ''}</div>
+        </div>
+      </div>
+      <div style="display:flex;align-items:center;gap:8px;">
+        <span style="font-size:11px;padding:3px 8px;border-radius:12px;background:${isLocked ? '#2d1917;color:var(--red)' : '#13241b;color:var(--green)'};font-weight:600;">
+          ${isLocked ? '🔒 Kilidli' : '🔓 Açıq'}
+        </span>
+      </div>
+    `;
+    list.appendChild(item);
+  });
+};

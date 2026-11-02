@@ -432,6 +432,26 @@
         </span>
       </div>
       <div id="toastGateway" class="toast" style="display: none;"></div>
+
+      <!-- HESABA BAĞLI CİHAZLAR SİYAHISI -->
+      <div id="accountDevicesBox" style="margin-top: 18px; padding-top: 16px; border-top: 1px solid var(--line);">
+        <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 10px;">
+          <label style="font-size: 13px; font-weight: 600; color: var(--text); display: flex; align-items: center; gap: 6px;">
+            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <rect x="2" y="3" width="20" height="14" rx="2" ry="2"></rect>
+              <line x1="8" y1="21" x2="16" y2="21"></line>
+              <line x1="12" y1="17" x2="12" y2="21"></line>
+            </svg>
+            Hesabınıza Bağlı Kompüterlər (Cihazlarınız):
+          </label>
+          <button type="button" class="btn-secondary" id="btnAddNewDeviceNav" style="font-size: 11px; padding: 4px 10px;">+ Yeni Cihaz Əlavə Et</button>
+        </div>
+        <div id="accountDevicesList" style="display: flex; flex-direction: column; gap: 6px;">
+          <div style="font-size: 12px; color: var(--text-muted); padding: 8px 12px; background: #101412; border-radius: 6px;">
+            Hesaba daxil olunduqda bütün cihazlarınız burada görünəcək.
+          </div>
+        </div>
+      </div>
     </div>
 
     <!-- TAB 2: TƏHLÜKƏSİZLİK VƏ PIN -->
@@ -474,6 +494,20 @@
 
       <div id="lblModeBanner" style="background: #111a14; border: 1px solid #1f3325; padding: 10px 14px; border-radius: 8px; font-size: 12px; color: var(--green); margin-bottom: 16px; display: flex; align-items: center; gap: 8px;">
         <span>✓ <strong>Lokal Rejim:</strong> Telefon kompüterlə eyni Wi-Fi şəbəkəsində olmalıdır. İnternet bağlantısı tələb olunmur.</span>
+      </div>
+
+      <!-- KOMPÜTERİN ADI VƏ QR CÜTLƏŞDİRMƏ -->
+      <div style="background: #141716; border: 1px solid var(--line); border-radius: 10px; padding: 14px 16px; margin-bottom: 16px;">
+        <label for="txtPairPcName" style="display: block; font-size: 12px; font-weight: 600; color: var(--green); margin-bottom: 6px;">
+          🖥️ Bu Kompüterin Adı (Telefonda "Kompüter seç" menyusunda görünəcək ad):
+        </label>
+        <div style="display: flex; gap: 8px;">
+          <input type="text" id="txtPairPcName" placeholder="Məsələn: Ofis, Ev, PC 2, Kafe..." style="flex: 1; padding: 10px 14px; background: #0c0f0d; border: 1px solid var(--line); border-radius: 6px; color: var(--text); font-size: 13px; font-weight: 500;">
+          <button type="button" class="btn-action" id="btnApplyPairPcName" style="white-space: nowrap;">Adı Təsdiqlə və QR Yarat</button>
+        </div>
+        <span style="font-size: 11px; color: var(--text-muted); display: block; margin-top: 6px;">
+          💡 Telefonunuz bu QR kodunu kamerası ilə oxudan kimi kompüter avtomatik bu adla qeyd olunacaq.
+        </span>
       </div>
 
       <p style="font-size: 12px; color: var(--text-muted); line-height: 1.6; margin-bottom: 16px;">

@@ -22,6 +22,9 @@
         const account = await invoke('account_status');
         document.getElementById('accountOpen').textContent = account.email;
         document.getElementById('accountEmail').value = account.email;
+        if (account.devices && window.renderAccountDevices) {
+          window.renderAccountDevices(account.devices);
+        }
         showMessage('Hesab aktivdir. Davam et düyməsini basa bilərsiniz.', 'success');
         continueButton.hidden = false;
         overlay.hidden = true;
@@ -90,6 +93,7 @@
         document.getElementById('accountOpen').textContent = account.email;
         showMessage(button.value === 'register' ? 'Hesab uğurla yaradıldı. Davam et düyməsini basın.' : 'Hesaba uğurla daxil oldunuz. Davam et düyməsini basın.', 'success');
         continueButton.hidden = false;
+        await status();
       } catch (error) { showMessage('Əməliyyat alınmadı: ' + String(error), 'error'); }
       finally { password.value = ''; controls.forEach(item => { item.disabled = false; }); }
     };
