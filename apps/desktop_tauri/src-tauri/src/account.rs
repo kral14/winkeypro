@@ -17,7 +17,7 @@ fn origin() -> Result<String, String> {
     let origin = super::gateway_config::cloud_origin(cfg.get("cloud_gateway_origin").and_then(Value::as_str));
     let url = tauri::Url::parse(&origin).map_err(|_| "E_ACCOUNT_ORIGIN")?;
     if url.scheme() != "https" && !matches!(url.host_str(), Some("127.0.0.1") | Some("localhost") | Some("[::1]")) {
-        return Err("Qeydiyyat üçün HTTPS server ünvanı lazımdır. Qoşulma bölməsində server ünvanını dəyişin.".into());
+        return Err("Qeydiyyat üçün etibarlı HTTPS serveri lazımdır. VM-də HTTPS qurduqdan sonra hesab ekranında server ünvanını dəyişin.".into());
     }
     Ok(origin)
 }

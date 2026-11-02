@@ -65,6 +65,16 @@ def dev_client_environment(lan_ip, port, base_env=None):
     return env
 
 
+def is_ipc_pipe_active(pipe_name=r"\\.\pipe\WinKey_Service_IPC"):
+    try:
+        import ctypes
+        kernel32 = ctypes.windll.kernel32
+        res = kernel32.WaitNamedPipeW(pipe_name, 0)
+        err = kernel32.GetLastError()
+        return res != 0 or err in (0, 121, 5, 231)
+    except Exception:
+        return False
+
 def check_run_dependencies():
     import importlib.util
     missing = [name for name in ('qrcode', 'PIL', 'cryptography') if importlib.util.find_spec(name) is None]
@@ -352,7 +362,7 @@ exit 0
         print(f"[...] Yeni compile olunmuş Tauri dev pəncərəsi açılır: {os.path.basename(tauri_exe)}")
 
         env = dev_client_environment(lan_ip, GATEWAY_PORT)
-        if not os.path.exists(r"\\.\pipe\WinKey_Service_IPC"):
+        if not is_ipc_pipe_active():
             worker_exe = os.path.join(ROOT_DIR, "apps", "winkey_service", "target", "release", "winkey_service.exe")
             if os.path.isfile(worker_exe):
                 dev_data = os.path.join(ROOT_DIR, ".dev-runtime")
@@ -370,6 +380,8 @@ exit 0
                 print(f"[DEV_WORKER] PID={worker_proc.pid}. Sistem xidməti qurulmayıb; dev worker başladıldı. Secure Desktop unlock üçün SYSTEM xidməti tələb olunur.")
             else:
                 print("[E_WORKER_MISSING] PC əmrlərini qəbul edən xidmət binarı yoxdur.")
+        else:
+            print("[INFO] WinKeyService fon xidməti artıq aktivdir (IPC pipe mövcuddur). Əlavə dev worker başladılmadı.")
         tauri_proc = subprocess.Popen([tauri_exe], cwd=ROOT_DIR, env=env)
         print(f"[PASS] Native Tauri Masaüstü Pəncərəsi uğurla başladıldı (PID: {tauri_proc.pid})!")
     else:

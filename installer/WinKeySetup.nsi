@@ -33,6 +33,9 @@ ShowUnInstDetails show
 !include "MUI2.nsh"
 !include "FileFunc.nsh"
 !include "LogicLib.nsh"
+!include "nsDialogs.nsh"
+Var DesktopShortcutSelected
+Var DesktopShortcutCheckbox
 
 ; Pencere Basligi ve Mehsul Adi
 Name "${PRODUCT_NAME}"
@@ -41,6 +44,7 @@ BrandingText "WinKey Pro · Tehlukesizlik ve Uzaqdan Idareetme"
 
 Function .onInit
     SetRegView 64
+    StrCpy $DesktopShortcutSelected ${BST_CHECKED}
 FunctionEnd
 
 Function un.onInit
@@ -55,6 +59,25 @@ FunctionEnd
 !define MUI_WELCOMEPAGE_TITLE "WinKey Pro Qurasdiricisina Xos Gelmisiniz"
 !define MUI_WELCOMEPAGE_TEXT "Bu sehrbaz WinKey Pro (v${PRODUCT_VERSION}) proqramini ve onun arxa plan tehlukesizlik xidmetini komputerinize qurasdiracaq.$\r$\n$\r$\nQurasdirma zamani sistem xidmeti avtomatik tenzimlenecek, qorunan tehlukesizlik icazeleri tetbiq olunacaq ve masaustu idareetme merkezi basladilacaq.$\r$\n$\r$\nDavam etmek ucun 'Qurasdir' duymesini sixin."
 !insertmacro MUI_PAGE_WELCOME
+
+Page custom ShortcutOptionsPage ShortcutOptionsLeave
+
+Function ShortcutOptionsPage
+    !insertmacro MUI_HEADER_TEXT "Qisayol secimi" "Masaustunde WinKey Pro qisayolu yaradilsin?"
+    nsDialogs::Create 1018
+    Pop $0
+    ${If} $0 == error
+        Abort
+    ${EndIf}
+    ${NSD_CreateCheckbox} 0 20u 100% 24u "Masaustunde WinKey Pro qisayolu yarat"
+    Pop $DesktopShortcutCheckbox
+    ${NSD_SetState} $DesktopShortcutCheckbox $DesktopShortcutSelected
+    nsDialogs::Show
+FunctionEnd
+
+Function ShortcutOptionsLeave
+    ${NSD_GetState} $DesktopShortcutCheckbox $DesktopShortcutSelected
+FunctionEnd
 
 ; 2. Qurasdirilma Prosesi Sehifesi
 !define MUI_PAGE_HEADER_TEXT "WinKey Pro Qurasdirilir"
@@ -154,7 +177,11 @@ Section "MainSection" SEC01
     CreateDirectory "$SMPROGRAMS\WinKey Pro"
     CreateShortcut "$SMPROGRAMS\WinKey Pro\WinKey Pro.lnk" "$INSTDIR\winkey_desktop.exe" "" "$INSTDIR\winkey_desktop.exe" 0
     CreateShortcut "$SMPROGRAMS\WinKey Pro\WinKey Pro Qaldir (Uninstall).lnk" "$INSTDIR\uninstall.exe" "" "$INSTDIR\uninstall.exe" 0
-    CreateShortcut "$DESKTOP\WinKey Pro.lnk" "$INSTDIR\winkey_desktop.exe" "" "$INSTDIR\winkey_desktop.exe" 0
+    ${If} $DesktopShortcutSelected == ${BST_CHECKED}
+        CreateShortcut "$DESKTOP\WinKey Pro.lnk" "$INSTDIR\winkey_desktop.exe" "" "$INSTDIR\winkey_desktop.exe" 0
+    ${Else}
+        Delete "$DESKTOP\WinKey Pro.lnk"
+    ${EndIf}
 
     ; Windows Registry (Apps & Features ucun qeydiyyat)
     DetailPrint "Windows Qurasdirilmis Proqramlar bazasinda qeydiyyat aparilir..."

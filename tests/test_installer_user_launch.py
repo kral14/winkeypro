@@ -6,6 +6,12 @@ ROOT = Path(__file__).resolve().parents[1]
 
 
 class InstallerUserLaunchTests(unittest.TestCase):
+    def test_desktop_shortcut_is_user_selected(self):
+        source = (ROOT / 'installer/WinKeySetup.nsi').read_text(encoding='utf-8')
+        self.assertIn('Page custom ShortcutOptionsPage ShortcutOptionsLeave', source)
+        self.assertIn('${NSD_GetState} $DesktopShortcutCheckbox $DesktopShortcutSelected', source)
+        shortcut = source.index('CreateShortcut "$DESKTOP')
+        self.assertIn('${If} $DesktopShortcutSelected == ${BST_CHECKED}', source[shortcut-100:shortcut])
     def test_finish_delegates_to_desktop_shell(self):
         source = (ROOT / 'installer/WinKeySetup.nsi').read_text(encoding='utf-8')
         launch = source.split('Function LaunchApp', 1)[1].split('FunctionEnd', 1)[0]

@@ -318,10 +318,10 @@
       <input id="accountEmail" type="email" autocomplete="username" required maxlength="254" style="display:block;width:100%;margin:8px 0 16px;padding:12px;">
       <label for="accountPassword">Şifrə (ən azı 10 simvol)</label>
       <input id="accountPassword" type="password" autocomplete="current-password" required minlength="10" maxlength="256" style="display:block;width:100%;margin:8px 0 16px;padding:12px;">
-      <p id="accountMessage" role="status" style="margin:12px 0;"></p>
-      <button id="accountLogin" type="submit" value="login" class="btn-primary">Daxil ol</button>
-      <button type="submit" value="register" class="btn-secondary">Hesab yarat</button>
-      <button id="accountSettings" type="button" class="btn-secondary" style="margin-top:16px;">Server ünvanını tənzimlə</button>
+      <p id="accountMessage" role="status" aria-live="polite" style="margin:12px 0;line-height:1.5;"></p>
+      <button id="accountLogin" type="submit" value="login" class="btn-action">Daxil ol</button>
+      <button id="accountRegister" type="submit" value="register" class="btn-secondary">Hesab yarat</button>
+      <button id="accountContinue" hidden type="button" class="btn-action">Davam et</button>
     </form>
   </div>
   <button id="accountOpen" type="button" class="btn-secondary" style="position:fixed;bottom:12px;right:16px;z-index:20;">Hesab</button>

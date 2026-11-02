@@ -416,8 +416,13 @@ fn run_ipc_worker_loop(stop_signal: Arc<AtomicBool>, is_mock: bool, data_dir: Pa
             let h_pipe = match create_secure_overlapped_pipe(PIPE_NAME, &sddl) {
                 Ok(h) => h,
                 Err(e) => {
-                    eprintln!("[IPC_ERROR] Pipe yaradıla bilmədi: {e}");
-                    thread::sleep(Duration::from_millis(200));
+                    if e.contains("os error 5") || e.contains("Erişim engellendi") || e.contains("Access is denied") {
+                        eprintln!("[IPC_CONFLICT] Named Pipe artıq aktiv sistem xidməti (WinKeyService) tərəfindən idarə olunur. Təkrar IPC dinləməsi gözlədilir.");
+                        thread::sleep(Duration::from_secs(5));
+                    } else {
+                        eprintln!("[IPC_ERROR] Pipe yaradıla bilmədi: {e}");
+                        thread::sleep(Duration::from_millis(500));
+                    }
                     continue;
                 }
             };
