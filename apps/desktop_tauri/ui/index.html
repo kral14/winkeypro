@@ -684,6 +684,35 @@
       }
     }
 
+    /* Give the device list the available space, including compact windows. */
+    #panel-status {
+      overflow-y: auto;
+    }
+    #panel-status .split-row {
+      min-height: 490px;
+    }
+    #deviceManagementCard {
+      justify-content: flex-start;
+      gap: 16px !important;
+    }
+    #accountDevicesBox {
+      display: flex;
+      flex-direction: column;
+      flex: 1;
+      min-height: 240px;
+    }
+    #accountDevicesList {
+      flex: 1;
+      min-height: 190px;
+      max-height: none !important;
+      gap: 8px !important;
+      overflow-y: auto;
+    }
+    #accountDevicesList > div {
+      flex-shrink: 0;
+      min-height: 62px;
+      font-size: 14px;
+    }
   </style>
 </head>
 <body>
@@ -853,7 +882,7 @@
         </div>
 
         <!-- Sağ: Kompüter Adı və Mobil Nəzarət -->
-        <div class="content-card">
+        <div class="content-card" id="deviceManagementCard">
           <div>
             <div class="card-header-sm">
               <span class="card-title">
@@ -893,7 +922,7 @@
               </span>
               <button type="button" class="btn-secondary" id="btnAddNewDeviceNav" style="font-size:10px;padding:2px 8px;">+ Əlavə Et</button>
             </div>
-            <div id="accountDevicesList" style="display:flex;flex-direction:column;gap:4px;max-height:85px;overflow-y:auto;">
+            <div id="accountDevicesList" style="display:flex;flex-direction:column;">
               <div style="font-size:11px;color:var(--text-muted);padding:6px 10px;background:var(--card);border-radius:var(--radius-sm);">
                 Hesaba daxil olunduqda cihazlarınız burada görünəcək.
               </div>

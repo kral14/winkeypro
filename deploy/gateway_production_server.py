@@ -166,7 +166,7 @@ def get_mobile_html() -> str:
     <meta name="apple-mobile-web-app-title" content="WinKey">
     <meta name="theme-color" content="#0c0f0d">
     <link id="appManifest" rel="manifest" href="/mobile-assets/manifest.webmanifest">
-    <link rel="apple-touch-icon" href="/mobile-assets/icon.png">
+    <link rel="apple-touch-icon" href="/mobile-assets/apple-touch-icon.png">
     <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
     <style>
         :root {
@@ -817,7 +817,16 @@ def get_mobile_html() -> str:
             </div>
             <select id="deviceSelect" style="display:block;width:100%;padding:10px 12px;color:var(--text-main);background:#101412;border:1px solid var(--card-border);border-radius:8px;font-size:0.9rem;font-weight:500;outline:none;cursor:pointer;"></select>
             <p id="deviceMessage" role="status" style="font-size:.8rem;line-height:1.4;margin:6px 0 0;color:var(--text-dim);"></p>
-            <button id="prepareInstall" class="action-pill-btn" type="button">iPhone üçün tətbiqi hazırla</button>
+            <button id="prepareInstall" class="action-pill-btn" type="button">Tətbiqi quraşdır</button>
+            <button id="copyInstallCode" hidden class="action-pill-btn" type="button">Qoşulma kodunu kopyala</button>
+            <div id="installRecovery" hidden style="margin-top:12px;">
+              <p style="font-size:.85rem;line-height:1.5;">Köhnə ana ekran tətbiqi boş açılırsa, Safari-də qoşulmuş WinKey səhifəsində “Qoşulma kodunu kopyala” basın və kodu buraya yapışdırın.</p>
+              <form id="installRecoveryForm">
+                <label for="installRecoveryCode">Birdəfəlik qoşulma kodu</label>
+                <input id="installRecoveryCode" required autocomplete="off" autocapitalize="off" spellcheck="false" style="display:block;width:100%;padding:10px;margin:8px 0;">
+                <button id="restoreInstall" class="action-pill-btn" type="submit">Qoşulmanı bərpa et</button>
+              </form>
+            </div>
         </section>
         <!-- Header -->
         <header class="header">
@@ -970,6 +979,7 @@ def get_mobile_html() -> str:
     </div>
 
     <script src="/mobile-assets/jsQR.js"></script>
+    <script src="/mobile-assets/install.js"></script>
     <script src="/mobile-assets/devices.js"></script>
     <script>
         const urlParams = new URLSearchParams(window.location.search);
@@ -2051,6 +2061,16 @@ class GatewayHandler(BaseHTTPRequestHandler):
             print(f"[GATEWAY] phone opened {urlparse(self.path).path} (QR query redacted)", flush=True)
         url = urlparse(self.path)
         path = url.path.rstrip("/")
+        if path == '/mobile-sw.js':
+            from pathlib import Path
+            content=(Path(__file__).parent/'static'/'mobile-sw.js').read_bytes()
+            self.send_response(200)
+            self._set_security_headers('application/javascript')
+            self.send_header('Service-Worker-Allowed','/')
+            self.send_header('Content-Length',str(len(content)))
+            self.end_headers()
+            self.wfile.write(content)
+            return
         if path.startswith('/mobile-assets/'):
             from pathlib import Path
             from deploy.mobile_install import manifest
@@ -2059,10 +2079,10 @@ class GatewayHandler(BaseHTTPRequestHandler):
                 ticket = parse_qs(url.query).get('install', [''])[0]
                 self._send_json(200, manifest(ticket))
                 return
-            if asset in ('devices.js', 'jsQR.js', 'icon.png'):
+            if asset in ('devices.js','install.js','jsQR.js','icon.png','icon-192.png','icon-512.png','apple-touch-icon.png'):
                 content = (Path(__file__).parent / 'static' / asset).read_bytes()
                 self.send_response(200)
-                self._set_security_headers('image/png' if asset == 'icon.png' else 'application/javascript')
+                self._set_security_headers('image/png' if asset.endswith('.png') else 'application/javascript')
                 self.send_header('Content-Length', str(len(content)))
                 self.end_headers()
                 self.wfile.write(content)

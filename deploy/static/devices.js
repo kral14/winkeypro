@@ -89,6 +89,7 @@
       portfolio.save();render();
       if(previous!==portfolio.selected)onSelect(portfolio.current());
       onPresence?.(portfolio.current());
+      root.WinKeyInstall?.refresh();
     }catch(error){
       for(const device of portfolio.devices)device.online=false;
       render();onPresence?.(portfolio.current());
@@ -100,11 +101,12 @@
     const ticket=new URLSearchParams(location.hash.slice(1)).get('install');
     if(ticket && !portfolio.devices.length) {
       try {
-        const restored=await post('/mobile/restore',{ticket});
+        const restored=root.WinKeyInstall ? await root.WinKeyInstall.restore(ticket) : await post('/mobile/restore',{ticket});
         for(const device of restored.devices)portfolio.add(device);
         portfolio.select(restored.selected);history.replaceState({},'',location.pathname);
       }catch(error){message('Tətbiq qoşulması bərpa edilmədi. PC-də yeni QR yaradıb oxudun.');}
     }
+    if(ticket && portfolio.devices.length)history.replaceState({},'',location.pathname);
     const query=new URLSearchParams(location.search);
     const code=query.get('code') || query.get('pair_code');
     if(code) {
@@ -122,10 +124,10 @@
     if(select)select.onchange=event=>{
       const previous=portfolio.selected,next=portfolio.devices.find(d=>d.id===event.target.value);
       if(!next || !onSelect(next,true)){event.target.value=previous;message('Cari əmrin bitməsini gözləyin.');return;}
-      portfolio.select(next.id);onSelect(next);onPresence?.(next);message('Seçim yadda saxlanıldı.');
+      portfolio.select(next.id);onSelect(next);onPresence?.(next);message('Seçim yadda saxlanıldı.');root.WinKeyInstall?.refresh();
     };
     const prepare=byId('prepareInstall');
-    if(prepare)prepare.onclick=async()=>{
+    if(prepare && !root.WinKeyInstall)prepare.onclick=async()=>{
       try {
         if(!root.isSecureContext)throw Error('iPhone tətbiqi üçün serverdə HTTPS qurulmalıdır.');
         const result=await post('/mobile/install',{devices:portfolio.devices,selected:portfolio.selected});
@@ -135,6 +137,14 @@
     };
     await sync();
     if(!portfolio.devices.length)message('Cihaz əlavə etmək üçün PC-də hesabınıza daxil olub ad verin və QR-ni oxudun.');
+    if(root.WinKeyInstall)root.WinKeyInstall.init(()=>({
+      devices:portfolio.devices,selected:portfolio.selected,
+      restore:async payload=>{
+        if(!onSelect(null,true))throw Error('Cari əmrin bitməsini gözləyin.');
+        for(const device of payload.devices)portfolio.add(device);
+        portfolio.select(payload.selected);render();onSelect(portfolio.current());await sync();
+      }
+    }),message).catch(error=>message(error.message));
     root.setInterval(sync,5000);
     root.addEventListener('pageshow',sync);
     document.addEventListener('visibilitychange',()=>{if(!document.hidden)sync();});

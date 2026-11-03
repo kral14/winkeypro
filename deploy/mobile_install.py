@@ -11,7 +11,8 @@ def manifest(ticket=''):
     return {'id': '/mobile', 'name': 'WinKey Pro', 'short_name': 'WinKey',
             'start_url': '/mobile' + suffix, 'scope': '/', 'display': 'standalone',
             'background_color': '#0c0f0d', 'theme_color': '#0c0f0d',
-            'icons': [{'src': '/mobile-assets/icon.png', 'sizes': '128x128', 'type': 'image/png', 'purpose': 'any'}]}
+            'icons': [{'src': '/mobile-assets/icon-192.png', 'sizes': '192x192', 'type': 'image/png', 'purpose': 'any'},
+                      {'src': '/mobile-assets/icon-512.png', 'sizes': '512x512', 'type': 'image/png', 'purpose': 'any'}]}
 
 
 class MobileInstall:
@@ -45,7 +46,8 @@ class MobileInstall:
         if payload is None: return 401, {'error': 'E_INSTALL_SESSIONS'}
         ticket = secrets.token_hex(32)
         with self.service.db.get_conn() as conn:
-            conn.execute('DELETE FROM mobile_install_handoffs WHERE expires_at < ? OR consumed=1', (time.time(),))
+            conn.execute('DELETE FROM mobile_install_handoffs WHERE expires_at < ?', (time.time(),))
+            conn.execute('DELETE FROM mobile_install_receipts WHERE ticket_hash NOT IN (SELECT ticket_hash FROM mobile_install_handoffs)')
             conn.execute('INSERT INTO mobile_install_handoffs (ticket_hash,payload,expires_at,consumed) VALUES (?,?,?,0)',
                          (hashlib.sha256(ticket.encode()).hexdigest(), json.dumps(payload), time.time()+86400))
             conn.commit()
@@ -56,14 +58,23 @@ class MobileInstall:
         if not isinstance(ticket, str) or not re.fullmatch('[0-9a-f]{64}', ticket):
             return 400, {'error': 'E_INSTALL_TICKET'}
         digest = hashlib.sha256(ticket.encode()).hexdigest()
+        nonce = body.get('client_nonce')
+        if nonce is not None and (not isinstance(nonce,str) or not re.fullmatch('[0-9a-f]{64}',nonce)):
+            return 400, {'error':'E_INSTALL_NONCE'}
+        nonce_hash = hashlib.sha256(nonce.encode()).hexdigest() if nonce else None
         with self.service.db.get_conn() as conn:
-            row = conn.execute('SELECT payload FROM mobile_install_handoffs WHERE ticket_hash=? AND consumed=0 AND expires_at>?',
+            row = conn.execute('SELECT payload,consumed FROM mobile_install_handoffs WHERE ticket_hash=? AND expires_at>?',
                                (digest,time.time())).fetchone()
             if not row: return 410, {'error': 'E_INSTALL_EXPIRED'}
             changed = conn.execute('UPDATE mobile_install_handoffs SET consumed=1 WHERE ticket_hash=? AND consumed=0 AND expires_at>?',
                                    (digest,time.time())).rowcount
+            if changed == 1 and nonce_hash:
+                conn.execute('INSERT INTO mobile_install_receipts (ticket_hash,client_nonce_hash) VALUES (?,?)',(digest,nonce_hash))
+            elif changed != 1:
+                receipt=conn.execute('SELECT client_nonce_hash FROM mobile_install_receipts WHERE ticket_hash=?',(digest,)).fetchone()
+                if not nonce_hash or not receipt or not secrets.compare_digest(receipt['client_nonce_hash'],nonce_hash):
+                    return 410, {'error': 'E_INSTALL_EXPIRED'}
             conn.commit()
-            if changed != 1: return 410, {'error': 'E_INSTALL_EXPIRED'}
         payload = self.validated(json.loads(row['payload']))
         if payload is None: return 401, {'error': 'E_INSTALL_SESSIONS'}
         return 200, payload

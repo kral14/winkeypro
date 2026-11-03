@@ -39,6 +39,22 @@ class AccountTests(unittest.TestCase):
     def test_invalid_inputs(self):
         self.assertEqual(self.accounts.authenticate('register', {'email': 'bad', 'password': '123'})[0], 400)
 
+    def test_install_manifest_has_android_icons(self):
+        data=manifest()
+        self.assertTrue({'192x192','512x512'} <= {icon['sizes'] for icon in data['icons']})
+        self.assertEqual(data['display'],'standalone')
+
+    def test_lost_install_response_can_retry_only_from_same_installation(self):
+        self.seed_device('pc1','token1')
+        install=MobileInstall(GatewayService(self.db,''))
+        payload={'devices':[{'id':'pc1','token':'token1','name':'Ofis'}],'selected':'pc1'}
+        _, ticket=install.create(payload)
+        body={'ticket':ticket['ticket'],'client_nonce':'a'*64}
+        self.assertEqual(install.restore(body),(200,payload))
+        self.assertEqual(install.restore(body),(200,payload),'A lost response must be recoverable by the same installed app')
+        self.assertEqual(install.restore({'ticket':ticket['ticket'],'client_nonce':'b'*64})[0],410)
+        self.assertEqual(install.restore({'ticket':ticket['ticket']})[0],410)
+
     def test_account_lists_online_devices_using_real_schema(self):
         _, account = self.accounts.authenticate('register', {'email':'arif@example.com','password':'long valid password'})
         self.seed_device('pc1','phone1',account['account_id'])
@@ -210,10 +226,18 @@ class AccountTests(unittest.TestCase):
             self.assertEqual(response.json()['email'],'arif@example.com')
             self.assertEqual(client.post('/accounts/session',json={}).status_code,401)
             self.assertEqual(client.post('/accounts/login',json=[]).status_code,400)
-            for asset in ('devices.js','jsQR.js','icon.png','manifest.webmanifest'):
+            for asset in ('devices.js','install.js','jsQR.js','icon.png','icon-192.png','icon-512.png','apple-touch-icon.png','manifest.webmanifest'):
                 response = client.get('/mobile-assets/'+asset)
                 self.assertEqual(response.status_code,200,(asset,response.text[:100] if asset!='icon.png' else 'image'))
                 self.assertTrue(response.content)
+            worker=client.get('/mobile-sw.js')
+            self.assertEqual(worker.status_code,200)
+            self.assertEqual(worker.headers['Service-Worker-Allowed'],'/')
+            self.assertIn('application/javascript',worker.headers['Content-Type'])
+            import struct
+            for name,size in [('icon-192.png',192),('icon-512.png',512),('apple-touch-icon.png',180)]:
+                image=client.get('/mobile-assets/'+name).content
+                self.assertEqual(struct.unpack('>II',image[16:24]),(size,size))
             payload = {'devices':[{'id':'pc1','token':'token1','name':'Ofis 1'}],'selected':'pc1'}
             install = client.post('/mobile/install',json=payload).json()
             app_manifest = client.get('/mobile-assets/manifest.webmanifest?install='+install['ticket']).json()

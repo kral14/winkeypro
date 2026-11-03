@@ -15,8 +15,24 @@ On the server, an administrator must:
 
 The repository's existing domain-based Caddyfile does not automatically configure an IP certificate. Do not run the domain configure command with an invented domain. No remote server was modified as part of the local Windows build.
 
-## iPhone installation
+## iPhone and Android PWA installation
 
-In Safari, scan the PC QR and name that PC. Use **Yeni cihaz əlavə et** for more PCs. Select the required PC. Before adding to the home screen, press **iPhone üçün tətbiqi hazırla**, then use Safari's Share → Add to Home Screen. Open the new icon within 24 hours. A one-use handoff restores the paired devices into the installed app's own storage; persistent remote-control tokens are not placed in its launch URL.
+PC registration and device naming happen on PC. Scan its QR with the phone camera and open the mobile page in Safari (iPhone) or Chrome (Android). The paired device list and selection remain on the phone.
 
-If an old home-screen icon opens with no pairing, use its **Yeni cihaz əlavə et** action to scan a fresh PC QR, or prepare a new installation from Safari. Clearing browser/app storage requires pairing again. The installed app reconnects when brought back to the foreground. Physical iOS installation and camera permission still require device testing.
+On HTTPS, a browser with paired PCs automatically prepares an expiring handoff and updates both the web manifest and current launch fragment. This handles iOS opening an installed web app with storage separate from Safari. Persistent device tokens are never placed in the launch URL. First open the new icon within 24 hours.
+
+- iPhone: press **Ana ekrana əlavə et**, then Safari Share → Add to Home Screen. Depending on the iOS version, enable opening as a web app.
+- Android: press **Android-də quraşdır** when Chrome offers installation. If preparation is still running, the first click prepares it and the next click opens Chrome's native install prompt. If no prompt is available, use Chrome's menu → Install app / Add to Home Screen.
+- Old installed icon opens empty: in the paired Safari/Chrome page press **Qoşulma kodunu kopyala**. In the empty installed app, paste it into **Birdəfəlik qoşulma kodu** and press **Qoşulmanı bərpa et**. Prepare a fresh code if expired/already claimed elsewhere. This restores an existing phone pairing, rather than enrolling a PC on mobile.
+- If a restore response is lost, the same installed app can retry using its persisted random installation nonce. A different installation cannot reuse a claimed handoff. Expiry and live session revocation are still enforced.
+- The service worker caches only the public static shell and icons. API calls, commands, account/session data, QR query URLs, and install-ticket manifests are never cached. Offline controls do not execute commands.
+
+## Deployment files
+
+The Docker allowlist includes `deploy/static/install.js`, `mobile-sw.js`, 192px/512px icons and the 180px Apple touch icon. Both the ASGI and compatibility HTTP servers serve the worker at **/mobile-sw.js** with root scope. Deploy the new Python modules together with all static files; keep the existing database volume so phone sessions survive.
+
+This is a server/mobile update, not an APK and not a Windows setup change. Native mobile store distribution is outside this workflow. Physical iPhone and Android installation remains a device check after VM deployment.
+
+## Current operational blocker
+
+The last live check showed HTTP health 200 at `http://158.101.172.228:8080`, while `https://158.101.172.228` was unavailable. A shortcut can still be created on some browsers, but this is not a reliable secure PWA installation. Frontend changes cannot provision a trusted certificate on the VM. Configure IP HTTPS as described above before testing installation. After HTTPS is ready, the desktop must produce QR links using that HTTPS origin; do not keep pairing over the old HTTP origin and expect its storage to migrate automatically to HTTPS.

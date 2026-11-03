@@ -15,6 +15,11 @@ deploy/static/**
 !deploy/static/jsQR.js
 !deploy/static/jsQR-LICENSE.txt
 !deploy/static/icon.png
+!deploy/static/install.js
+!deploy/static/mobile-sw.js
+!deploy/static/icon-192.png
+!deploy/static/icon-512.png
+!deploy/static/apple-touch-icon.png
 !deploy/windows_release/
 deploy/windows_release/**
 !deploy/windows_release/WinKeyUpdate.zip

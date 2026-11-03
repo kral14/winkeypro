@@ -195,9 +195,16 @@ def build_asgi_app(service: GatewayService, dashboard_html_path: Optional[str] =
             response = JSONResponse(manifest(request.query_params.get('install', '')), media_type='application/manifest+json')
             response.headers['Cache-Control'] = 'no-store'
             return _security_headers(response)
-        if asset in ('devices.js', 'jsQR.js', 'icon.png'):
-            return _security_headers(FileResponse(Path(__file__).parent / 'static' / asset, media_type='image/png' if asset == 'icon.png' else 'application/javascript'))
+        if asset in ('devices.js','install.js','jsQR.js','icon.png','icon-192.png','icon-512.png','apple-touch-icon.png'):
+            return _security_headers(FileResponse(Path(__file__).parent / 'static' / asset, media_type='image/png' if asset.endswith('.png') else 'application/javascript'))
         return Response(status_code=404)
+
+    async def handle_mobile_worker(request):
+        from pathlib import Path
+        response=FileResponse(Path(__file__).parent/'static'/'mobile-sw.js',media_type='application/javascript')
+        response.headers['Cache-Control']='no-cache'
+        response.headers['Service-Worker-Allowed']='/'
+        return _security_headers(response)
 
     async def handle_admin_page(request: Request) -> Response:
         from deploy.gateway_production_server import get_admin_html
@@ -880,6 +887,7 @@ def build_asgi_app(service: GatewayService, dashboard_html_path: Optional[str] =
         Route("/", handle_dashboard, methods=["GET"]),
         Route("/dashboard", handle_dashboard, methods=["GET"]),
         Route("/mobile", handle_mobile_page, methods=["GET"]),
+        Route("/mobile-sw.js", handle_mobile_worker, methods=["GET"]),
         Route("/mobile-assets/{asset}", handle_mobile_asset, methods=["GET"]),
         Route("/accounts/{action}", handle_feature, methods=["POST"]),
         Route("/mobile/install", handle_feature, methods=["POST"]),

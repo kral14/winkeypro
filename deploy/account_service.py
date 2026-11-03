@@ -28,6 +28,8 @@ def initialize_accounts(conn):
         '''CREATE TABLE IF NOT EXISTS mobile_install_handoffs (
             ticket_hash TEXT PRIMARY KEY, payload TEXT NOT NULL,
             expires_at DOUBLE PRECISION NOT NULL, consumed INTEGER NOT NULL DEFAULT 0)''',
+        '''CREATE TABLE IF NOT EXISTS mobile_install_receipts (
+            ticket_hash TEXT PRIMARY KEY, client_nonce_hash TEXT NOT NULL)''',
     ):
         conn.execute(sql)
 

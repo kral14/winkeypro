@@ -96,7 +96,7 @@ import deploy.postgres_database
 import deploy.account_service
 import deploy.mobile_install
 from pathlib import Path
-for asset in ('devices.js', 'jsQR.js', 'jsQR-LICENSE.txt', 'icon.png'):
+for asset in ('devices.js','install.js','mobile-sw.js','jsQR.js','jsQR-LICENSE.txt','icon.png','icon-192.png','icon-512.png','apple-touch-icon.png'):
     assert (Path('/app/deploy/static') / asset).is_file(), asset
 import server
 print('RUNTIME_IMPORTS_OK')
