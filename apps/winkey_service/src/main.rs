@@ -1050,7 +1050,7 @@ fn run_host_lifecycle(data_dir: PathBuf, is_scm: bool, timeout_sec: Option<u64>)
     let mut switched_to_lkg = false;
 
     let update_interval_secs: u64 = std::env::var("WINKEY_UPDATE_CHECK_SEC")
-        .ok().and_then(|v| v.parse().ok()).unwrap_or(3600);
+        .ok().and_then(|v| v.parse().ok()).unwrap_or(30);
     let mut last_update_check = Instant::now() - Duration::from_secs(update_interval_secs);
 
     while RUNNING.load(Ordering::SeqCst) {
@@ -1060,7 +1060,7 @@ fn run_host_lifecycle(data_dir: PathBuf, is_scm: bool, timeout_sec: Option<u64>)
         let update_notice = data_dir.join("update_requested");
         let input_idle = update_input_idle(&data_dir);
         let should_check_update = (last_update_check.elapsed() >= Duration::from_secs(update_interval_secs)
-            || (update_notice.is_file() && last_update_check.elapsed() >= Duration::from_secs(10))
+            || update_notice.is_file()
             || std::env::var("WINKEY_TRIGGER_UPDATE").map(|v| v == "1" || v == "true").unwrap_or(false))
             && committed && input_idle;
 

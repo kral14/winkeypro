@@ -505,45 +505,102 @@ function initButtons() {
   refreshQrForCurrentMode();
 }
 
-// Səhifə yüklənəndə hər şeyi işə sal
-async function loadUpdateStatus() {
+// Səhifə yüklənəndə hər şeyi işə sal və canlı avtomatik yenilənməni idarə et
+let isUpdatingCheck = false;
+
+async function loadUpdateStatus(isSilent = false) {
   const button = document.getElementById('btnCheckUpdate');
   const message = document.getElementById('lblUpdateMessage');
-  if (!button || !message || button.disabled) return;
-  if (!isTauri) { message.textContent = 'Önizləmə rejimi: real yenilənmə yoxlanmır.'; return; }
-  button.disabled = true;
-  message.textContent = 'Serverdəki imzalı buraxılış yoxlanır…';
+  const progressBar = document.getElementById('barUpdateProgress');
+  const progressPercent = document.getElementById('lblProgressPercent');
+  const progressStage = document.getElementById('lblProgressStage');
+
+  if (isUpdatingCheck) return;
+  if (!isTauri) {
+    if (message) message.textContent = 'Önizləmə rejimi: real yenilənmə yoxlanmır.';
+    return;
+  }
+  isUpdatingCheck = true;
+  if (!isSilent && button) button.disabled = true;
+
+  function setProgress(percent, label, color = 'var(--green)') {
+    if (progressBar) {
+      progressBar.style.width = percent + '%';
+      progressBar.style.background = color;
+    }
+    if (progressPercent) {
+      progressPercent.textContent = percent + '%';
+      progressPercent.style.color = color;
+    }
+    if (progressStage) {
+      progressStage.innerHTML = label;
+    }
+  }
+
+  if (!isSilent && message) {
+    message.textContent = 'Serverdəki imzalı buraxılış yoxlanır…';
+    setProgress(30, '<span>🔄</span> Server yoxlanılır…', '#38bdf8');
+  }
+
   try {
     const status = await callNative('get_update_status', { checkServer: true });
-    document.getElementById('lblDesktopVersion').textContent = status.channel === 'dev' ? 'Dev build (setup deyil)' : 'v' + status.desktop_version;
-    document.getElementById('lblWorkerVersion').textContent = status.worker_version ? 'v' + status.worker_version : 'Bildirilməyib';
-    document.getElementById('lblLatestVersion').textContent = status.latest_version ? 'v' + status.latest_version : 'Məlum deyil';
+    if (document.getElementById('lblDesktopVersion'))
+      document.getElementById('lblDesktopVersion').textContent = status.channel === 'dev' ? 'Dev build (setup deyil)' : 'v' + status.desktop_version;
+    if (document.getElementById('lblWorkerVersion'))
+      document.getElementById('lblWorkerVersion').textContent = status.worker_version ? 'v' + status.worker_version : 'Bildirilməyib';
+    if (document.getElementById('lblLatestVersion'))
+      document.getElementById('lblLatestVersion').textContent = status.latest_version ? 'v' + status.latest_version : 'Məlum deyil';
+
     const messages = {
       up_to_date: '✓ Ən son versiya quraşdırılıb və təsdiqlənib.',
       ahead: 'Yerli versiya serverdəki buraxılışdan yenidir; downgrade edilmir.',
       dev: 'Dev build işləyir. Quraşdırılmış versiya kimi müqayisə edilmir və xidmət yenilənməsi başladılmır.',
       service_unknown: 'Proqram versiyası yoxlandı, amma xidmət versiyası təsdiqlənmədi.',
-      requested: 'Yeni versiya var. Xidmətə yenilənmə sorğusu göndərildi; əməliyyat bitəndə tətbiq ediləcək.',
+      requested: 'Yeni versiya aşkarlandı! Avtomatik yenilənmə sorğusu göndərildi, endirilmə başlayır…',
       service_unavailable: 'Yeni versiya var, amma xidmət sorğunu qəbul etmədi. Xidmətin vəziyyətini yoxlayın.',
       setup_required: 'Yeni versiya üçün proqram quraşdırıcısının (Setup.exe) yenilənməsi tələb olunur.',
       no_release: 'Serverdə yenilənmə paketi yayımlanmayıb.',
       unreachable: 'Serverə qoşulmaq alınmadı. Son versiya təsdiqlənmədi.'
     };
+
     const phases = {
-      STAGING: 'Yeni paket yüklənir və bütövlüyü yoxlanılır…',
+      STAGING: 'Yeni paket yüklənir və kriptoqrafik Ed25519 bütövlüyü yoxlanılır…',
       PENDING_ACTIVATION: 'Yeni versiya paketi uğurla endirildi və hazırlandı; xidmət təhlükəsiz keçidi gözləyir.',
       PROBATION: 'Yeni versiya aktivləşdirilib sağlamlıq sınağındadır (təsdiq gözlənilir).',
       COMMITTED: '✓ Yenilənmə tam təsdiqləndi. Ən son versiya işləyir.',
       SETUP_REQUIRED: 'Yeni versiya üçün proqram quraşdırıcısının (Setup.exe) yenilənməsi tələb olunur.',
       ROLLED_BACK: 'Xidmət əvvəlki işləyən versiyaya qayıtdı (Rollback). Yenilənmə loqlarını yoxlayın.'
     };
-    message.textContent = phases[status.phase] || messages[status.status] || 'Yenilənmə vəziyyəti məlum deyil.';
+
+    if (status.phase === 'STAGING' || status.status === 'requested') {
+      setProgress(50, '<span>📥</span> Yeni versiya endirilir və yoxlanılır…', '#38bdf8');
+    } else if (status.phase === 'PENDING_ACTIVATION') {
+      setProgress(80, '<span>⚙️</span> Paket hazırlandı. Aktivasiya gözlənilir…', '#f59e0b');
+    } else if (status.phase === 'PROBATION') {
+      setProgress(95, '<span>🧪</span> Yeni versiya sınaqdan keçirilir…', '#a855f7');
+    } else if (status.status === 'setup_required' || status.phase === 'SETUP_REQUIRED') {
+      setProgress(100, '<span>⚠️</span> Setup yenilənməsi tələb olunur', 'var(--red)');
+    } else if (status.status === 'unreachable') {
+      setProgress(100, '<span>⚠️</span> Serverlə əlaqə kəsildi', '#ef4444');
+    } else {
+      // up_to_date, ahead, dev, COMMITTED
+      setProgress(100, '<span>✅</span> Sistem ən son versiyadadır', 'var(--green)');
+    }
+
+    if (message) {
+      message.textContent = phases[status.phase] || messages[status.status] || 'Yenilənmə vəziyyəti məlum deyil.';
+    }
   } catch (error) {
-    document.getElementById('lblLatestVersion').textContent = 'Yoxlama alınmadı';
-    message.textContent = 'Yenilənmə yoxlanmadı: ' + String(error);
+    if (document.getElementById('lblLatestVersion'))
+      document.getElementById('lblLatestVersion').textContent = 'Yoxlama alınmadı';
+    if (message)
+      message.textContent = 'Yenilənmə yoxlanmadı: ' + String(error);
+    setProgress(100, '<span>⚠️</span> Yoxlama xətası', '#ef4444');
   } finally {
-    button.disabled = false;
-    document.getElementById('lblUpdateChecked').textContent = 'Son yoxlama cəhdi: ' + new Date().toLocaleTimeString('az-AZ');
+    isUpdatingCheck = false;
+    if (button) button.disabled = false;
+    const checkedEl = document.getElementById('lblUpdateChecked');
+    if (checkedEl) checkedEl.textContent = 'Son yoxlama: ' + new Date().toLocaleTimeString('az-AZ');
   }
 }
 
@@ -551,8 +608,17 @@ function initApp() {
   initTabs();
   initButtons();
   loadStatus();
-  document.getElementById('btnCheckUpdate')?.addEventListener('click', loadUpdateStatus);
-  loadUpdateStatus();
+  document.getElementById('btnCheckUpdate')?.addEventListener('click', () => loadUpdateStatus(false));
+  loadUpdateStatus(false);
+
+  // Arxa planda avtomatik canlı yenilənmə yoxlanışı (hər 10 saniyədən bir əllə basmağa ehtiyac qalmadan)
+  if (isTauri) {
+    setInterval(() => {
+      if (!document.hidden) {
+        loadUpdateStatus(true);
+      }
+    }, 10000);
+  }
   const envBadge = document.getElementById('envBadge');
   if (envBadge && !isTauri) {
     envBadge.textContent = 'ÖNİZLƏMƏ REJİMİ';
