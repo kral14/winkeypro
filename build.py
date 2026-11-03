@@ -700,12 +700,31 @@ def main():
     if args.version:
         RELEASE_VERSION = args.version
     else:
+        # Versiyanı həm tauri.conf.json, həm Cargo.toml, həm də manifest.json-dan oxuyub ən son/böyük olanı götürürük
+        detected_versions = []
         try:
-            old=json.loads(Path(PRE_SIGNED_DIR,'manifest.json').read_text(encoding='utf-8'))['version']
-            major,minor,patch=map(int,old.split('.'))
-            RELEASE_VERSION=f'{major}.{minor}.{patch+1}'
-        except (OSError,ValueError,KeyError):
-            RELEASE_VERSION='0.1.1'
+            old = json.loads(Path(PRE_SIGNED_DIR, 'manifest.json').read_text(encoding='utf-8'))['version']
+            detected_versions.append(tuple(map(int, old.split('.'))))
+        except Exception:
+            pass
+        try:
+            tconf = json.loads(Path(ROOT_DIR, 'apps', 'desktop_tauri', 'src-tauri', 'tauri.conf.json').read_text(encoding='utf-8'))
+            detected_versions.append(tuple(map(int, tconf['version'].split('.'))))
+        except Exception:
+            pass
+        try:
+            cargotxt = Path(DESKTOP_CARGO).read_text(encoding='utf-8')
+            m = re.search(r'(?m)^version\s*=\s*"(\d+\.\d+\.\d+)"', cargotxt)
+            if m:
+                detected_versions.append(tuple(map(int, m.group(1).split('.'))))
+        except Exception:
+            pass
+
+        if detected_versions:
+            major, minor, patch = max(detected_versions)
+            RELEASE_VERSION = f'{major}.{minor}.{patch+1}'
+        else:
+            RELEASE_VERSION = '0.2.10'
     if not re.fullmatch(r'\d+\.\d+\.\d+',RELEASE_VERSION):
         raise RuntimeError('Versiya MAJOR.MINOR.PATCH formatında olmalıdır.')
     print(f'[RELEASE] {RELEASE_VERSION}',flush=True)
