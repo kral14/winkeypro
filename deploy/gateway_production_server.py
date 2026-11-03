@@ -829,6 +829,15 @@ def get_mobile_html() -> str:
                     <span class="badge-count" id="notifBadge">0</span>
                 </button>
 
+                <!-- Install App / Add to Home Screen Button -->
+                <button class="icon-btn" id="btnInstallApp" title="Tətbiqi Quraşdır / Ana Ekrana Əlavə Et" onclick="triggerAppInstall()" style="border-color: rgba(200, 242, 121, 0.4); color: var(--accent-green);">
+                    <svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                        <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path>
+                        <polyline points="7 10 12 15 17 10"></polyline>
+                        <line x1="12" y1="15" x2="12" y2="3"></line>
+                    </svg>
+                </button>
+
                 <!-- Account / User Icon -->
                 <button class="icon-btn" id="accountBtn" title="Hesab / Giriş" onclick="openAccountModal()">
                     <svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
@@ -973,7 +982,31 @@ def get_mobile_html() -> str:
         </div>
     </div>
 
-        <!-- Account Login & Device Management Modal -->
+            <!-- iOS / Android Install Guide Modal -->
+    <div class="modal-overlay" id="installGuideOverlay" style="align-items: center;">
+        <div class="detail-modal-box">
+            <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:14px;">
+                <h3 id="installGuideTitle" style="font-size:1.05rem; font-weight:700; display:flex; align-items:center; gap:8px;">
+                    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="var(--accent-green)" stroke-width="2">
+                        <rect x="5" y="2" width="14" height="20" rx="2" ry="2"></rect>
+                        <line x1="12" y1="18" x2="12.01" y2="18"></line>
+                    </svg>
+                    <span>Tətbiqi Quraşdır</span>
+                </h3>
+                <button class="drawer-close" onclick="closeInstallGuide()">
+                    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
+                        <line x1="18" y1="6" x2="6" y2="18"></line>
+                        <line x1="6" y1="6" x2="18" y2="18"></line>
+                    </svg>
+                </button>
+            </div>
+            <div id="installGuideContent" style="font-size:0.86rem; color:var(--text-main); line-height:1.5;">
+            </div>
+            <button class="action-pill-btn" style="margin-top:16px; width:100%; padding:10px;" onclick="closeInstallGuide()">Bağla</button>
+        </div>
+    </div>
+
+    <!-- Account Login & Device Management Modal -->
     <div class="modal-overlay" id="accountModalOverlay" style="align-items: center;">
         <div class="detail-modal-box" style="max-height: 85vh; overflow-y: auto;">
             <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:14px;">
@@ -1048,6 +1081,86 @@ def get_mobile_html() -> str:
         let targetDevice = urlParams.get('device') || localStorage.getItem('winkey_dev_id') || '';
         let pairCode = urlParams.get('code') || '';
         let authToken = localStorage.getItem('winkey_token') || '';
+
+
+        // --- TƏTBİQİN QURAŞDIRILMASI (iOS Ana Ekran & Android App) ---
+        let deferredPrompt = null;
+        window.addEventListener('beforeinstallprompt', (e) => {
+            e.preventDefault();
+            deferredPrompt = e;
+        });
+
+        function isRunningStandalone() {
+            return (window.matchMedia && window.matchMedia('(display-mode: standalone)').matches) || (window.navigator.standalone === true);
+        }
+
+        function checkInstallButtonVisibility() {
+            const btn = document.getElementById('btnInstallApp');
+            if (btn && isRunningStandalone()) {
+                btn.style.display = 'none';
+            }
+        }
+
+        async function triggerAppInstall() {
+            const isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent) || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
+            const overlay = document.getElementById('installGuideOverlay');
+            const content = document.getElementById('installGuideContent');
+            const title = document.getElementById('installGuideTitle');
+
+            if (isIOS) {
+                if (title) title.innerHTML = '<span>📱 iOS: Ana Ekrana Əlavə Et</span>';
+                if (content) {
+                    content.innerHTML = `
+                        <p style="margin-bottom:12px; color:var(--text-muted);">iPhone/iPad-də WinKey-i ayrıca proqram kimi işlətmək üçün:</p>
+                        <div style="background:#18221b; border:1px solid #2e3e32; border-radius:10px; padding:12px; display:flex; flex-direction:column; gap:10px;">
+                            <div style="display:flex; align-items:center; gap:10px;">
+                                <span style="background:var(--accent-green); color:#000; font-weight:800; border-radius:50%; width:24px; height:24px; display:flex; align-items:center; justify-content:center; font-size:12px; flex-shrink:0;">1</span>
+                                <span>Safari-nin aşağı menyusunda <strong>Paylaş (Share <svg style="display:inline-block; vertical-align:middle;" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 12v8a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-8"/><polyline points="16 6 12 2 8 6"/><line x1="12" y1="2" x2="12" y2="15"/></svg>)</strong> düyməsinə basın.</span>
+                            </div>
+                            <div style="display:flex; align-items:center; gap:10px;">
+                                <span style="background:var(--accent-green); color:#000; font-weight:800; border-radius:50%; width:24px; height:24px; display:flex; align-items:center; justify-content:center; font-size:12px; flex-shrink:0;">2</span>
+                                <span>Aşağı çəkib <strong>"Ana ekrana əlavə et" (Add to Home Screen ⊞)</strong> seçin.</span>
+                            </div>
+                            <div style="display:flex; align-items:center; gap:10px;">
+                                <span style="background:var(--accent-green); color:#000; font-weight:800; border-radius:50%; width:24px; height:24px; display:flex; align-items:center; justify-content:center; font-size:12px; flex-shrink:0;">3</span>
+                                <span>Yuxarı sağda <strong>"Əlavə et" (Add)</strong> basın. Proqram ana ekranınızda hazır olacaq!</span>
+                            </div>
+                        </div>
+                    `;
+                }
+                if (overlay) overlay.style.display = 'flex';
+            } else if (deferredPrompt) {
+                deferredPrompt.prompt();
+                const choiceResult = await deferredPrompt.userChoice;
+                if (choiceResult && choiceResult.outcome === 'accepted') {
+                    recordNotification(true, 'Tətbiq Quraşdırıldı', 'WinKey Pro ana ekrana əlavə edildi.');
+                }
+                deferredPrompt = null;
+            } else {
+                if (title) title.innerHTML = '<span>🤖 Android: Tətbiqi Quraşdır</span>';
+                if (content) {
+                    content.innerHTML = `
+                        <p style="margin-bottom:12px; color:var(--text-muted);">Android cihazında tətbiq kimi quraşdırmaq üçün:</p>
+                        <div style="background:#18221b; border:1px solid #2e3e32; border-radius:10px; padding:12px; display:flex; flex-direction:column; gap:10px;">
+                            <div style="display:flex; align-items:center; gap:10px;">
+                                <span style="background:var(--accent-green); color:#000; font-weight:800; border-radius:50%; width:24px; height:24px; display:flex; align-items:center; justify-content:center; font-size:12px; flex-shrink:0;">1</span>
+                                <span>Brauzerin (Chrome) menyusunda <strong>üç nöqtə (⋮)</strong> işarəsinə toxunun.</span>
+                            </div>
+                            <div style="display:flex; align-items:center; gap:10px;">
+                                <span style="background:var(--accent-green); color:#000; font-weight:800; border-radius:50%; width:24px; height:24px; display:flex; align-items:center; justify-content:center; font-size:12px; flex-shrink:0;">2</span>
+                                <span><strong>"Tətbiqi quraşdır"</strong> və ya <strong>"Ana ekrana əlavə et"</strong> seçin.</span>
+                            </div>
+                        </div>
+                    `;
+                }
+                if (overlay) overlay.style.display = 'flex';
+            }
+        }
+
+        function closeInstallGuide() {
+            const overlay = document.getElementById('installGuideOverlay');
+            if (overlay) overlay.style.display = 'none';
+        }
 
         // --- HESAB GİRİŞİ VƏ ÇOXLU CİHAZ İDARƏETMƏSİ ---
         let currentAuthMode = 'login';
@@ -1990,6 +2103,7 @@ ${n.fullText}
             window.addEventListener('pageshow', resumeMobileConnection);
         }
 
+        checkInstallButtonVisibility();
         init();
     </script>
         <!-- Hidden test compatibility elements -->
