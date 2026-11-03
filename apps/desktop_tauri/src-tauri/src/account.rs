@@ -54,12 +54,20 @@ fn stored(origin: &str) -> Result<Value, String> {
     result
 }
 
+fn local_device_id() -> String {
+    fs::read(super::get_app_data_dir().join("config.json")).ok()
+        .and_then(|raw|serde_json::from_slice::<Value>(&raw).ok())
+        .and_then(|value|value.get("device_id").and_then(Value::as_str).map(String::from)).unwrap_or_default()
+}
+
 #[tauri::command]
 pub fn account_status() -> Result<Value, String> {
     let origin = origin()?;
     let session = stored(&origin)?;
     let token = session["account_token"].as_str().ok_or("E_ACCOUNT_REQUIRED")?;
-    post(&origin, "/accounts/session", json!({}), Some(token))
+    let mut account = post(&origin, "/accounts/session", json!({}), Some(token))?;
+    account["current_device_id"] = json!(local_device_id());
+    Ok(account)
 }
 
 #[tauri::command]
@@ -72,11 +80,37 @@ pub fn account_authenticate(action: String, email: String, mut password: String)
     let response = response?;
     let encrypted = super::dpapi_protect(response.to_string().as_bytes())?;
     fs::write(session_path(&origin)?, encrypted).map_err(|_| "E_ACCOUNT_STORAGE")?;
+    let account = post(&origin,"/accounts/session",json!({}),response["account_token"].as_str())?;
+    let current = local_device_id();
+    if !current.is_empty() && account["devices"].as_array().map(|list|list.iter().any(|d|d["device_id"].as_str()==Some(current.as_str()))).unwrap_or(false) {
+        let (key,_) = super::get_or_create_device_keypair()?;
+        bind_device(&current,&key)?;
+    }
     Ok(json!({"email":response["email"],"account_id":response["account_id"]}))
 }
 
 pub fn require_account() -> Result<(), String> {
     account_status().map(|_| ())
+}
+
+#[tauri::command]
+pub fn account_logout() -> Result<Value,String> {
+    let origin = origin()?;
+    let session = stored(&origin)?;
+    let result = post(&origin,"/accounts/logout",json!({"device_id":local_device_id()}),session["account_token"].as_str())?;
+    fs::remove_file(session_path(&origin)?).map_err(|_|"E_ACCOUNT_STORAGE")?;
+    Ok(result)
+}
+
+#[tauri::command]
+pub fn account_device_action(device_id: String, action: String, name: Option<String>) -> Result<Value,String> {
+    let origin = origin()?;
+    let session = stored(&origin)?;
+    let result = post(&origin,"/accounts/device-action",json!({"device_id":device_id,"action":action,"name":name}),session["account_token"].as_str())?;
+    if action == "rename" && device_id == local_device_id() {
+        if let Some(name) = name { super::set_computer_name(name)?; }
+    }
+    Ok(result)
 }
 
 pub fn bind_device(device_id: &str, signing_key: &ed25519_dalek::SigningKey) -> Result<(), String> {
@@ -89,6 +123,8 @@ pub fn bind_device(device_id: &str, signing_key: &ed25519_dalek::SigningKey) -> 
     let nonce = challenge["nonce"].as_str().ok_or("E_BIND_CHALLENGE")?;
     let proof = signing_key.sign(format!("WINKEY_ACCOUNT_BIND:{}:{}:{}", nonce, device_id, account_id).as_bytes());
     let proof_hex = proof.to_bytes().iter().map(|b| format!("{:02x}", b)).collect::<String>();
-    post(&origin, "/accounts/device", json!({"device_id":device_id,"nonce":nonce,"proof":proof_hex}), Some(token))?;
+    let config: Value = fs::read(super::get_app_data_dir().join("config.json")).ok()
+        .and_then(|raw|serde_json::from_slice(&raw).ok()).unwrap_or_default();
+    post(&origin, "/accounts/device", json!({"device_id":device_id,"nonce":nonce,"proof":proof_hex,"name":config["computer_name"]}), Some(token))?;
     Ok(())
 }

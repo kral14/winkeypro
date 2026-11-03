@@ -817,11 +817,7 @@ def get_mobile_html() -> str:
             </div>
             <select id="deviceSelect" style="display:block;width:100%;padding:10px 12px;color:var(--text-main);background:#101412;border:1px solid var(--card-border);border-radius:8px;font-size:0.9rem;font-weight:500;outline:none;cursor:pointer;"></select>
             <p id="deviceMessage" role="status" style="font-size:.8rem;line-height:1.4;margin:6px 0 0;color:var(--text-dim);"></p>
-            <div style="display:none;">
-                <button id="deviceAdd"></button>
-                <button id="prepareInstall"></button>
-                <div id="deviceAddPanel"><form id="deviceAddForm"><input id="deviceName"><button id="deviceScan"></button><video id="deviceCamera"></video><input id="devicePhoto"><input id="devicePairCode"><button id="deviceAddConfirm"></button><button id="deviceAddCancel"></button></form></div>
-            </div>
+            <button id="prepareInstall" class="action-pill-btn" type="button">iPhone üçün tətbiqi hazırla</button>
         </section>
         <!-- Header -->
         <header class="header">
@@ -996,6 +992,7 @@ def get_mobile_html() -> str:
         const notifListContainer = document.getElementById('notifListContainer');
 
         let isPcLocked = null;
+        let isPcOnline = null;
         let commandBusy = false;
         let desiredAction = null;
         let desiredSince = 0;
@@ -1006,6 +1003,16 @@ def get_mobile_html() -> str:
         let pendingCommand = null;
         let deviceEpoch = 0;
         let deviceMutationBusy = false;
+
+        function updateMobilePresence(device) {
+            if (!device || device.id !== targetDevice) return;
+            isPcOnline = Boolean(device.online);
+            isPcLocked = Boolean(device.locked);
+            devNameEl.textContent = device.name;
+            badgeTextEl.textContent = isPcOnline ? 'Onlayn' : 'Oflayn';
+            badgeEl.className = isPcOnline ? 'badge badge-online' : 'badge badge-offline';
+            renderState();
+        }
 
         function selectMobileDevice(device, probe = false) {
             if (commandBusy) return false;
@@ -1023,7 +1030,8 @@ def get_mobile_html() -> str:
             savePending(null);
             authToken = device ? device.token : '';
             targetDevice = device ? device.id : '';
-            isPcLocked = null;
+            isPcLocked = device && typeof device.locked === 'boolean' ? device.locked : null;
+            isPcOnline = device && typeof device.online === 'boolean' ? device.online : null;
             statusBusy = false;
             renderState();
             devNameEl.textContent = device ? device.name : 'Kompüter əlavə edin';
@@ -1193,7 +1201,7 @@ ${n.fullText}
         }
 
         function renderState() {
-            circleBtn.disabled = isPcLocked === null;
+            circleBtn.disabled = isPcLocked === null || isPcOnline === false;
             if (isPcLocked === null) {
                 actionLabel.textContent = "YOXLANILIR…";
                 stateBadge.innerHTML = "<span>Windows vəziyyəti yoxlanılır…</span>";
@@ -1344,7 +1352,7 @@ ${n.fullText}
 
             if (window.WinKeyDevices) {
                 try {
-                    const device = await window.WinKeyDevices.start(selectMobileDevice);
+                    const device = await window.WinKeyDevices.start(selectMobileDevice, updateMobilePresence);
                     selectMobileDevice(device);
                     setInterval(pollStatus, 3000);
                     scheduleDiagnostics();
@@ -1403,9 +1411,10 @@ ${n.fullText}
                     if (deviceEpoch !== expectedEpoch) return;
                     devNameEl.textContent = window.WinKeyDevices?.current()?.name || d.computer_name || targetDevice;
                     isPcLocked = Boolean(d.locked);
+                    isPcOnline = d.online !== false;
                     renderState();
-                    badgeTextEl.textContent = 'Onlayn';
-                    badgeEl.className = 'badge badge-online';
+                    badgeTextEl.textContent = isPcOnline ? 'Onlayn' : 'Oflayn';
+                    badgeEl.className = isPcOnline ? 'badge badge-online' : 'badge badge-offline';
                 } else if (r.status === 403 || r.status === 401) {
                     badgeTextEl.textContent = 'İcazəsiz';
                     badgeEl.className = 'badge badge-offline';
@@ -1419,6 +1428,7 @@ ${n.fullText}
                 return;
             }
             if (!authToken || !targetDevice) return;
+            if (isPcOnline === false) { statusBox.textContent = 'Kompüter oflayndır və ya mobil idarəetmə dayandırılıb.'; return; }
             if (!resume && !requestId) {
                 requestId = hexId();
                 mobileEvent('tap', 'COMMAND_TAP', 0, action, requestId);
@@ -1628,6 +1638,7 @@ ${n.fullText}
                     } else if (msg.type === 'device_state') {
                         if (msg.computer_name) devNameEl.textContent = window.WinKeyDevices?.current()?.name || msg.computer_name;
                         isPcLocked = Boolean(msg.locked);
+                        isPcOnline = Boolean(msg.online);
                         renderState();
                         badgeTextEl.textContent = msg.online ? 'Onlayn' : 'Oflayn';
                         badgeEl.className = msg.online ? 'badge badge-online' : 'badge badge-offline';
@@ -2215,7 +2226,7 @@ class GatewayHandler(BaseHTTPRequestHandler):
         path = url.path.rstrip("/")
         data = self._read_json()
 
-        if path.startswith('/accounts/') or path in ('/pair', '/mobile/install', '/mobile/restore', '/mobile/pair'):
+        if path.startswith('/accounts/') or path in ('/pair', '/mobile/install', '/mobile/restore', '/mobile/pair', '/mobile/devices'):
             from deploy.gateway_service import GatewayService
             from deploy.mobile_install import feature_request
             if not isinstance(data, dict):

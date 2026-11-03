@@ -211,6 +211,11 @@ class GatewayService:
                 "INSERT INTO mobile_sessions (session_token, device_id, created_at, expires_at) VALUES (?, ?, ?, ?)",
                 (session_token, device_id, time.time(), 0)
             )
+            group = conn.execute('SELECT group_id FROM mobile_session_groups WHERE session_token=?',(existing_token or '',)).fetchone()
+            group_id = group['group_id'] if group else secrets.token_hex(24)
+            if existing_token and not group:
+                conn.execute('INSERT INTO mobile_session_groups (session_token,group_id) VALUES (?,?) ON CONFLICT(session_token) DO NOTHING',(existing_token,group_id))
+            conn.execute('INSERT INTO mobile_session_groups (session_token,group_id) VALUES (?,?)',(session_token,group_id))
             conn.commit()
 
         comp_name = dev["computer_name"] if dev and "computer_name" in dev.keys() else "Kompüter"
@@ -258,6 +263,10 @@ class GatewayService:
             if sess["device_id"] != req_device_id:
                 return 403, {"error": "E_TENANT_IDOR_FORBIDDEN", "message": "Başqa istifadəçinin cihazına komanda göndərə bilməzsiniz!"}
 
+            from deploy.account_service import remote_enabled
+            conn.execute('UPDATE devices SET status=status WHERE device_id=?',(req_device_id,))
+            if not remote_enabled(conn,req_device_id):
+                return 409, {'error':'E_REMOTE_OFFLINE','message':'Kompüterdə hesabdan çıxılıb və ya mobil idarəetmə dayandırılıb.'}
             dev = conn.execute("SELECT status FROM devices WHERE device_id = ?", (req_device_id,)).fetchone()
             if not dev or dev["status"] != "ACTIVE":
                 return 403, {"error": "E_DEVICE_NOT_ACTIVE", "message": "Cihaz deaktiv edilib və ya aktiv deyil"}
@@ -303,6 +312,10 @@ class GatewayService:
         now = time.time()
         expires_at = now + 60.0
         with self.db.get_conn() as conn:
+            from deploy.account_service import remote_enabled
+            conn.execute('UPDATE devices SET status=status WHERE device_id=?',(device_id,))
+            if not remote_enabled(conn,device_id):
+                return False
             res = conn.execute(
                 """UPDATE commands
                    SET status = 'claimed', claim_owner = ?, claim_expires_at = ?
@@ -374,6 +387,10 @@ class GatewayService:
                 "UPDATE devices SET last_seen_at = ?, locked = ?, pin_ready = ? WHERE device_id = ?",
                 (now, 1 if locked else 0, 1 if pin_ready else 0, device_id)
             )
+            from deploy.account_service import remote_enabled
+            if not remote_enabled(conn,device_id):
+                conn.commit()
+                return 200, {'command':None}
             cmd = conn.execute(
                 """SELECT command_id, action FROM commands
                    WHERE device_id = ? AND status = 'pending'
@@ -443,14 +460,25 @@ class GatewayService:
             if not dev:
                 return 404, {"error": "E_DEVICE_NOT_FOUND"}
 
+            from deploy.account_service import device_presence
+            presence = device_presence(conn,dev)
             return 200, {
                 "device_id": dev["device_id"],
                 "computer_name": dev["computer_name"],
                 "status": dev["status"],
                 "last_seen_at": dev["last_seen_at"],
                 "locked": bool(dev["locked"]),
-                "pin_ready": bool(dev["pin_ready"])
+                "pin_ready": bool(dev["pin_ready"]),
+                "online": presence['online'],
+                "paused": bool(presence['paused']),
+                "signed_in": bool(presence['signed_in'])
             }
+
+    def device_snapshot(self, device_id):
+        from deploy.account_service import device_presence
+        with self.db.get_conn() as conn:
+            row = conn.execute('SELECT device_id,computer_name,status,last_seen_at,locked,pin_ready FROM devices WHERE device_id=?',(device_id,)).fetchone()
+            return device_presence(conn,row) if row else None
 
     def get_command_status(self, cmd_id: str, bearer_token: Optional[str]) -> Tuple[int, Dict[str, Any]]:
         if not bearer_token:

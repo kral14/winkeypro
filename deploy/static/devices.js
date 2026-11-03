@@ -56,146 +56,90 @@
   if (typeof module !== 'undefined') module.exports = {DevicePortfolio};
   if (!root || !root.document) return;
 
-  let portfolio, onSelect, pairing = false;
-  const byId = id => document.getElementById(id);
-  const message = text => {
-    const el = byId('deviceMessage');
-    if (el) el.textContent = text;
-  };
-
-  async function post(path, body, token) {
-    const response = await fetch(path, {
-      method: 'POST',
-      cache: 'no-store',
-      headers: {
-        'Content-Type': 'application/json',
-        ...(token ? {Authorization: 'Bearer ' + token} : {})
-      },
-      body: JSON.stringify(body),
-      signal: AbortSignal.timeout(15000)
-    });
-    const data = await response.json();
-    if (!response.ok) throw Error(data.message || data.error || 'Sorğu alınmadı.');
-    return data;
+  let portfolio, onSelect, onPresence, pairing=false, syncing=false;
+  const byId=id=>document.getElementById(id);
+  const message=text=>{const el=byId('deviceMessage');if(el)el.textContent=text;};
+  async function post(path,body,token) {
+    const response=await fetch(path,{method:'POST',cache:'no-store',headers:{'Content-Type':'application/json',...(token?{Authorization:'Bearer '+token}:{})},body:JSON.stringify(body),signal:AbortSignal.timeout(15000)});
+    const result=await response.json();
+    if(!response.ok)throw Error(result.message || result.error || 'Sorğu alınmadı.');
+    return result;
   }
-
   function render() {
-    const select = byId('deviceSelect');
-    if (!select) return;
+    const select=byId('deviceSelect');if(!select)return;
     select.replaceChildren();
-    if (!portfolio.devices.length) {
-      const opt = document.createElement('option');
-      opt.value = '';
-      opt.textContent = 'Heç bir kompüter qoşulmayıb (PC QR oxudun)';
-      select.appendChild(opt);
-      select.disabled = true;
-    } else {
-      select.disabled = false;
-      for (const device of portfolio.devices) {
-        const option = document.createElement('option');
-        option.value = device.id;
-        option.textContent = '🖥️ ' + device.name;
-        select.appendChild(option);
-      }
-      select.value = portfolio.selected;
+    for(const device of portfolio.devices) {
+      const option=document.createElement('option');option.value=device.id;
+      option.textContent=device.name+' · '+(device.online?'Onlayn':'Oflayn');select.appendChild(option);
     }
-    const badge = byId('deviceCountBadge');
-    if (badge) badge.textContent = portfolio.devices.length + ' Kompüter';
+    select.value=portfolio.selected;select.disabled=!portfolio.devices.length;
+    if(byId('deviceCountBadge'))byId('deviceCountBadge').textContent=portfolio.devices.length+' Kompüter';
   }
-
-  function codeFrom(value) {
-    if (!value) return '';
-    value = value.trim();
-    if (/^PAIR_[A-Z0-9]+$/.test(value)) return value;
+  async function sync() {
+    if(syncing || pairing || !portfolio.devices.length || document.hidden)return;
+    syncing=true;
     try {
-      const url = new URL(value, location.origin);
-      const code = url.searchParams.get('code') || url.searchParams.get('pair_code');
-      if (code && /^PAIR_[A-Z0-9]+$/.test(code)) return code;
-    } catch (_) {}
-    return value;
+      const data=await post('/mobile/devices',{devices:portfolio.devices.map(d=>({id:d.id,token:d.token}))});
+      if(!Array.isArray(data.devices))throw Error('Cihaz siyahısı alınmadı.');
+      // Do not rotate a command target while its physical operation is pending.
+      if(!onSelect(null,true))return;
+      const previous=portfolio.selected;
+      portfolio.devices=data.devices.map(d=>({id:d.device_id,token:d.token,name:d.computer_name,online:Boolean(d.online),locked:Boolean(d.locked)}));
+      if(!portfolio.devices.some(d=>d.id===previous))portfolio.selected=portfolio.devices[0]?.id || '';
+      portfolio.save();render();
+      if(previous!==portfolio.selected)onSelect(portfolio.current());
+      onPresence?.(portfolio.current());
+    }catch(error){
+      for(const device of portfolio.devices)device.online=false;
+      render();onPresence?.(portfolio.current());
+      message('Serverə əlaqə yoxdur. Cihaz seçimləri yadda saxlanılıb.');
+    }finally{syncing=false;}
   }
-
-  async function start(selectCallback) {
-    portfolio = new DevicePortfolio(localStorage);
-    onSelect = selectCallback;
-
-    // iOS install bərpası (varsa)
-    const ticket = new URLSearchParams(location.hash.slice(1)).get('install');
-    if (ticket && !portfolio.devices.length) {
+  async function start(selectCallback,presenceCallback) {
+    portfolio=new DevicePortfolio(localStorage);onSelect=selectCallback;onPresence=presenceCallback;
+    const ticket=new URLSearchParams(location.hash.slice(1)).get('install');
+    if(ticket && !portfolio.devices.length) {
       try {
-        const restored = await post('/mobile/restore', {ticket});
-        for (const device of restored.devices) portfolio.add(device);
-        portfolio.select(restored.selected);
-        history.replaceState({}, '', location.pathname);
-      } catch (_) {}
+        const restored=await post('/mobile/restore',{ticket});
+        for(const device of restored.devices)portfolio.add(device);
+        portfolio.select(restored.selected);history.replaceState({},'',location.pathname);
+      }catch(error){message('Tətbiq qoşulması bərpa edilmədi. PC-də yeni QR yaradıb oxudun.');}
     }
-
+    const query=new URLSearchParams(location.search);
+    const code=query.get('code') || query.get('pair_code');
+    if(code) {
+      pairing=true;
+      try {
+        const result=await post('/pair',{pair_code:code},portfolio.current()?.token);
+        portfolio.add({id:result.device_id,token:result.session_token,name:result.computer_name || result.name || 'Kompüter'});
+        history.replaceState({},'',location.pathname);
+        message('Kompüter əlavə edildi. Siyahıdan Ev və ya Ofis seçə bilərsiniz.');
+      }catch(error){message('Qoşulma alınmadı: '+error.message);}
+      finally{pairing=false;}
+    }
     render();
-
-    const devSelect = byId('deviceSelect');
-    if (devSelect) {
-      devSelect.onchange = event => {
-        const previous = portfolio.selected;
-        const next = portfolio.devices.find(d => d.id === event.target.value);
-        if (!next) return;
-        if (!onSelect(next, true)) {
-          event.target.value = previous;
-          message('Cari əmrin bitməsini gözləyin.');
-          return;
-        }
-        portfolio.select(next.id);
-        onSelect(next);
-        message('Seçim dəyişdirildi: ' + next.name);
-      };
-    }
-
-    // Telefonun kamerası ilə birbaşa QR oxudulduqda avtomatik cütləşmə
-    const query = new URLSearchParams(location.search);
-    const rawCode = query.get('code') || query.get('pair_code');
-    const nameParam = query.get('name') || '';
-
-    if (rawCode) {
-      const pairCode = codeFrom(rawCode);
-      if (pairCode) {
-        pairing = true;
-        message('Yeni kompüter qoşulur...');
-        (async () => {
-          try {
-            const reqBody = { pair_code: pairCode };
-            if (nameParam) reqBody.name = nameParam;
-            const res = await post('/pair', reqBody, portfolio.current()?.token);
-            const assignedName = nameParam || res.name || res.computer_name || ('Kompüter ' + (portfolio.devices.length + 1));
-            portfolio.add({
-              id: res.device_id,
-              token: res.session_token,
-              name: assignedName
-            }, true);
-            render();
-            if (onSelect) onSelect(portfolio.current());
-            history.replaceState({}, '', location.pathname);
-            message('✓ "' + assignedName + '" kompüteri uğurla əlavə edildi!');
-          } catch (err) {
-            message('Qoşulma xətası: ' + err.message);
-          } finally {
-            pairing = false;
-          }
-        })();
-      }
-    }
-
+    const select=byId('deviceSelect');
+    if(select)select.onchange=event=>{
+      const previous=portfolio.selected,next=portfolio.devices.find(d=>d.id===event.target.value);
+      if(!next || !onSelect(next,true)){event.target.value=previous;message('Cari əmrin bitməsini gözləyin.');return;}
+      portfolio.select(next.id);onSelect(next);onPresence?.(next);message('Seçim yadda saxlanıldı.');
+    };
+    const prepare=byId('prepareInstall');
+    if(prepare)prepare.onclick=async()=>{
+      try {
+        if(!root.isSecureContext)throw Error('iPhone tətbiqi üçün serverdə HTTPS qurulmalıdır.');
+        const result=await post('/mobile/install',{devices:portfolio.devices,selected:portfolio.selected});
+        byId('appManifest').href='/mobile-assets/manifest.webmanifest?install='+encodeURIComponent(result.ticket);
+        message('Hazırdır. Safari → Paylaş → Ana ekrana əlavə et. İlk açılışı 24 saat içində edin.');
+      }catch(error){message(error.message);}
+    };
+    await sync();
+    if(!portfolio.devices.length)message('Cihaz əlavə etmək üçün PC-də hesabınıza daxil olub ad verin və QR-ni oxudun.');
+    root.setInterval(sync,5000);
+    root.addEventListener('pageshow',sync);
+    document.addEventListener('visibilitychange',()=>{if(!document.hidden)sync();});
     return portfolio.current();
   }
-
-  root.WinKeyDevices = {
-    start,
-    current: () => portfolio?.current(),
-    isPairing: () => pairing,
-    remove(id) {
-      if (!onSelect(null, true)) return false;
-      portfolio.remove(id);
-      render();
-      onSelect(portfolio.current());
-      return true;
-    }
-  };
-})(typeof window !== 'undefined' ? window : null);
+  root.WinKeyDevices={start,current:()=>portfolio?.current(),isPairing:()=>pairing,
+    remove(id){if(!onSelect(null,true))return false;portfolio.remove(id);render();onSelect(portfolio.current());return true;}};
+})(typeof window!=='undefined'?window:null);

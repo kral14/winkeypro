@@ -39,6 +39,84 @@ class AccountTests(unittest.TestCase):
     def test_invalid_inputs(self):
         self.assertEqual(self.accounts.authenticate('register', {'email': 'bad', 'password': '123'})[0], 400)
 
+    def test_account_lists_online_devices_using_real_schema(self):
+        _, account = self.accounts.authenticate('register', {'email':'arif@example.com','password':'long valid password'})
+        self.seed_device('pc1','phone1',account['account_id'])
+        devices = self.accounts.session(account['account_token'])['devices']
+        self.assertEqual(len(devices),1)
+        self.assertEqual(devices[0]['device_id'],'pc1')
+        self.assertTrue(devices[0]['online'])
+
+    def test_pause_logout_and_delete_preserve_or_revoke_correct_credentials(self):
+        _, account = self.accounts.authenticate('register', {'email':'arif@example.com','password':'long valid password'})
+        token = account['account_token']
+        self.seed_device('pc1','phone1',account['account_id'])
+        service = GatewayService(self.db,'')
+        self.assertEqual(self.accounts.device_action({'device_id':'pc1','action':'pause'},token)[0],200)
+        self.assertEqual(service.enqueue_command('pc1','lock',None,'phone1',{})[0],409)
+        self.assertEqual(self.accounts.device_action({'device_id':'pc1','action':'resume'},token)[0],200)
+        self.assertEqual(service.enqueue_command('pc1','mock',None,'phone1',{})[0],200)
+        self.assertEqual(self.accounts.logout({'device_id':'pc1'},token)[0],200)
+        self.assertIsNone(self.accounts.session(token))
+        self.assertEqual(service.enqueue_command('pc1','lock',None,'phone1',{})[0],409)
+        # Agent transport and mobile pairing remain valid while signed out.
+        self.assertEqual(service.poll_agent('pc1',False,True,'agent'),(200,{'command':None}))
+        with self.db.get_conn() as conn:
+            self.assertIsNotNone(service.authenticate_mobile_session(conn,'phone1'))
+        _, again = self.accounts.authenticate('login',{'email':'arif@example.com','password':'long valid password'})
+        self.assertEqual(self.accounts.device_action({'device_id':'pc1','action':'delete'},again['account_token'])[0],200)
+        self.assertEqual(self.accounts.session(again['account_token'])['devices'],[])
+        with self.db.get_conn() as conn:
+            self.assertIsNone(service.authenticate_mobile_session(conn,'phone1'))
+
+    def test_device_management_rejects_other_account(self):
+        _, account = self.accounts.authenticate('register', {'email':'arif@example.com','password':'long valid password'})
+        self.seed_device('pc1','phone1','different-account')
+        for action in ('pause','resume','delete','rename'):
+            self.assertEqual(self.accounts.device_action({'device_id':'pc1','action':action,'name':'Ev'},account['account_token'])[0],403)
+
+    def test_second_qr_syncs_to_same_phone_group_and_no_other_phone(self):
+        self.seed_device('office','phone1','arif')
+        self.seed_device('home','independent-phone','arif')
+        service=GatewayService(self.db,'')
+        with self.db.get_conn() as conn:
+            conn.execute('UPDATE devices SET computer_name=? WHERE device_id=?',('Ev','home'))
+            conn.execute('INSERT INTO pairing_requests (pair_code,device_id,challenge_hex,expires_at,created_at) VALUES (?,?,?,?,?)',('PAIR_HOME','home','',time.time()+120,time.time()))
+            conn.commit()
+        status, paired=service.claim_pair('PAIR_HOME','phone1')
+        self.assertEqual(status,200)
+        result=feature_request(service,'/mobile/devices',{'devices':[{'id':'office','token':'phone1'}]},None)[1]['devices']
+        self.assertEqual({d['device_id'] for d in result},{'office','home'})
+        self.assertEqual(next(d for d in result if d['device_id']=='home')['computer_name'],'Ev')
+        self.assertEqual(next(d for d in result if d['device_id']=='home')['token'],paired['session_token'])
+        other=feature_request(service,'/mobile/devices',{'devices':[{'id':'home','token':'independent-phone'}]},None)[1]['devices']
+        self.assertEqual([d['device_id'] for d in other],['home'])
+
+    def test_logout_pushes_offline_but_keeps_agent_and_phone_connections(self):
+        from starlette.testclient import TestClient
+        from deploy.asgi_app import build_asgi_app
+        from deploy.websocket_hub import hub
+        _, account=self.accounts.authenticate('register',{'email':'arif@example.com','password':'long valid password'})
+        self.seed_device('pc1','phone1',account['account_id'])
+        with TestClient(build_asgi_app(GatewayService(self.db,''))) as client:
+            with client.websocket_connect('/ws') as agent:
+                agent.send_json({'type':'auth','role':'agent','device_id':'pc1','token':'agent'})
+                self.assertEqual(agent.receive_json()['type'],'auth_ok')
+                with client.websocket_connect('/ws') as phone:
+                    phone.send_json({'type':'auth','role':'mobile','session_token':'phone1'})
+                    self.assertEqual(phone.receive_json()['type'],'auth_ok')
+                    self.assertTrue(phone.receive_json()['online'])
+                    response=client.post('/accounts/logout',json={'device_id':'pc1'},headers={'Authorization':'Bearer '+account['account_token']})
+                    self.assertEqual(response.status_code,200)
+                    self.assertFalse(phone.receive_json()['online'])
+                    self.assertTrue(hub.has_active_agent('pc1'))
+                    agent.send_json({'type':'state','locked':True,'pin_ready':True})
+                    self.assertFalse(phone.receive_json()['online'],'Agent heartbeats must not undo logout')
+                    phone.send_json({'type':'command','action':'lock','request_id':'a'*32})
+                    self.assertEqual(phone.receive_json()['error'],'E_REMOTE_OFFLINE')
+                    phone.send_json({'type':'ping'})
+                    self.assertEqual(phone.receive_json()['type'],'pong')
+
     def seed_device(self, device_id, token, owner='account1'):
         import hashlib
         with self.db.get_conn() as conn:

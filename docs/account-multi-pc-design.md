@@ -1,28 +1,30 @@
-# Account registration and multiple computers
+# PC-owned devices and mobile control (2026-11-03)
 
-## Requested behavior
+The user clarified that adding/managing devices belongs on PC, not mobile. New device means the physical PC currently running WinKey. On another PC, install WinKey and sign in to the same account.
 
-On first desktop use, the user creates an account with email and password or signs in to an existing account. The same account can own multiple computers. On the first QR pairing, the user supplies a name such as PC 1 or Ofis 2. Mobile shows the account's computer list. Its last selected computer survives closing and reopening the page; lock and unlock commands always target that selected computer.
+## PC flow
 
-## Proposed implementation
+- Sign-in/registration is mandatory. There is no Skip, unauthenticated drawer close, or fake browser registration success.
+- A valid stored account session can resume. Successful new registration/login stays visible until Continue.
+- The owner sees all owned PCs with online/offline and locked/unlocked as separate states, and can pause/resume/delete each owned PC.
+- Add device opens the current PC naming field. Explicitly confirm its name before creating QR. The signed device proof binds the PC to its account and stores its canonical name on the server.
+- Sign out marks only this PC signed out on the server and removes its local account session. It preserves agent transport, device ownership, PIN storage and phone pairings. Existing phone commands are rejected while signed out.
+- Sign back in reactivates an already enrolled PC using its device proof. Pause persists until explicit Resume. A deleted PC must be added again and paired with a fresh QR.
 
-- Keep the current Python gateway, SQLite/PostgreSQL storage, Tauri desktop, and mobile page.
-- Add account records, hashed passwords, expiring account sessions, and account-to-computer ownership records. Never store plaintext passwords or log them. Keep existing device authentication separate from account authentication.
-- Desktop signs in through the configured gateway and stores the account session protected by Windows DPAPI. It binds the local authenticated device to that account before showing its pairing QR.
-- Registration and account sign-in occur on PC only. Mobile consumes each one-use QR, requires a computer name, and keeps the resulting device-scoped session in its local portfolio. There is no mobile account login.
-- The mobile Add device action scans another QR inside the existing page without navigation. It appends a named device to the selector, preserving other pairings. Existing command and WebSocket authorization remain scoped to a single device.
-- Persist the selected device in the phone's portfolio storage. Revalidate device sessions when restoring it. Close the previous device's connection and clear pending actions before switching; ignore late responses from the previous device. Do not allow a switch while a command is still in progress.
-- Show an unknown/checking state until real Windows state arrives. Query the interactive console session from the Windows service rather than the service's Session 0 desktop.
-- Provide a PWA manifest, reconnection on resume, and a short-lived one-use install handoff. This lets an iOS standalone launch restore its paired devices even when Safari and the installed web app do not share local storage. Do not put persistent remote tokens in launch URLs.
+## Mobile flow
 
-## Validation
+- No mobile Add device/name/scanner form. Scan the QR produced on the PC using the phone camera.
+- QR pairing consumes the one-use code and appends the server-provided PC name to the phone portfolio. A second QR adds another choice, such as Ev next to Ofis.
+- Keep the last selection on reload. Online/offline and lock state update independently; offline controls are disabled. Never switch a target while a physical command is pending.
+- Session groups synchronize only PCs explicitly paired to the same phone group. This also lets an installed iOS PWA learn about a second PC paired in Safari. It does not grant every phone access to every device in the owner's account.
+- iOS install handoff remains one-use and expiring. Physical iPhone/PWA testing still follows trusted HTTPS deployment.
 
-Test registration/login, password verification, session expiry, account isolation, QR ownership and replay rejection, per-device naming, multiple-device selection, restored selection, and commands after switching. Run mobile and desktop regressions, native session state tests, and the local release build. Server code must be deployed before account-enabled clients can use the new flow; deployment is separate from the local build.
+## Server behavior
 
-## Compatibility
+Account owner checks protect PC management. Account-device control state is separate from agent credentials and device ACTIVE status. Command enqueue, WS claim and HTTP poll all enforce signed-in/not-paused/not-removed state. Agent heartbeats cannot turn a signed-out PC back online. Logout/pause pushes offline presence without closing agent/phone sockets; delete revokes that PC's phone sessions.
 
-Keep unowned legacy device pairings working during migration. Since the user explicitly requires no mobile account login, possession of the first one-use QR intentionally authorizes a new phone. When a phone supplies its existing remote token to add a device, both devices must have the same account owner. Apply that check in shared pairing logic across both APIs. The QR is a credential and must not be shared. Public release-key rotation previously approved by the user is independent of account passwords and device credentials.
+The account device query uses last_seen_at. Missing schema columns are not silently converted into an empty device list.
 
-## Deployment prerequisite
+## HTTPS and deployment
 
-The current default cloud endpoint is HTTP. New account onboarding requires a trusted HTTPS endpoint; sending passwords over the existing public HTTP endpoint is deliberately blocked. The desktop provides a server-settings action so a trusted HTTPS IP or domain can be configured. No server credentials or deployment authorization were supplied in this chat. A local build alone does not activate the new mobile page on the running server.
+Let's Encrypt supports trusted certificates for a public IP without buying a domain. Short-lived IP certificates require automatic renewal; see docs/IP_HTTPS_SETUP.md. No VM access was provided and the user handles Git push/deployment. The existing user-added HTTP exemption for the public IP remains unchanged in this task; it does not encrypt passwords. HTTPS provisioning is still required on the VM to secure that traffic and enable iOS secure-context features.

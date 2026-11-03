@@ -78,6 +78,32 @@ def feature_request(service, path, body, token):
         session = accounts.session(token)
         return (200, session) if session else (401, {'error': 'E_ACCOUNT_REQUIRED'})
     if path == '/accounts/device': return accounts.bind_device(body, token)
+    if path == '/accounts/device-action': return accounts.device_action(body,token)
+    if path == '/accounts/logout': return accounts.logout(body,token)
+    if path == '/mobile/devices':
+        devices = body.get('devices')
+        if not isinstance(devices,list) or len(devices)>50:
+            return 400, {'error':'E_DEVICES_INPUT'}
+        results, seen = [], set()
+        for device in devices:
+            if not isinstance(device,dict) or not isinstance(device.get('id'),str) or not isinstance(device.get('token'),str):
+                return 400, {'error':'E_DEVICES_INPUT'}
+            status, result = service.get_device_status(device['id'],device['token'])
+            if status != 200: continue
+            candidates = [{'device_id':device['id'],'session_token':device['token']}]
+            with service.db.get_conn() as conn:
+                group = conn.execute('SELECT group_id FROM mobile_session_groups WHERE session_token=?',(device['token'],)).fetchone()
+                if group:
+                    rows = conn.execute("SELECT s.device_id,s.session_token FROM mobile_sessions s JOIN mobile_session_groups g ON g.session_token=s.session_token WHERE g.group_id=? AND (s.expires_at=0 OR s.expires_at>?)",(group['group_id'],time.time())).fetchall()
+                    candidates.extend(dict(row) for row in rows)
+            for candidate in candidates:
+                if candidate['device_id'] in seen: continue
+                status, state = service.get_device_status(candidate['device_id'],candidate['session_token'])
+                if status == 200:
+                    seen.add(candidate['device_id'])
+                    state['token'] = candidate['session_token']
+                    results.append(state)
+        return 200, {'devices':results}
     if path == '/mobile/pair':
         name, code = body.get('name'), body.get('pair_code')
         if not isinstance(name, str) or not 1 <= len(name.strip()) <= 80:

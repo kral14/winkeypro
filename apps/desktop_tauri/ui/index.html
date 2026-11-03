@@ -691,7 +691,7 @@
   <!-- ==========================================================================
        İSTİFADƏÇİ PROFİLİ / GİRİŞ DRAWER OVERLAY
        ========================================================================== -->
-  <div id="accountOverlay" class="drawer-overlay" hidden>
+  <div id="accountOverlay" class="drawer-overlay">
     <div class="drawer-panel">
       <div style="display:flex;align-items:center;justify-content:space-between;border-bottom:1px solid var(--line);padding-bottom:12px;">
         <div style="display:flex;align-items:center;gap:8px;">
@@ -701,7 +701,7 @@
             <span style="font-size:11px;color:var(--text-muted);" id="drawerHeaderSub">Uzaqdan İdarəetmə Girişi</span>
           </div>
         </div>
-        <button type="button" class="icon-btn icon-btn-close" id="accountCloseDrawer" aria-label="Bağla" title="Bağla">✕</button>
+        <button hidden type="button" class="icon-btn icon-btn-close" id="accountCloseDrawer" aria-label="Bağla" title="Bağla">✕</button>
       </div>
 
       <form id="accountForm" style="display:flex;flex-direction:column;gap:12px;flex:1;">
@@ -724,8 +724,8 @@
         <div style="display:flex;gap:8px;align-items:center;margin-top:auto;padding-top:12px;border-top:1px solid var(--line);">
           <button id="accountLogin" type="submit" value="login" class="btn-action" style="flex:1;">Daxil ol</button>
           <button id="accountRegister" type="submit" value="register" class="btn-secondary">Qeydiyyat</button>
-          <button id="accountSkip" type="button" class="btn-secondary" title="Hesabsız davam et">Keç</button>
           <button id="accountContinue" hidden type="button" class="btn-action" style="flex:1;">Davam et</button>
+          <button id="accountLogout" hidden type="button" class="btn-secondary">Hesabdan çıxış</button>
         </div>
       </form>
     </div>
@@ -850,15 +850,6 @@
             <div class="metric-label" id="lblUpdateChecked" style="margin-top:4px;"></div>
           </div>
 
-          <!-- Gateway Server Origin Konfiqurasiyası -->
-          <div style="border-top:1px solid var(--line-subtle);padding-top:10px;">
-            <label for="txtGatewayOrigin" style="font-size:11px;color:var(--text-muted);display:block;margin-bottom:4px;">Gateway Server Ünvanı (Origin):</label>
-            <div class="input-group">
-              <input type="text" id="txtGatewayOrigin" placeholder="http://158.101.172.228:8080">
-              <button class="btn-secondary" id="btnSaveGateway">Saxla</button>
-            </div>
-            <div id="toastGateway" class="toast"></div>
-          </div>
         </div>
 
         <!-- Sağ: Kompüter Adı və Mobil Nəzarət -->

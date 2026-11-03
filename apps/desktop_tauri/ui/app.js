@@ -267,12 +267,20 @@ function initButtons() {
   }
 
   let isRemotePaused = false;
+  window.setRemotePauseState = paused => {
+    isRemotePaused = Boolean(paused);
+    const label = document.getElementById('lblPauseState');
+    const button = document.getElementById('btnTogglePause');
+    if (label) label.textContent = isRemotePaused ? 'DAYANDIRILIB' : 'AKTİV';
+    if (button) button.textContent = isRemotePaused ? 'Mobil İdarəni Bərpa Et' : 'Mobil İdarəni Dayandır';
+  };
   var btnTogglePause = document.getElementById('btnTogglePause');
   if (btnTogglePause) {
     btnTogglePause.addEventListener('click', async () => {
       try {
-        isRemotePaused = !isRemotePaused;
-        await callNative('toggle_remote_service_control', { pause: isRemotePaused });
+        const nextPaused = !isRemotePaused;
+        await callNative('account_device_action', {deviceId:window.currentDeviceId,action:nextPaused ? 'pause' : 'resume'});
+        isRemotePaused = nextPaused;
         if (isRemotePaused) {
           document.getElementById('lblPauseState').textContent = 'DAYANDIRILIB (PAUSED)';
           document.getElementById('lblPauseState').style.color = '#f78d7e';
@@ -360,6 +368,7 @@ function initButtons() {
   updateModeUI(activeMode);
 
   async function refreshQrForCurrentMode() {
+    if (isTauri && !window.__WINKEY_ACCOUNT_READY__) { showQrError('Əvvəl hesaba daxil olun.'); return; }
     try {
       const qr = await callNative('generate_qr_pairing', { mode: activeMode });
       if (qr) {
@@ -559,40 +568,3 @@ if (document.readyState === 'loading') {
   initApp();
 }
 })();
-
-
-
-window.renderAccountDevices = function(devices, currentId) {
-  const list = document.getElementById('accountDevicesList');
-  if (!list) return;
-  list.innerHTML = '';
-  if (!Array.isArray(devices) || devices.length === 0) {
-    list.innerHTML = '<div style="font-size:12px;color:var(--text-muted);padding:8px 12px;background:#101412;border-radius:6px;">Hesabınızda hələ heç bir əlavə cihaz yoxdur. "+ Yeni Cihaz Əlavə Et" ilə digər kompüterlərinizi də bağlaya bilərsiniz.</div>';
-    return;
-  }
-  const curr = currentId || window.currentDeviceId || '';
-  devices.forEach(d => {
-    const item = document.createElement('div');
-    item.style.cssText = 'display:flex;align-items:center;justify-content:space-between;background:#141716;border:1px solid var(--line);border-radius:8px;padding:10px 14px;';
-    const isCurrent = Boolean(curr && d.device_id === curr);
-    const isLocked = Boolean(d.locked);
-    item.innerHTML = `
-      <div style="display:flex;align-items:center;gap:10px;">
-        <span style="font-size:18px;">💻</span>
-        <div>
-          <div style="font-size:13px;font-weight:600;color:var(--text);display:flex;align-items:center;gap:6px;">
-            ${d.computer_name || 'Kompüter'}
-            ${isCurrent ? '<span style="font-size:10px;padding:1px 6px;border-radius:4px;background:var(--green-dark);color:var(--green);font-weight:700;">Bu PC</span>' : ''}
-          </div>
-          <div style="font-size:11px;color:var(--text-muted);font-family:monospace;">${d.device_id || ''}</div>
-        </div>
-      </div>
-      <div style="display:flex;align-items:center;gap:8px;">
-        <span style="font-size:11px;padding:3px 8px;border-radius:12px;background:${isLocked ? '#2d1917;color:var(--red)' : '#13241b;color:var(--green)'};font-weight:600;">
-          ${isLocked ? '🔒 Kilidli' : '🔓 Açıq'}
-        </span>
-      </div>
-    `;
-    list.appendChild(item);
-  });
-};

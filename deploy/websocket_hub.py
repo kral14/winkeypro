@@ -271,6 +271,12 @@ class WebSocketHub:
         for conn in targets:
             await conn.close(code=code, reason=reason)
 
+    async def disconnect_device_mobiles(self, device_id: str):
+        async with self._get_lock():
+            targets = list(self._mobiles.get(device_id, []))
+        for connection in targets:
+            await connection.close(code=4403, reason='DEVICE_REMOVED')
+
     async def disconnect_mobile_session(self, session_token: str, code: int = 4403, reason: str = "REVOKED"):
         """Mobil sessiya ləğv edildikdə həmin sessiyanın WebSocket bağlantısını kəsir."""
         targets = []

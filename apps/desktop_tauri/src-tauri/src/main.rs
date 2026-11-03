@@ -869,7 +869,7 @@ fn get_device_status() -> Result<DeviceStatusDto, String> {
 #[tauri::command]
 fn set_computer_name(name: String) -> Result<String, String> {
     let clean = name.trim().to_string();
-    if clean.is_empty() {
+    if clean.is_empty() || clean.chars().count() > 80 {
         return Err("Kompüter adı boş ola bilməz".to_string());
     }
     let cfg_file = get_app_data_dir().join("config.json");
@@ -883,6 +883,7 @@ fn set_computer_name(name: String) -> Result<String, String> {
     };
 
     val["computer_name"] = serde_json::json!(clean);
+    val["pairing_name_confirmed"] = serde_json::json!(true);
     val["updated_at"] = serde_json::json!(std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).unwrap().as_secs());
 
     fs::write(&cfg_file, val.to_string()).map_err(|e| format!("Saxlama xətası: {}", e))?;
@@ -942,6 +943,9 @@ fn generate_qr_pairing(mode: Option<String>) -> Result<PairingPayloadDto, String
             .unwrap_or_else(|| "http://127.0.0.1:8788".to_string())
     };
     let origin = gateway_config::normalize(&target_origin)?;
+    if cfg_val.get("pairing_name_confirmed").and_then(|v|v.as_bool()) != Some(true) {
+        return Err("Əvvəl bu kompüterə ad verin və Təsdiqlə və QR Yarat düyməsini basın.".into());
+    }
     let request = |path: &str, payload: serde_json::Value, token: Option<&str>| -> Result<serde_json::Value, String> {
         eprintln!("[PAIRING] POST {} started", path);
         let mut req = ureq::post(&format!("{}{}", origin, path))
@@ -1669,6 +1673,8 @@ fn main() {
         .invoke_handler(tauri::generate_handler![
             account::account_status,
             account::account_authenticate,
+            account::account_logout,
+            account::account_device_action,
             save_credential_dpapi,
             check_credential_status,
             get_device_status,

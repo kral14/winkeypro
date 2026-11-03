@@ -9,10 +9,11 @@ const script = fs.readFileSync(path.join(ui, 'app.js'), 'utf8');
 assert.match(html, /<script src="app\.js"><\/script>/);
 
 async function main() {
-  const panels = Object.fromEntries(['status', 'security', 'pairing', 'support'].map(id => [id, {style: {}}]));
+  const panels = Object.fromEntries(['status', 'security', 'pairing', 'support'].map(id => [id, {style: {},classList:{add(){},remove(){}}}]));
   const tabs = Object.keys(panels).map(id => ({
     getAttribute: () => id,
     classList: {add() {}, remove() {}},
+    setAttribute() {},
     addEventListener(type, fn) { this.click = fn; }
   }));
   const context = vm.createContext({
@@ -29,8 +30,8 @@ async function main() {
   vm.runInContext(script, context, {filename: 'packaged-app-second-load.js'});
   for (let i = 0; i < tabs.length; i++) {
     context.window.switchTab(Object.keys(panels)[i]);
-    assert.equal(panels[Object.keys(panels)[i]].style.display, 'block');
-    assert.equal(Object.values(panels).filter(p => p.style.display === 'block').length, 1);
+    assert.equal(panels[Object.keys(panels)[i]].style.display, 'flex');
+    assert.equal(Object.values(panels).filter(p => p.style.display === 'flex').length, 1);
   }
   assert.equal(context.window.__WINKEY_UI_LOADED__, true);
   console.log('PASS: script loads twice without declaration collisions; all four native-mode panels switch.');

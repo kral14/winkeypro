@@ -177,6 +177,12 @@ def build_asgi_app(service: GatewayService, dashboard_html_path: Optional[str] =
         except Exception:
             return _json_resp(400, {'error': 'E_INPUT'}, start)
         status, data = await asyncio.to_thread(feature_request, service, request.url.path, body, _get_bearer(request))
+        if status == 200 and request.url.path in ('/accounts/device-action','/accounts/logout'):
+            snapshot = await asyncio.to_thread(service.device_snapshot,body.get('device_id'))
+            if snapshot:
+                await hub.push_device_state(snapshot['device_id'],bool(snapshot['locked']),bool(snapshot['pin_ready']),online=snapshot['online'])
+            if body.get('action') == 'delete':
+                await hub.disconnect_device_mobiles(body.get('device_id'))
         response = _json_resp(status, data, start)
         response.headers['Cache-Control'] = 'no-store'
         return response
@@ -662,8 +668,9 @@ def build_asgi_app(service: GatewayService, dashboard_html_path: Optional[str] =
                 # Cari cihaz statusunu dərhal mobilə göndəririk
                 def _dev_info():
                     with service.db.get_conn() as conn:
-                        d = conn.execute("SELECT computer_name, locked, pin_ready, last_seen_at FROM devices WHERE device_id = ?", (device_id,)).fetchone()
-                        return dict(d) if d else None
+                        from deploy.account_service import device_presence
+                        d = conn.execute("SELECT device_id,computer_name,status,locked,pin_ready,last_seen_at FROM devices WHERE device_id = ?", (device_id,)).fetchone()
+                        return device_presence(conn,d) if d else None
 
                 dev_row = await asyncio.to_thread(_dev_info)
                 if dev_row:
@@ -673,7 +680,7 @@ def build_asgi_app(service: GatewayService, dashboard_html_path: Optional[str] =
                         "computer_name": dev_row.get("computer_name"),
                         "locked": bool(dev_row.get("locked")),
                         "pin_ready": bool(dev_row.get("pin_ready")),
-                        "online": hub.has_active_agent(device_id)
+                        "online": dev_row['online']
                     }))
 
             # --- ADMIN ROLE AUTH ---
@@ -749,7 +756,8 @@ def build_asgi_app(service: GatewayService, dashboard_html_path: Optional[str] =
                                 conn.commit()
 
                         await asyncio.to_thread(_update_state)
-                        await hub.push_device_state(did, locked, pin_ready, online=True)
+                        snapshot = await asyncio.to_thread(service.device_snapshot,did)
+                        await hub.push_device_state(did, locked, pin_ready, online=bool(snapshot and snapshot['online']))
 
                     elif m_type == "result":
                         t_result_recv = time.time()
@@ -852,6 +860,15 @@ def build_asgi_app(service: GatewayService, dashboard_html_path: Optional[str] =
         finally:
             if client_conn:
                 await hub.unregister(client_conn)
+                if client_conn.role == 'agent' and not hub.has_active_agent(client_conn.identifier):
+                    def disconnected():
+                        with service.db.get_conn() as conn:
+                            conn.execute('UPDATE devices SET last_seen_at=0 WHERE device_id=?',(client_conn.identifier,))
+                            conn.commit()
+                    await asyncio.to_thread(disconnected)
+                    snapshot = await asyncio.to_thread(service.device_snapshot,client_conn.identifier)
+                    if snapshot:
+                        await hub.push_device_state(snapshot['device_id'],bool(snapshot['locked']),bool(snapshot['pin_ready']),online=False)
 
     # Routes list
     routes = [
@@ -868,6 +885,7 @@ def build_asgi_app(service: GatewayService, dashboard_html_path: Optional[str] =
         Route("/mobile/install", handle_feature, methods=["POST"]),
         Route("/mobile/restore", handle_feature, methods=["POST"]),
         Route("/mobile/pair", handle_feature, methods=["POST"]),
+        Route("/mobile/devices", handle_feature, methods=["POST"]),
         Route("/remote", handle_mobile_page, methods=["GET"]),
         Route("/admin", handle_admin_page, methods=["GET"]),
 

@@ -20,11 +20,39 @@ def initialize_accounts(conn):
             window_start DOUBLE PRECISION NOT NULL)''',
         '''CREATE TABLE IF NOT EXISTS account_devices (
             device_id TEXT PRIMARY KEY, account_id TEXT NOT NULL)''',
+        '''CREATE TABLE IF NOT EXISTS account_device_state (
+            device_id TEXT PRIMARY KEY, signed_in INTEGER NOT NULL DEFAULT 1,
+            paused INTEGER NOT NULL DEFAULT 0, removed INTEGER NOT NULL DEFAULT 0)''',
+        '''CREATE TABLE IF NOT EXISTS mobile_session_groups (
+            session_token TEXT PRIMARY KEY, group_id TEXT NOT NULL)''',
         '''CREATE TABLE IF NOT EXISTS mobile_install_handoffs (
             ticket_hash TEXT PRIMARY KEY, payload TEXT NOT NULL,
             expires_at DOUBLE PRECISION NOT NULL, consumed INTEGER NOT NULL DEFAULT 0)''',
     ):
         conn.execute(sql)
+
+
+def remote_enabled(conn, device_id):
+    row = conn.execute('SELECT signed_in,paused,removed FROM account_device_state WHERE device_id=?', (device_id,)).fetchone()
+    return not row or bool(row['signed_in'] and not row['paused'] and not row['removed'])
+
+
+def device_presence(conn, device):
+    result = dict(device)
+    row = conn.execute('SELECT signed_in,paused,removed FROM account_device_state WHERE device_id=?', (result['device_id'],)).fetchone()
+    result.update(dict(row) if row else {'signed_in':1,'paused':0,'removed':0})
+    result['online'] = bool(result.get('status') == 'ACTIVE' and
+        time.time()-result.get('last_seen_at',0) < 65 and remote_enabled(conn,result['device_id']))
+    return result
+
+
+def set_device_state(conn, device_id, **fields):
+    assert fields and set(fields) <= {'signed_in','paused','removed'}
+    conn.execute('INSERT INTO account_device_state (device_id) VALUES (?) ON CONFLICT (device_id) DO NOTHING', (device_id,))
+    columns = ','.join(name+'=?' for name in fields)
+    conn.execute('UPDATE account_device_state SET '+columns+' WHERE device_id=?', (*fields.values(),device_id))
+    if not remote_enabled(conn,device_id):
+        conn.execute("UPDATE commands SET status='failed',result_status='E_REMOTE_OFFLINE',completed_at=? WHERE device_id=? AND status='pending'",(time.time(),device_id))
 
 
 class AccountService:
@@ -45,16 +73,54 @@ class AccountService:
             if not row:
                 return None
             res = dict(row)
-            try:
-                device_rows = conn.execute('''SELECT d.device_id, d.computer_name, d.status, d.last_seen, d.locked
+            device_rows = conn.execute('''SELECT d.device_id, d.computer_name, d.status, d.last_seen_at, d.locked
                     FROM account_devices ad
                     JOIN devices d ON d.device_id = ad.device_id
+                    LEFT JOIN account_device_state s ON s.device_id=d.device_id
                     WHERE ad.account_id = ?
+                    AND COALESCE(s.removed,0)=0
                     ORDER BY d.created_at ASC''', (row['account_id'],)).fetchall()
-                res['devices'] = [dict(d) for d in device_rows]
-            except Exception:
-                res['devices'] = []
+            res['devices'] = [device_presence(conn,d) for d in device_rows]
             return res
+
+    def device_action(self, body, token):
+        account = self.session(token)
+        if not account: return 401, {'error':'E_ACCOUNT_REQUIRED'}
+        device_id, action = body.get('device_id'), body.get('action')
+        if not isinstance(device_id,str) or action not in ('pause','resume','delete','rename'):
+            return 400, {'error':'E_DEVICE_ACTION'}
+        with self.db.get_conn() as conn:
+            conn.execute('UPDATE devices SET status=status WHERE device_id=?',(device_id,))
+            owner = conn.execute('SELECT account_id FROM account_devices WHERE device_id=?',(device_id,)).fetchone()
+            if not owner or owner['account_id'] != account['account_id']:
+                return 403, {'error':'E_TENANT_IDOR_FORBIDDEN'}
+            if action == 'rename':
+                name = body.get('name')
+                if not isinstance(name,str) or not 1 <= len(name.strip()) <= 80:
+                    return 400, {'error':'E_DEVICE_NAME'}
+                conn.execute('UPDATE devices SET computer_name=? WHERE device_id=?',(name.strip(),device_id))
+            elif action == 'delete':
+                set_device_state(conn,device_id,removed=1,signed_in=0)
+                conn.execute('DELETE FROM mobile_sessions WHERE device_id=?',(device_id,))
+                conn.execute("UPDATE pairing_requests SET status='CANCELLED' WHERE device_id=? AND status='PENDING'",(device_id,))
+            else:
+                set_device_state(conn,device_id,paused=1 if action=='pause' else 0)
+            conn.commit()
+        return 200, {'success':True,'device_id':device_id}
+
+    def logout(self, body, token):
+        account = self.session(token)
+        if not account: return 401, {'error':'E_ACCOUNT_REQUIRED'}
+        device_id = body.get('device_id')
+        with self.db.get_conn() as conn:
+            if isinstance(device_id,str) and device_id:
+                conn.execute('UPDATE devices SET status=status WHERE device_id=?',(device_id,))
+                owner = conn.execute('SELECT account_id FROM account_devices WHERE device_id=?',(device_id,)).fetchone()
+                if owner and owner['account_id']==account['account_id']:
+                    set_device_state(conn,device_id,signed_in=0)
+            conn.execute('DELETE FROM account_sessions WHERE token_hash=?',(self.digest(token),))
+            conn.commit()
+        return 200, {'success':True,'device_id':device_id}
 
     def authenticate(self, action, body):
         email, password = body.get('email'), body.get('password')
@@ -119,5 +185,9 @@ class AccountService:
             conn.execute('INSERT INTO account_devices (device_id,account_id) VALUES (?,?) ON CONFLICT (device_id) DO NOTHING', (device_id,account['account_id']))
             owner = conn.execute('SELECT account_id FROM account_devices WHERE device_id=?', (device_id,)).fetchone()
             if owner['account_id'] != account['account_id']: return 403, {'error': 'E_DIFFERENT_ACCOUNT', 'message': 'Kompüter başqa hesaba bağlıdır.'}
+            name = body.get('name')
+            if isinstance(name,str) and 1 <= len(name.strip()) <= 80:
+                conn.execute('UPDATE devices SET computer_name=? WHERE device_id=?',(name.strip(),device_id))
+            set_device_state(conn,device_id,signed_in=1,removed=0)
             conn.commit()
         return 200, {'success': True}
