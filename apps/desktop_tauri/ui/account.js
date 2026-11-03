@@ -18,8 +18,16 @@
       authenticated = value;
       window.__WINKEY_ACCOUNT_READY__ = value;
       if (close) close.hidden = !value;
-      if (logout) logout.hidden = !value;
-      continueButton.hidden = !value;
+      if (logout) logout.style.display = value ? 'block' : 'none';
+      const loginBtn = byId('accountLogin');
+      if (loginBtn) loginBtn.style.display = value ? 'none' : 'block';
+      const regBtn = byId('accountRegister');
+      if (regBtn) regBtn.style.display = value ? 'none' : 'block';
+      const passWrap = byId('accountPasswordWrapper');
+      if (passWrap) passWrap.style.display = value ? 'none' : 'flex';
+      const emailInput = byId('accountEmail');
+      if (emailInput) emailInput.disabled = value;
+      if (continueButton) continueButton.hidden = true;
     }
     function updateUser(email) {
       for (const id of ['navUserText','drawerHeaderTitle']) if (byId(id)) byId(id).textContent=email;
@@ -131,7 +139,17 @@
     }
     byId('accountOpen').onclick=()=>{overlay.hidden=false;};
     if(close) close.onclick=()=>{if(authenticated)overlay.hidden=true;};
-    continueButton.onclick=()=>{if(authenticated){overlay.hidden=true;window.switchTab?.('status');}};
+    if(continueButton) continueButton.onclick=()=>{if(authenticated){overlay.hidden=true;window.switchTab?.('status');}};
+    const btnShowPass = byId('btnShowAccountPassword');
+    if (btnShowPass) {
+      btnShowPass.onclick = () => {
+        const pass = byId('accountPassword');
+        if (!pass) return;
+        const isPass = pass.type === 'password';
+        pass.type = isPass ? 'text' : 'password';
+        btnShowPass.textContent = isPass ? 'Gizlət' : 'Göstər';
+      };
+    }
     if(logout) logout.onclick=async()=>{
       logout.disabled=true;
       try {
@@ -157,8 +175,8 @@
         const account=await invoke('account_authenticate',{action,email:byId('accountEmail').value.trim(),password:password.value});
         signedIn(true);updateUser(account.email);
         await refresh();
-        overlay.hidden=false;
-        showMessage(action==='register'?'Hesab uğurla yaradıldı. Davam et düyməsini basın.':'Hesaba uğurla daxil oldunuz. Davam et düyməsini basın.','success');
+        overlay.hidden=true;
+        if(window.switchTab) window.switchTab('status');
       }catch(error){showMessage('Əməliyyat alınmadı: '+String(error),'error');}
       finally{password.value='';controls.forEach(button=>{button.disabled=false;});}
     };

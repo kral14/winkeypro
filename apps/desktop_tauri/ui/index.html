@@ -748,9 +748,12 @@
           <input id="accountEmail" type="email" autocomplete="username" required maxlength="254" placeholder="ad@domain.com">
         </div>
 
-        <div style="display:flex;flex-direction:column;gap:4px;">
+        <div id="accountPasswordWrapper" style="display:flex;flex-direction:column;gap:4px;">
           <label for="accountPassword" style="font-size:11px;font-weight:600;color:var(--text-muted);">Şifrə (ən azı 10 simvol)</label>
-          <input id="accountPassword" type="password" autocomplete="current-password" required minlength="10" maxlength="256" placeholder="••••••••••">
+          <div class="input-group">
+            <input id="accountPassword" type="password" autocomplete="current-password" required minlength="10" maxlength="256" placeholder="••••••••••" style="flex:1;">
+            <button type="button" class="btn-secondary" id="btnShowAccountPassword" style="font-size:11px;padding:6px 10px;">Göstər</button>
+          </div>
         </div>
 
         <p id="accountMessage" role="status" aria-live="polite" style="font-size:11px;line-height:1.5;min-height:18px;"></p>
@@ -758,8 +761,7 @@
         <div style="display:flex;gap:8px;align-items:center;margin-top:auto;padding-top:12px;border-top:1px solid var(--line);">
           <button id="accountLogin" type="submit" value="login" class="btn-action" style="flex:1;">Daxil ol</button>
           <button id="accountRegister" type="submit" value="register" class="btn-secondary">Qeydiyyat</button>
-          <button id="accountContinue" hidden type="button" class="btn-action" style="flex:1;">Davam et</button>
-          <button id="accountLogout" hidden type="button" class="btn-secondary">Hesabdan çıxış</button>
+          <button id="accountLogout" type="button" class="btn-danger" style="display:none;width:100%;">Hesabdan çıxış</button>
         </div>
       </form>
     </div>
