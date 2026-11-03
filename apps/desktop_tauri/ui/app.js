@@ -633,7 +633,13 @@ async function loadUpdateStatus(isSilent = false) {
       ROLLED_BACK: 'Xidmət əvvəlki işləyən versiyaya qayıtdı (Rollback). Yenilənmə loqlarını yoxlayın.'
     };
 
+    const dVer = status.desktop_version;
+    const wVer = status.worker_version;
+    const lVer = status.latest_version;
+    const isDev = status.channel === 'dev';
+
     const isNewer = status.status === 'requested' || status.phase === 'STAGING' || status.phase === 'PENDING_ACTIVATION';
+    const isDesktopOutdated = Boolean(lVer && dVer && dVer !== lVer && !isDev);
 
     const container = document.getElementById('updateProgressContainer');
 
@@ -642,7 +648,7 @@ async function loadUpdateStatus(isSilent = false) {
       return;
     }
 
-    // Normal vəziyyətdə (ən son versiyada olduqda) bar tamamilə gizlənir, heç nə görünmür
+    // Normal vəziyyətdə bar tamamilə gizlənir
     if (container && !updateSequenceActive) {
       container.style.display = 'none';
     }
@@ -650,13 +656,20 @@ async function loadUpdateStatus(isSilent = false) {
     if (status.status === 'setup_required' || status.phase === 'SETUP_REQUIRED') {
       if (container) container.style.display = 'block';
       setProgress(100, '<span>⚠️</span> Setup yenilənməsi tələb olunur', 'var(--red)');
+      if (message) message.textContent = 'Yeni versiya üçün Setup.exe quraşdırıcısının yenilənməsi tələb olunur.';
+    } else if (isDesktopOutdated) {
+      // Desktop proqramı ən son versiyaya keçməyibsə, yalançı "Ən son versiya işləyir" yazılmır!
+      if (wVer === lVer) {
+        if (message) message.textContent = `⚠️ Xidmət v${wVer} yeniləndi, lakin Desktop proqramı (v${dVer}) hələ köhnə binarla işləyir. Proqramı bağlayıb yenidən açın və ya avto-keçidi gözləyin.`;
+      } else {
+        if (message) message.textContent = `⚠️ Proqram hələ yenilənməyib (Desktop: v${dVer}, Xidmət: v${wVer || '?'}). Serverdə son versiya: v${lVer}.`;
+      }
     } else if (status.status === 'unreachable') {
-      // unreachable halında barı açmırıq, sadəcə mətndə göstəririk
-      if (container) container.style.display = 'none';
-    }
-
-    if (message && !updateSequenceActive) {
-      message.textContent = phases[status.phase] || messages[status.status] || 'Yenilənmə vəziyyəti məlum deyil.';
+      if (message) message.textContent = 'Serverə qoşulmaq alınmadı. Son versiya təsdiqlənmədi.';
+    } else {
+      if (message && !updateSequenceActive) {
+        message.textContent = phases[status.phase] || messages[status.status] || 'Yenilənmə vəziyyəti məlum deyil.';
+      }
     }
   } catch (error) {
     if (document.getElementById('lblLatestVersion'))
