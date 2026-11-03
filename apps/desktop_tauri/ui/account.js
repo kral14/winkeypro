@@ -27,29 +27,90 @@
       if (byId('drawerHeaderSub')) byId('drawerHeaderSub').textContent='Hesab aktivdir';
     }
     function renderDevices(devices) {
-      const list=byId('accountDevicesList'); if (!list) return;
+      const list = byId('accountDevicesList');
+      if (!list) return;
       list.replaceChildren();
-      if (!devices.length) {list.textContent='Bu PC-ni əlavə etmək üçün əvvəl ona ad verin.';return;}
+      if (!devices.length) {
+        const empty = document.createElement('div');
+        empty.style.cssText = 'font-size:11px;color:var(--text-muted);padding:8px 10px;background:var(--card);border-radius:var(--radius-sm);';
+        empty.textContent = 'Hesabınızda hələ heç bir əlavə cihaz yoxdur. "+ Əlavə Et" ilə bu kompüteri və ya başqa PC-ləri bağlaya bilərsiniz.';
+        list.appendChild(empty);
+        return;
+      }
       for (const device of devices) {
-        const row=document.createElement('div');
-        row.style.cssText='padding:10px;border:1px solid var(--line);border-radius:8px;display:flex;flex-wrap:wrap;align-items:center;gap:8px;';
-        const title=document.createElement('span');
-        title.textContent=device.computer_name+(device.device_id===currentId ? ' (Bu PC)' : '');
-        row.appendChild(title);
-        const state=document.createElement('span');
-        state.textContent=(device.online ? 'Onlayn' : 'Oflayn')+' · '+(device.locked ? 'Kilidli' : 'Açıq')+(device.paused ? ' · Dayandırılıb' : '');
-        state.style.color=device.online ? 'var(--green)' : 'var(--text-muted)';row.appendChild(state);
-        for (const [action,label] of [[device.paused?'resume':'pause',device.paused?'Davam et':'Dayandır'],['delete','Sil']]) {
-          const button=document.createElement('button'); button.type='button';button.className='btn-secondary';button.textContent=label;
-          button.onclick=async()=>{
-            if (action==='delete' && !window.confirm('Bu kompüteri silib telefon girişini ləğv edəsiniz?')) return;
-            button.disabled=true;
-            try {await invoke('account_device_action',{deviceId:device.device_id,action});await refresh();}
-            catch(error){showMessage(String(error),'error');}
-            finally{button.disabled=false;}
-          };
-          row.appendChild(button);
+        const isCurrent = (device.device_id === currentId);
+        const isLocked = Boolean(device.locked);
+
+        const row = document.createElement('div');
+        row.style.cssText = 'padding:6px 10px;border:1px solid var(--line);border-radius:8px;background:var(--card);display:flex;align-items:center;justify-content:space-between;gap:8px;';
+
+        // Sol tərəf: İkon + Ad + Bu PC bərici + ID
+        const left = document.createElement('div');
+        left.style.cssText = 'display:flex;align-items:center;gap:8px;min-width:0;';
+        
+        const iconSpan = document.createElement('span');
+        iconSpan.style.fontSize = '15px';
+        iconSpan.textContent = '💻';
+        left.appendChild(iconSpan);
+
+        const infoDiv = document.createElement('div');
+        infoDiv.style.minWidth = '0';
+
+        const nameLine = document.createElement('div');
+        nameLine.style.cssText = 'font-size:12px;font-weight:700;color:var(--text);display:flex;align-items:center;gap:6px;line-height:1.2;';
+        nameLine.textContent = device.computer_name || 'Kompüter';
+
+        if (isCurrent) {
+          const pcBadge = document.createElement('span');
+          pcBadge.style.cssText = 'font-size:9px;padding:1px 5px;border-radius:4px;background:var(--green-dark);color:var(--green);font-weight:700;';
+          pcBadge.textContent = 'Bu PC';
+          nameLine.appendChild(pcBadge);
         }
+        infoDiv.appendChild(nameLine);
+
+        if (device.device_id) {
+          const idLine = document.createElement('div');
+          idLine.style.cssText = 'font-size:10px;color:var(--text-faint);font-family:monospace;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;';
+          idLine.textContent = device.device_id.length > 28 ? device.device_id.slice(0, 26) + '…' : device.device_id;
+          infoDiv.appendChild(idLine);
+        }
+        left.appendChild(infoDiv);
+        row.appendChild(left);
+
+        // Sağ tərəf: Status bərici + Əməliyyat düymələri
+        const right = document.createElement('div');
+        right.style.cssText = 'display:flex;align-items:center;gap:6px;flex-shrink:0;';
+
+        const stateBadge = document.createElement('span');
+        stateBadge.style.cssText = `font-size:10px;padding:2px 7px;border-radius:8px;font-weight:600;background:${isLocked ? '#2d1917' : '#13241b'};color:${isLocked ? 'var(--red)' : 'var(--green)'};`;
+        stateBadge.textContent = isLocked ? '🔒 Kilidli' : '🔓 Açıq';
+        right.appendChild(stateBadge);
+
+        for (const [action, label, isDanger] of [
+          [device.paused ? 'resume' : 'pause', device.paused ? 'Davam et' : 'Dayandır', false],
+          ['delete', 'Sil', true]
+        ]) {
+          const button = document.createElement('button');
+          button.type = 'button';
+          button.className = 'btn-secondary';
+          button.style.cssText = `font-size:10px;padding:2px 7px;${isDanger ? 'color:var(--red);border-color:var(--red-border);' : ''}`;
+          button.textContent = label;
+          button.onclick = async () => {
+            if (action === 'delete' && !window.confirm(`"${device.computer_name}" kompüterini silib telefon girişini ləğv etmək istəyirsiniz?`)) return;
+            button.disabled = true;
+            try {
+              await invoke('account_device_action', { deviceId: device.device_id, action });
+              await refresh();
+            } catch (error) {
+              showMessage(String(error), 'error');
+            } finally {
+              button.disabled = false;
+            }
+          };
+          right.appendChild(button);
+        }
+
+        row.appendChild(right);
         list.appendChild(row);
       }
     }

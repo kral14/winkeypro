@@ -684,34 +684,39 @@
       }
     }
 
-    /* Give the device list the available space, including compact windows. */
+    /* Give the device list the central available space seamlessly, without page scrollbar */
     #panel-status {
-      overflow-y: auto;
+      overflow-y: hidden !important;
     }
     #panel-status .split-row {
-      min-height: 490px;
+      min-height: 0 !important;
+      flex: 1;
     }
     #deviceManagementCard {
+      display: flex;
+      flex-direction: column;
       justify-content: flex-start;
-      gap: 16px !important;
+      gap: 10px !important;
+      min-height: 0;
     }
     #accountDevicesBox {
       display: flex;
       flex-direction: column;
       flex: 1;
-      min-height: 240px;
+      min-height: 130px;
+      overflow: hidden;
     }
     #accountDevicesList {
       flex: 1;
-      min-height: 190px;
-      max-height: none !important;
-      gap: 8px !important;
+      min-height: 110px;
+      max-height: 230px;
+      gap: 6px !important;
       overflow-y: auto;
+      padding-right: 2px;
     }
     #accountDevicesList > div {
       flex-shrink: 0;
-      min-height: 62px;
-      font-size: 14px;
+      min-height: 42px;
     }
   </style>
 </head>
@@ -881,8 +886,9 @@
 
         </div>
 
-        <!-- Sağ: Kompüter Adı və Mobil Nəzarət -->
+        <!-- Sağ: Kompüter Adı, Cihazlar Siyahısı və Mobil Nəzarət -->
         <div class="content-card" id="deviceManagementCard">
+          <!-- 1. Yuxarı: Kompüter Adı Tənzimləməsi -->
           <div>
             <div class="card-header-sm">
               <span class="card-title">
@@ -890,7 +896,7 @@
                 Kompüter Adı Tənzimləməsi
               </span>
             </div>
-            <div style="margin-top:10px;">
+            <div style="margin-top:8px;">
               <label for="txtPcName" style="font-size:11px;color:var(--text-muted);display:block;margin-bottom:4px;">Kompüterin Adı:</label>
               <div class="input-group">
                 <input type="text" id="txtPcName" value="Nesib-Workstation">
@@ -900,32 +906,32 @@
             </div>
           </div>
 
-          <!-- Uzaqdan Mobil İdarə Nəzarəti -->
-          <div style="border-top:1px solid var(--line-subtle);padding-top:10px;">
-            <div class="card-title" style="margin-bottom:6px;">
-              <svg viewBox="0 0 24 24"><rect width="14" height="20" x="5" y="2" rx="2"/><line x1="12" y1="18" x2="12.01" y2="18"/></svg>
+          <!-- 2. ƏSAS MƏRKƏZİ HİSSƏ: Hesaba Bağlı Cihazlar Qutusu -->
+          <div id="accountDevicesBox" style="border-top:1px solid var(--line-subtle);padding-top:8px;flex:1;display:flex;flex-direction:column;min-height:120px;">
+            <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:6px;">
+              <span style="font-size:11px;font-weight:700;color:var(--text);display:flex;align-items:center;gap:5px;">
+                💻 Hesaba Bağlı Cihazlar
+              </span>
+              <button type="button" class="btn-secondary" id="btnAddNewDeviceNav" style="font-size:10px;padding:2px 8px;">+ Əlavə Et</button>
+            </div>
+            <div id="accountDevicesList" style="display:flex;flex-direction:column;flex:1;overflow-y:auto;">
+              <div style="font-size:11px;color:var(--text-muted);padding:8px 10px;background:var(--card);border-radius:var(--radius-sm);">
+                Hesaba daxil olunduqda cihazlarınız burada görünəcək.
+              </div>
+            </div>
+          </div>
+
+          <!-- 3. Aşağı: Uzaqdan Mobil İdarə Nəzarəti -->
+          <div style="border-top:1px solid var(--line-subtle);padding-top:8px;">
+            <div class="card-title" style="margin-bottom:4px;font-size:11px;">
+              <svg viewBox="0 0 24 24" style="width:13px;height:13px;"><rect width="14" height="20" x="5" y="2" rx="2"/><line x1="12" y1="18" x2="12.01" y2="18"/></svg>
               Uzaqdan Mobil İdarə (Service Control)
             </div>
             <div style="display:flex;align-items:center;justify-content:space-between;gap:8px;">
               <span style="font-size:11px;color:var(--text-muted);" id="lblPauseDesc">
                 Vəziyyət: <b id="lblPauseState" style="color:var(--green);">AKTİV</b>
               </span>
-              <button class="btn-secondary" id="btnTogglePause" style="font-size:11px;padding:5px 10px;">İdarəni Dayandır</button>
-            </div>
-          </div>
-
-          <!-- Hesaba Bağlı Cihazlar Qutusu -->
-          <div id="accountDevicesBox" style="border-top:1px solid var(--line-subtle);padding-top:10px;">
-            <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:6px;">
-              <span style="font-size:11px;font-weight:600;color:var(--text);display:flex;align-items:center;gap:4px;">
-                💻 Hesaba Bağlı Cihazlar
-              </span>
-              <button type="button" class="btn-secondary" id="btnAddNewDeviceNav" style="font-size:10px;padding:2px 8px;">+ Əlavə Et</button>
-            </div>
-            <div id="accountDevicesList" style="display:flex;flex-direction:column;">
-              <div style="font-size:11px;color:var(--text-muted);padding:6px 10px;background:var(--card);border-radius:var(--radius-sm);">
-                Hesaba daxil olunduqda cihazlarınız burada görünəcək.
-              </div>
+              <button class="btn-secondary" id="btnTogglePause" style="font-size:11px;padding:4px 10px;">İdarəni Dayandır</button>
             </div>
           </div>
         </div>
