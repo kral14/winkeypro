@@ -1,6 +1,6 @@
 [package]
 name = "winkey_desktop"
-version = "0.2.8"
+version = "0.2.9"
 description = "WinKey Pro - Windows Təhlükəsiz Masaüstü İdarəetməsi"
 edition = "2021"
 
