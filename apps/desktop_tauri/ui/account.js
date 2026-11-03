@@ -89,6 +89,12 @@
         const right = document.createElement('div');
         right.style.cssText = 'display:flex;align-items:center;gap:6px;flex-shrink:0;';
 
+        const isOnline = isCurrent || Boolean(device.online);
+        const onlineBadge = document.createElement('span');
+        onlineBadge.style.cssText = `font-size:10px;padding:2px 7px;border-radius:8px;font-weight:600;display:inline-flex;align-items:center;gap:4px;background:${isOnline ? '#13241b' : '#202124'};color:${isOnline ? 'var(--green)' : '#9ca3af'};border:1px solid ${isOnline ? 'rgba(74,222,128,0.25)' : 'var(--line)'};`;
+        onlineBadge.innerHTML = `<span style="width:6px;height:6px;border-radius:50%;background:${isOnline ? 'var(--green)' : '#6b7280'};display:inline-block;"></span> ${isOnline ? 'Onlayn' : 'Oflayn'}`;
+        right.appendChild(onlineBadge);
+
         const stateBadge = document.createElement('span');
         stateBadge.style.cssText = `font-size:10px;padding:2px 7px;border-radius:8px;font-weight:600;background:${isLocked ? '#2d1917' : '#13241b'};color:${isLocked ? 'var(--red)' : 'var(--green)'};`;
         stateBadge.textContent = isLocked ? '🔒 Kilidli' : '🔓 Açıq';
