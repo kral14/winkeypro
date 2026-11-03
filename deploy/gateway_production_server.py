@@ -21,11 +21,14 @@ import hashlib
 from typing import Dict, Any, Optional
 from http.server import HTTPServer, ThreadingHTTPServer, BaseHTTPRequestHandler
 from urllib.parse import urlparse, parse_qs
+import urllib.parse
 from cryptography.hazmat.primitives.asymmetric import ed25519
 
 if not __package__:
     # Keep the documented direct-script entrypoint working with shared modules.
     sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+
+from deploy.gateway_service import GatewayService
 
 # Dinamik Admin Secret — heç vaxt hardcode edilmir!
 _RUNTIME_ADMIN_SECRET = secrets.token_hex(32)
@@ -2145,103 +2148,538 @@ def get_admin_html() -> str:
 <html lang="az">
 <head>
     <meta charset="utf-8">
-    <title>WinKey Pro — Şəxsi Sahib Paneli (Private Admin)</title>
+    <title>WinKey Pro — Şəxsi Sahib İdarəetmə Mərkəzi (Private Admin)</title>
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <style>
+        :root {
+            --bg: #090d0b;
+            --panel: #111613;
+            --panel-border: #1a231e;
+            --panel-sub: #161d19;
+            --text: #e6ede8;
+            --text-muted: #8e9e95;
+            --text-faint: #5a6860;
+            --green: #10b981;
+            --green-glow: rgba(16, 185, 129, 0.15);
+            --green-border: rgba(16, 185, 129, 0.3);
+            --accent: #c8f279;
+            --red: #ef4444;
+            --red-glow: rgba(239, 68, 68, 0.15);
+            --red-border: rgba(239, 68, 68, 0.3);
+            --amber: #f59e0b;
+            --radius-sm: 6px;
+            --radius-md: 10px;
+            --radius-lg: 14px;
+        }
         * { box-sizing: border-box; margin: 0; padding: 0; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; }
-        body { background: #0c0f0e; color: #e6ede8; display: flex; justify-content: center; min-height: 100vh; padding: 24px; }
-        .admin-container { width: 100%; max-width: 900px; display: flex; flex-direction: column; gap: 20px; }
-        .header { display: flex; justify-content: space-between; align-items: center; padding: 16px 0; border-bottom: 1px solid #1c2420; }
-        .logo { font-size: 1.4rem; font-weight: 700; color: #c8f279; letter-spacing: -0.5px; }
-        .badge { font-size: 0.75rem; padding: 4px 10px; border-radius: 6px; font-weight: 600; text-transform: uppercase; }
-        .badge-admin { background: rgba(200, 242, 121, 0.15); color: #c8f279; border: 1px solid rgba(200, 242, 121, 0.3); }
-        .card { background: #141a17; border: 1px solid #1f2723; border-radius: 12px; padding: 20px; display: flex; flex-direction: column; gap: 14px; }
-        .card-title { font-size: 1.1rem; font-weight: 600; color: #fff; }
-        .input-group { display: flex; gap: 10px; }
-        input[type="password"], input[type="text"] { flex: 1; padding: 10px 14px; background: #0a0d0c; border: 1px solid #27332c; border-radius: 8px; color: #fff; font-size: 0.95rem; }
-        .btn { padding: 10px 18px; border-radius: 8px; font-size: 0.9rem; font-weight: 600; cursor: pointer; border: none; transition: 0.15s; }
-        .btn-primary { background: #c8f279; color: #0c0f0e; }
-        .btn-primary:active { transform: scale(0.98); }
-        .btn-danger { background: rgba(239, 68, 68, 0.2); color: #ef4444; border: 1px solid rgba(239, 68, 68, 0.4); padding: 6px 12px; font-size: 0.8rem; }
-        table { width: 100%; border-collapse: collapse; font-size: 0.85rem; margin-top: 8px; }
-        th, td { text-align: left; padding: 10px; border-bottom: 1px solid #1a221e; }
-        th { color: #8e9e95; font-weight: 600; text-transform: uppercase; font-size: 0.75rem; }
-        .status-pill { display: inline-block; padding: 2px 8px; border-radius: 4px; font-size: 0.75rem; font-weight: 600; }
-        .status-active { background: rgba(200,242,121,0.15); color: #c8f279; }
-        .status-revoked { background: rgba(239,68,68,0.15); color: #ef4444; }
-        .err-msg { color: #ef4444; font-size: 0.85rem; }
+        body { background: var(--bg); color: var(--text); min-height: 100vh; display: flex; flex-direction: column; }
+        
+        /* Üst Zolaq (Navbar) */
+        header.admin-nav {
+            position: sticky; top: 0; z-index: 50;
+            background: rgba(9, 13, 11, 0.92);
+            backdrop-filter: blur(10px);
+            border-bottom: 1px solid var(--panel-border);
+            padding: 12px 24px;
+            display: flex; justify-content: space-between; align-items: center;
+        }
+        .nav-brand { display: flex; align-items: center; gap: 12px; }
+        .nav-logo-pill {
+            background: #13241b; color: var(--accent);
+            border: 1px solid var(--green-border);
+            padding: 4px 10px; border-radius: var(--radius-sm);
+            font-size: 0.75rem; font-weight: 700; text-transform: uppercase; letter-spacing: 0.5px;
+        }
+        .nav-title { font-size: 1.15rem; font-weight: 700; color: #fff; letter-spacing: -0.3px; }
+        .nav-right { display: flex; align-items: center; gap: 16px; font-size: 0.85rem; }
+        .ws-badge {
+            display: inline-flex; align-items: center; gap: 6px;
+            padding: 4px 10px; border-radius: var(--radius-sm); font-size: 0.75rem; font-weight: 600;
+        }
+        .ws-online { background: var(--green-glow); color: var(--green); border: 1px solid var(--green-border); }
+        .ws-offline { background: var(--red-glow); color: var(--red); border: 1px solid var(--red-border); }
+        .ws-dot { width: 7px; height: 7px; border-radius: 50%; background: currentColor; }
+
+        /* Əsas Sahə */
+        main.admin-content { flex: 1; max-width: 1300px; width: 100%; margin: 0 auto; padding: 24px; display: flex; flex-direction: column; gap: 20px; }
+
+        /* Giriş Qutusu (Login Screen) */
+        .auth-card {
+            max-width: 480px; width: 100%; margin: 80px auto;
+            background: var(--panel); border: 1px solid var(--panel-border); border-radius: var(--radius-lg);
+            padding: 32px; display: flex; flex-direction: column; gap: 18px;
+            box-shadow: 0 10px 30px rgba(0, 0, 0, 0.5);
+        }
+        .auth-title { font-size: 1.3rem; font-weight: 700; color: #fff; }
+        .auth-desc { font-size: 0.85rem; color: var(--text-muted); line-height: 1.5; }
+
+        /* Düymələr və Girişlər */
+        input[type="text"], input[type="password"], select {
+            width: 100%; padding: 10px 14px; background: var(--panel-sub);
+            border: 1px solid var(--panel-border); border-radius: var(--radius-sm);
+            color: #fff; font-size: 0.9rem; outline: none; transition: 0.15s;
+        }
+        input:focus, select:focus { border-color: var(--green); }
+        .btn {
+            display: inline-flex; align-items: center; justify-content: center; gap: 6px;
+            padding: 9px 16px; border-radius: var(--radius-sm); font-size: 0.85rem; font-weight: 600;
+            cursor: pointer; border: none; transition: 0.15s; white-space: nowrap; text-decoration: none;
+        }
+        .btn-primary { background: var(--accent); color: #090d0b; }
+        .btn-primary:hover { opacity: 0.9; }
+        .btn-secondary { background: var(--panel-sub); color: var(--text); border: 1px solid var(--panel-border); }
+        .btn-secondary:hover { background: #1c2520; }
+        .btn-danger { background: var(--red-glow); color: var(--red); border: 1px solid var(--red-border); }
+        .btn-danger:hover { background: rgba(239, 68, 68, 0.25); }
+        .btn-sm { padding: 5px 10px; font-size: 0.78rem; }
+
+        /* Tab Menyu */
+        .tab-bar {
+            display: flex; gap: 6px; background: var(--panel); border: 1px solid var(--panel-border);
+            padding: 4px; border-radius: var(--radius-md); overflow-x: auto;
+        }
+        .tab-btn {
+            background: transparent; border: none; color: var(--text-muted);
+            padding: 8px 16px; border-radius: var(--radius-sm); font-size: 0.85rem; font-weight: 600;
+            cursor: pointer; transition: 0.15s; display: flex; align-items: center; gap: 8px;
+        }
+        .tab-btn:hover { color: #fff; }
+        .tab-btn.active { background: var(--panel-sub); color: var(--accent); border: 1px solid var(--green-border); }
+
+        /* Kartlar və Grid */
+        .grid-overview { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 16px; }
+        .metric-card {
+            background: var(--panel); border: 1px solid var(--panel-border); border-radius: var(--radius-md);
+            padding: 18px; display: flex; flex-direction: column; gap: 8px;
+        }
+        .metric-label { font-size: 0.75rem; text-transform: uppercase; font-weight: 600; color: var(--text-muted); letter-spacing: 0.5px; }
+        .metric-value { font-size: 1.6rem; font-weight: 700; color: #fff; font-family: monospace; }
+        .metric-sub { font-size: 0.78rem; color: var(--text-faint); }
+
+        .card {
+            background: var(--panel); border: 1px solid var(--panel-border); border-radius: var(--radius-md);
+            padding: 20px; display: flex; flex-direction: column; gap: 16px;
+        }
+        .card-header { display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 12px; }
+        .card-title { font-size: 1.05rem; font-weight: 700; color: #fff; }
+
+        /* Cədvəllər */
+        .table-responsive { width: 100%; overflow-x: auto; }
+        table { width: 100%; border-collapse: collapse; font-size: 0.85rem; }
+        th, td { padding: 12px; text-align: left; border-bottom: 1px solid var(--panel-border); }
+        th { color: var(--text-muted); font-weight: 600; text-transform: uppercase; font-size: 0.72rem; letter-spacing: 0.5px; }
+        tr:hover td { background: rgba(255, 255, 255, 0.02); }
+        code { font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; font-size: 0.8rem; color: #a3e635; }
+
+        /* Status Pilleri */
+        .pill { display: inline-flex; align-items: center; gap: 5px; padding: 3px 8px; border-radius: 4px; font-size: 0.72rem; font-weight: 600; }
+        .pill-active { background: var(--green-glow); color: var(--green); border: 1px solid var(--green-border); }
+        .pill-revoked { background: var(--red-glow); color: var(--red); border: 1px solid var(--red-border); }
+        .pill-online { background: #064e3b; color: #34d399; }
+        .pill-offline { background: #262626; color: #a3a3a3; }
+        .pill-info { background: rgba(59, 130, 246, 0.15); color: #60a5fa; border: 1px solid rgba(59, 130, 246, 0.3); }
+        .pill-warn { background: rgba(245, 158, 11, 0.15); color: #fbbf24; border: 1px solid rgba(245, 158, 11, 0.3); }
+
+        /* Səhifələmə (Pagination) */
+        .pagination-bar {
+            display: flex; justify-content: space-between; align-items: center; padding-top: 12px;
+            font-size: 0.85rem; color: var(--text-muted); flex-wrap: wrap; gap: 12px;
+        }
+        .pagination-controls { display: flex; align-items: center; gap: 8px; }
+
+        /* Modal Dialog */
+        .modal-overlay {
+            position: fixed; inset: 0; background: rgba(0, 0, 0, 0.75);
+            backdrop-filter: blur(4px); z-index: 100;
+            display: flex; justify-content: center; align-items: center; padding: 20px;
+        }
+        .modal-overlay[hidden] { display: none !important; }
+        .modal-box {
+            background: var(--panel); border: 1px solid var(--panel-border); border-radius: var(--radius-lg);
+            max-width: 840px; width: 100%; max-height: 85vh; overflow-y: auto;
+            padding: 24px; display: flex; flex-direction: column; gap: 20px;
+            box-shadow: 0 20px 40px rgba(0, 0, 0, 0.8);
+        }
+
+        /* Timeline addımları */
+        .timeline { display: flex; flex-direction: column; gap: 12px; position: relative; padding-left: 20px; }
+        .timeline::before {
+            content: ''; position: absolute; left: 6px; top: 8px; bottom: 8px; width: 2px;
+            background: var(--panel-border);
+        }
+        .timeline-item { position: relative; display: flex; flex-direction: column; gap: 4px; }
+        .timeline-dot {
+            position: absolute; left: -20px; top: 4px; width: 10px; height: 10px; border-radius: 50%;
+            background: var(--green); border: 2px solid var(--bg);
+        }
+        .timeline-title { font-size: 0.85rem; font-weight: 600; color: #fff; }
+        .timeline-meta { font-size: 0.75rem; color: var(--text-muted); display: flex; gap: 12px; }
+
+        .filter-row { display: flex; gap: 10px; flex-wrap: wrap; align-items: center; }
+        .filter-input { flex: 1; min-width: 180px; }
+
+        .progress-bar-wrap { width: 100%; height: 6px; background: var(--panel-sub); border-radius: 3px; overflow: hidden; margin-top: 6px; }
+        .progress-bar-fill { height: 100%; background: var(--green); transition: width 0.3s; }
+        .err-msg { color: var(--red); font-size: 0.85rem; }
     </style>
 </head>
 <body>
-    <div class="admin-container">
-        <div class="header">
-            <div class="logo">WinKey Pro — Şəxsi Sahib Paneli</div>
-            <div class="badge badge-admin">Private Surface</div>
+
+    <!-- Üst Zolaq -->
+    <header class="admin-nav">
+        <div class="nav-brand">
+            <span class="nav-logo-pill">Admin Center</span>
+            <span class="nav-title">WinKey Pro — Şəxsi Sahib Paneli</span>
+        </div>
+        <div class="nav-right" id="nav-right-box" style="display:none;">
+            <div id="wsStatusBadge" class="ws-badge ws-offline">
+                <span class="ws-dot"></span> <span id="wsStatusText">Bağlantı kəsildi</span>
+            </div>
+            <button class="btn btn-secondary btn-sm" onclick="refreshCurrentTab()" title="Yenilə">🔄 Yenilə</button>
+            <button class="btn btn-danger btn-sm" onclick="logoutAdmin()">Çıxış</button>
+        </div>
+    </header>
+
+    <main class="admin-content">
+
+        <!-- Autentifikasiya Paneli -->
+        <div class="auth-card" id="authBox">
+            <div class="auth-title">Sahib Girişi</div>
+            <div class="auth-desc">WinKey Pro serverini idarə etmək üçün təyin edilmiş <code>X-Owner-Admin-Secret</code> daxil edin.</div>
+            <div style="display:flex; flex-direction:column; gap:10px;">
+                <input type="password" id="inputAdminSecret" placeholder="X-Owner-Admin-Secret...">
+                <button class="btn btn-primary" onclick="loginAdmin()">Daxil Ol</button>
+            </div>
+            <div id="authErrMsg" class="err-msg"></div>
         </div>
 
-        <div class="card" id="auth-box">
-            <div class="card-title">Sahib Autentifikasiyası</div>
-            <div class="input-group">
-                <input type="password" id="admin-sec-input" placeholder="X-Owner-Admin-Secret daxil edin...">
-                <button class="btn btn-primary" onclick="loginAdmin()">Giriş</button>
+        <!-- Əsas Dashboard Panelləri (Girişdən sonra) -->
+        <div id="dashboardContainer" style="display:none; flex-direction:column; gap:20px;">
+            
+            <!-- Tablar -->
+            <div class="tab-bar">
+                <button class="tab-btn active" id="tabBtn-overview" onclick="switchTab('overview')">📊 Ümumi Baxış</button>
+                <button class="tab-btn" id="tabBtn-devices" onclick="switchTab('devices')">💻 PC Cihazları</button>
+                <button class="tab-btn" id="tabBtn-updates" onclick="switchTab('updates')">⚡ OTA Yenilənmələr</button>
+                <button class="tab-btn" id="tabBtn-telemetry" onclick="switchTab('telemetry')">📜 Hadisələr və Diaqnostika</button>
             </div>
-            <div id="auth-err" class="err-msg"></div>
+
+            <!-- ==================== BÖLMƏ 1: ÜMUMİ BAXIŞ ==================== -->
+            <div id="tabPanel-overview" style="display:flex; flex-direction:column; gap:20px;">
+                <div class="grid-overview">
+                    <div class="metric-card">
+                        <div class="metric-label">Qeydiyyatlı Cihazlar</div>
+                        <div class="metric-value" id="ovTotalDevices">—</div>
+                        <div class="metric-sub" id="ovActiveRevoked">Aktiv: — | Ləğv: —</div>
+                    </div>
+                    <div class="metric-card">
+                        <div class="metric-label">Online Cihazlar (Fresh)</div>
+                        <div class="metric-value" style="color:var(--green);" id="ovOnlineDevices">—</div>
+                        <div class="metric-sub" id="ovOfflineDevices">Oflayn: —</div>
+                    </div>
+                    <div class="metric-card">
+                        <div class="metric-label">Son 24 Saat Xətaları</div>
+                        <div class="metric-value" style="color:var(--amber);" id="ovError24h">—</div>
+                        <div class="metric-sub">Kritik və ya xəta insidentləri</div>
+                    </div>
+                    <div class="metric-card">
+                        <div class="metric-label">Cari Server Buraxılışı</div>
+                        <div class="metric-value" style="color:var(--accent);" id="ovReleaseVer">—</div>
+                        <div class="metric-sub" id="ovReleaseId">ID: —</div>
+                    </div>
+                    <div class="metric-card">
+                        <div class="metric-label">OTA Uğur Nisbəti</div>
+                        <div class="metric-value" id="ovOtaCommitted">—</div>
+                        <div class="metric-sub" id="ovOtaRollback">Rollback: — | Xəta: —</div>
+                    </div>
+                    <div class="metric-card">
+                        <div class="metric-label">Telemetriya Hadisələri</div>
+                        <div class="metric-value" id="ovTotalTelemetry">—</div>
+                        <div class="metric-sub">Qeydə alınmış bütün loqlar</div>
+                    </div>
+                </div>
+
+                <!-- Server Sağlamlıq və Təhlükəsizlik Kartı -->
+                <div class="card">
+                    <div class="card-title">Mərkəzi Server Vəziyyəti</div>
+                    <div style="display:grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap:16px; font-size:0.85rem;">
+                        <div style="background:var(--panel-sub); padding:14px; border-radius:var(--radius-sm); border:1px solid var(--panel-border);">
+                            <div style="color:var(--text-muted); font-size:0.75rem;">YENİLƏNMƏ ANBARI (REPOSITORY)</div>
+                            <div style="font-weight:600; margin-top:4px;" id="repoStatusText">Yoxlanılır...</div>
+                            <div style="color:var(--text-faint); margin-top:4px;" id="repoPathText">Yol: deploy/windows_release/WinKeyUpdate.zip</div>
+                        </div>
+                        <div style="background:var(--panel-sub); padding:14px; border-radius:var(--radius-sm); border:1px solid var(--panel-border);">
+                            <div style="color:var(--text-muted); font-size:0.75rem;">MƏLUMAT BAZASI VƏ SESSİYALAR</div>
+                            <div style="font-weight:600; margin-top:4px;">SQLite / PostgreSQL İkiqat Dəstək</div>
+                            <div style="color:var(--text-faint); margin-top:4px;">Multi-Tenant & Session-Scoped Isolation</div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- ==================== BÖLMƏ 2: CİHAZLAR ==================== -->
+            <div id="tabPanel-devices" style="display:none; flex-direction:column; gap:20px;">
+                <div class="card">
+                    <div class="card-header">
+                        <div class="card-title">Qeydiyyatdan Keçmiş PC Cihazları</div>
+                        <div class="filter-row">
+                            <input type="text" id="devSearchInput" class="filter-input" placeholder="Kompüter adı və ya ID ilə axtar..." oninput="debouncedLoadDevices()">
+                            <select id="devStatusFilter" onchange="loadDevices(1)" style="width:130px;">
+                                <option value="">Bütün Statuslar</option>
+                                <option value="ACTIVE">Aktiv (ACTIVE)</option>
+                                <option value="REVOKED">Ləğv edilmiş (REVOKED)</option>
+                            </select>
+                            <select id="devOnlineFilter" onchange="loadDevices(1)" style="width:130px;">
+                                <option value="">Bütün Əlaqələr</option>
+                                <option value="true">Yalnız Online</option>
+                                <option value="false">Yalnız Offline</option>
+                            </select>
+                            <select id="devSortFilter" onchange="loadDevices(1)" style="width:140px;">
+                                <option value="last_seen_desc">Son Görülmə (Azalan)</option>
+                                <option value="created_desc">Qeydiyyat (Yeni)</option>
+                                <option value="created_asc">Qeydiyyat (Köhnə)</option>
+                                <option value="name_asc">Ad (A-Z)</option>
+                            </select>
+                        </div>
+                    </div>
+
+                    <div class="table-responsive">
+                        <table id="devicesTable">
+                            <thead>
+                                <tr>
+                                    <th>Cihaz ID</th>
+                                    <th>Kompüter Adı</th>
+                                    <th>Əlaqə</th>
+                                    <th>Qeydiyyat</th>
+                                    <th>Worker Versiyası</th>
+                                    <th>Serverdə Son</th>
+                                    <th>Kilid</th>
+                                    <th>PIN</th>
+                                    <th>Son Görülmə</th>
+                                    <th>Əməliyyatlar</th>
+                                </tr>
+                            </thead>
+                            <tbody id="devicesTableBody">
+                                <tr><td colspan="10" style="color:var(--text-muted); text-align:center;">Yüklənir...</td></tr>
+                            </tbody>
+                        </table>
+                    </div>
+
+                    <div class="pagination-bar" id="devicesPagination">
+                        <div id="devicesCountInfo">0 cihazdan 0 göstərilir</div>
+                        <div class="pagination-controls">
+                            <button class="btn btn-secondary btn-sm" id="btnDevPrev" onclick="changeDevPage(-1)">← Əvvəlki</button>
+                            <span id="devPageIndicator">Səhifə 1 / 1</span>
+                            <button class="btn btn-secondary btn-sm" id="btnDevNext" onclick="changeDevPage(1)">Növbəti →</button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- ==================== BÖLMƏ 3: OTA YENİLƏNMƏLƏR ==================== -->
+            <div id="tabPanel-updates" style="display:none; flex-direction:column; gap:20px;">
+                
+                <!-- İmzalı Paket Yayımlama Bloku -->
+                <div class="card">
+                    <div class="card-title">İmzalı Release Paketini Yayımla (Publish Package)</div>
+                    <div style="font-size:0.85rem; color:var(--text-muted);">
+                        Serveri yenidən başlatmadan yeni imzalanmış <code>WinKeyUpdate-*.zip</code> paketini birbaşa mərkəzə yükləyin. 
+                        Paket Ed25519 public key ilə təsdiqlənəcək və bütün aktiv cihazlara dərhal bildiriş göndəriləcək.
+                    </div>
+                    <div style="display:flex; gap:12px; align-items:center; flex-wrap:wrap; margin-top:8px;">
+                        <input type="file" id="packageFileInput" accept=".zip" style="max-width:320px; font-size:0.8rem;">
+                        <button class="btn btn-primary" onclick="uploadPackage()">🚀 Paketi Yayımla</button>
+                    </div>
+                    <div id="uploadProgressWrap" style="display:none; flex-direction:column; gap:4px; margin-top:10px;">
+                        <div style="display:flex; justify-content:space-between; font-size:0.75rem;">
+                            <span id="uploadStatusLabel">Yüklənir...</span>
+                            <span id="uploadPercentLabel">0%</span>
+                        </div>
+                        <div class="progress-bar-wrap"><div class="progress-bar-fill" id="uploadBarFill" style="width:0%;"></div></div>
+                    </div>
+                    <div id="uploadResultMsg" style="font-size:0.85rem; margin-top:6px;"></div>
+                </div>
+
+                <!-- Cihazların OTA Update Mərhələləri -->
+                <div class="card">
+                    <div class="card-title">Cihazların Update Mərhələləri və Keçid Tarixçəsi</div>
+                    <div class="table-responsive">
+                        <table>
+                            <thead>
+                                <tr>
+                                    <th>Cihaz ID</th>
+                                    <th>Son Mərhələ</th>
+                                    <th>Versiya</th>
+                                    <th>Müddət (ms)</th>
+                                    <th>Xəta Kodu</th>
+                                    <th>Qeydə Alınma Vaxtı</th>
+                                </tr>
+                            </thead>
+                            <tbody id="updateStagesTableBody">
+                                <tr><td colspan="6" style="color:var(--text-muted); text-align:center;">Yüklənir...</td></tr>
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+
+            <!-- ==================== BÖLMƏ 4: TELEMETRİYA VƏ HADİSƏLƏR ==================== -->
+            <div id="tabPanel-telemetry" style="display:none; flex-direction:column; gap:20px;">
+                <div class="card">
+                    <div class="card-header">
+                        <div class="card-title">Hadisələr və Performans Diaqnostikası</div>
+                        <div style="display:flex; gap:8px;">
+                            <button class="btn btn-secondary btn-sm" onclick="exportTelemetry('json')">📥 JSON İxrac</button>
+                            <button class="btn btn-secondary btn-sm" onclick="exportTelemetry('csv')">📥 CSV İxrac</button>
+                        </div>
+                    </div>
+
+                    <!-- Filtrlər -->
+                    <div class="filter-row">
+                        <input type="text" id="telDevInput" class="filter-input" placeholder="Cihaz ID ilə filtr..." oninput="debouncedLoadTelemetry()">
+                        <select id="telCompFilter" onchange="loadTelemetry(1)" style="width:130px;">
+                            <option value="">Bütün Komponentlər</option>
+                            <option value="agent">Agent / Worker</option>
+                            <option value="mobile">Mobil PWA</option>
+                            <option value="installer">Quraşdırıcı</option>
+                            <option value="service">Windows Xidməti</option>
+                        </select>
+                        <select id="telSevFilter" onchange="loadTelemetry(1)" style="width:130px;">
+                            <option value="">Bütün Dərəcələr</option>
+                            <option value="INFO">INFO</option>
+                            <option value="WARN">WARN</option>
+                            <option value="ERROR">ERROR</option>
+                            <option value="CRITICAL">CRITICAL</option>
+                        </select>
+                        <input type="text" id="telStageInput" class="filter-input" placeholder="Mərhələ (Stage) axtar..." oninput="debouncedLoadTelemetry()">
+                    </div>
+
+                    <div class="table-responsive">
+                        <table>
+                            <thead>
+                                <tr>
+                                    <th>Vaxt</th>
+                                    <th>Cihaz</th>
+                                    <th>Komponent</th>
+                                    <th>Mərhələ / Əlaqə ID</th>
+                                    <th>Hadisə</th>
+                                    <th>Müddət</th>
+                                    <th>Dərəcə</th>
+                                    <th>Xəta / İzah</th>
+                                </tr>
+                            </thead>
+                            <tbody id="telemetryTableBody">
+                                <tr><td colspan="8" style="color:var(--text-muted); text-align:center;">Yüklənir...</td></tr>
+                            </tbody>
+                        </table>
+                    </div>
+
+                    <div class="pagination-bar" id="telemetryPagination">
+                        <div id="telemetryCountInfo">0 hadisədən 0 göstərilir</div>
+                        <div class="pagination-controls">
+                            <button class="btn btn-secondary btn-sm" id="btnTelPrev" onclick="changeTelPage(-1)">← Əvvəlki</button>
+                            <span id="telPageIndicator">Səhifə 1 / 1</span>
+                            <button class="btn btn-secondary btn-sm" id="btnTelNext" onclick="changeTelPage(1)">Növbəti →</button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
         </div>
 
-        <div id="dashboard-content" style="display: none; flex-direction: column; gap: 20px;">
-            <div class="card">
-                <div class="card-title">Qeydiyyatdan Keçmiş PC Cihazları</div>
-                <div id="devices-container">Yüklənir...</div>
+    </main>
+
+    <!-- ==================== CİHAZ DETAL MODALI ==================== -->
+    <div id="deviceDetailModal" class="modal-overlay" hidden>
+        <div class="modal-box">
+            <div style="display:flex; justify-content:space-between; align-items:center; border-bottom:1px solid var(--panel-border); padding-bottom:12px;">
+                <h3 style="font-size:1.15rem; font-weight:700;" id="modalDevTitle">Cihaz Detalları</h3>
+                <button class="btn btn-secondary btn-sm" onclick="closeDeviceDetail()">✕ Bağla</button>
+            </div>
+            
+            <!-- Metadata Grid -->
+            <div style="display:grid; grid-template-columns:repeat(auto-fit, minmax(200px, 1fr)); gap:12px;" id="modalMetaGrid">
+                <!-- Javascript tərəfindən doldurulur -->
             </div>
 
-            <div class="card">
-                <div class="card-title">Canlı Telemetriya və İnsidentlər (Son 100 Hadisə)</div>
-                <div id="telemetry-container">Yüklənir...</div>
+            <!-- Son Əmrlər Cədvəli -->
+            <div>
+                <h4 style="font-size:0.95rem; font-weight:600; margin-bottom:8px;">Son İcra Olunmuş Əmrlər</h4>
+                <div class="table-responsive">
+                    <table style="font-size:0.8rem;">
+                        <thead>
+                            <tr>
+                                <th>Əmr ID</th>
+                                <th>Əməliyyat</th>
+                                <th>Status</th>
+                                <th>Nəticə</th>
+                                <th>Tarix</th>
+                                <th>Timeline</th>
+                            </tr>
+                        </thead>
+                        <tbody id="modalCommandsBody">
+                            <tr><td colspan="6" style="color:var(--text-muted);">Əmr yoxdur.</td></tr>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+
+            <!-- Əmr Gecikməsi Timeline Bölməsi (Timeline Section) -->
+            <div id="modalTimelineBox" style="display:none; background:var(--panel-sub); padding:16px; border-radius:var(--radius-sm); border:1px solid var(--panel-border);">
+                <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:12px;">
+                    <h4 style="font-size:0.9rem; font-weight:600; color:var(--accent);">Əmr İcra Mərhələləri (Latency Breakdown)</h4>
+                    <button class="btn btn-secondary btn-sm" style="padding:2px 8px; font-size:0.75rem;" onclick="document.getElementById('modalTimelineBox').style.display='none'">Gizlət</button>
+                </div>
+                <div class="timeline" id="modalTimelineSteps">
+                    <!-- Dinamik addımlar -->
+                </div>
+            </div>
+
+            <!-- Cihazın Son Telemetriyası -->
+            <div>
+                <h4 style="font-size:0.95rem; font-weight:600; margin-bottom:8px;">Cihaza Aid Son Telemetriya</h4>
+                <div class="table-responsive">
+                    <table style="font-size:0.8rem;">
+                        <thead>
+                            <tr>
+                                <th>Vaxt</th>
+                                <th>Komponent</th>
+                                <th>Mərhələ</th>
+                                <th>Müddət</th>
+                                <th>Dərəcə</th>
+                                <th>Xəta</th>
+                            </tr>
+                        </thead>
+                        <tbody id="modalTelemetryBody">
+                            <tr><td colspan="6" style="color:var(--text-muted);">Telemetriya qeydi yoxdur.</td></tr>
+                        </tbody>
+                    </table>
+                </div>
             </div>
         </div>
     </div>
 
+    <!-- ==================== JAVASCRIPT MƏNTİQİ ==================== -->
     <script>
-        const localAccess = typeof location !== 'undefined' ? new URLSearchParams(location.hash.slice(1)).get('dev-admin') : null;
-        if (localAccess && typeof history !== 'undefined') {
-            sessionStorage.setItem('winkey_admin_secret', localAccess);
-            history.replaceState(null, '', location.pathname);
-        }
+        // State
         let adminSecret = sessionStorage.getItem('winkey_admin_secret') || '';
+        let currentTab = 'overview';
+        let wsSocket = null;
+        let wsReconnectTimer = null;
+        let debTimerDev = null;
+        let debTimerTel = null;
 
-        function loginAdmin() {
-            const val = document.getElementById('admin-sec-input').value.trim();
-            if (!val) return;
-            adminSecret = val;
-            sessionStorage.setItem('winkey_admin_secret', adminSecret);
-            loadDashboard();
-        }
+        let devPage = 1;
+        let devTotalPages = 1;
+        let telPage = 1;
+        let telTotalPages = 1;
 
-        async function loadDashboard() {
-            document.getElementById('auth-err').textContent = '';
-            try {
-                const resDev = await fetch('/admin/devices', {
-                    headers: { 'X-Owner-Admin-Secret': adminSecret }
-                });
-                if (resDev.status === 403) {
-                    document.getElementById('auth-err').textContent = 'XƏTA 403: Admin Secret yanlışdır!';
-                    document.getElementById('dashboard-content').style.display = 'none';
-                    return;
-                }
-                const dataDev = await resDev.json();
-                renderDevices(dataDev.devices || []);
-
-                const resTel = await fetch('/admin/telemetry', {
-                    headers: { 'X-Owner-Admin-Secret': adminSecret }
-                });
-                const dataTel = await resTel.json();
-                renderTelemetry(dataTel.telemetry || []);
-
-                document.getElementById('auth-box').style.display = 'none';
-                document.getElementById('dashboard-content').style.display = 'flex';
-            } catch(e) {
-                document.getElementById('auth-err').textContent = 'Şəbəkə xətası: ' + e;
-            }
+        // URL hash-dən dev-admin dəstəyi
+        const localAccess = typeof location !== 'undefined' ? new URLSearchParams(location.hash.slice(1)).get('dev-admin') : null;
+        if (localAccess) {
+            sessionStorage.setItem('winkey_admin_secret', localAccess);
+            adminSecret = localAccess;
+            history.replaceState(null, '', location.pathname);
         }
 
         function escapeHtml(value) {
@@ -2250,116 +2688,597 @@ def get_admin_html() -> str:
             }[ch]));
         }
 
-        function renderDevices(list) {
+        function loginAdmin() {
+            const val = document.getElementById('inputAdminSecret').value.trim();
+            if (!val) return;
+            adminSecret = val;
+            sessionStorage.setItem('winkey_admin_secret', adminSecret);
+            initDashboard();
+        }
+
+        function logoutAdmin() {
+            sessionStorage.removeItem('winkey_admin_secret');
+            adminSecret = '';
+            if (wsSocket) {
+                try { wsSocket.close(); } catch(e) {}
+            }
+            document.getElementById('dashboardContainer').style.display = 'none';
+            document.getElementById('nav-right-box').style.display = 'none';
+            document.getElementById('authBox').style.display = 'flex';
+        }
+
+        async function initDashboard() {
+            document.getElementById('authErrMsg').textContent = '';
+            // Test admin auth with overview
+            try {
+                const res = await fetch('/admin/overview', {
+                    headers: { 'X-Owner-Admin-Secret': adminSecret }
+                });
+                if (res.status === 403 || res.status === 401) {
+                    document.getElementById('authErrMsg').textContent = 'XƏTA: Admin Secret yanlışdır və ya icazəniz yoxdur.';
+                    return;
+                }
+                const data = await res.json();
+                document.getElementById('authBox').style.display = 'none';
+                document.getElementById('nav-right-box').style.display = 'flex';
+                document.getElementById('dashboardContainer').style.display = 'flex';
+                
+                renderOverview(data);
+                connectWebSocket();
+                switchTab('overview');
+            } catch(e) {
+                document.getElementById('authErrMsg').textContent = 'Şəbəkə xətası: ' + e.message;
+            }
+        }
+
+        function switchTab(tabId) {
+            currentTab = tabId;
+            ['overview', 'devices', 'updates', 'telemetry'].forEach(t => {
+                const p = document.getElementById('tabPanel-' + t);
+                const b = document.getElementById('tabBtn-' + t);
+                if (p) p.style.display = (t === tabId) ? 'flex' : 'none';
+                if (b) b.classList.toggle('active', t === tabId);
+            });
+            if (tabId === 'overview') loadOverview();
+            else if (tabId === 'devices') loadDevices(devPage);
+            else if (tabId === 'updates') loadUpdates();
+            else if (tabId === 'telemetry') loadTelemetry(telPage);
+        }
+
+        function refreshCurrentTab() {
+            switchTab(currentTab);
+        }
+
+        // ================== WEBSOCKET ƏLAQƏSİ ==================
+        function connectWebSocket() {
+            if (!adminSecret) return;
+            if (wsSocket && wsSocket.readyState <= 1) return;
+
+            const proto = location.protocol === 'https:' ? 'wss:' : 'ws:';
+            const wsUrl = `${proto}//${location.host}/ws`;
+
+            try {
+                wsSocket = new WebSocket(wsUrl);
+                wsSocket.onopen = () => {
+                    updateWsStatus(true);
+                    wsSocket.send(JSON.stringify({
+                        action: 'auth',
+                        role: 'admin',
+                        admin_secret: adminSecret
+                    }));
+                };
+                wsSocket.onmessage = (event) => {
+                    try {
+                        const msg = JSON.parse(event.data);
+                        // Cihaz və ya release yeniləndikdə cari tabı səssiz yeniləyirik
+                        if (msg.event === 'device_status_update' || msg.event === 'release_published') {
+                            refreshCurrentTab();
+                        }
+                    } catch(e) {}
+                };
+                wsSocket.onclose = () => {
+                    updateWsStatus(false);
+                    clearTimeout(wsReconnectTimer);
+                    wsReconnectTimer = setTimeout(connectWebSocket, 5000);
+                };
+                wsSocket.onerror = () => {
+                    updateWsStatus(false);
+                };
+            } catch(e) {
+                updateWsStatus(false);
+            }
+        }
+
+        function updateWsStatus(online) {
+            const badge = document.getElementById('wsStatusBadge');
+            const txt = document.getElementById('wsStatusText');
+            if (online) {
+                badge.className = 'ws-badge ws-online';
+                txt.textContent = 'Canlı (WS)';
+            } else {
+                badge.className = 'ws-badge ws-offline';
+                txt.textContent = 'Oflayn (HTTP Fallback)';
+            }
+        }
+
+        // ================== 1. ÜMUMİ BAXIŞ ==================
+        async function loadOverview() {
+            try {
+                const res = await fetch('/admin/overview', {
+                    headers: { 'X-Owner-Admin-Secret': adminSecret }
+                });
+                if (res.status === 200) {
+                    const data = await res.json();
+                    renderOverview(data);
+                }
+            } catch(e) {}
+        }
+
+        function renderOverview(data) {
+            document.getElementById('ovTotalDevices').textContent = data.total_devices ?? '0';
+            document.getElementById('ovActiveRevoked').textContent = `Aktiv: ${data.active_devices ?? 0} | Ləğv: ${data.revoked_devices ?? 0}`;
+            document.getElementById('ovOnlineDevices').textContent = data.online_devices ?? '0';
+            document.getElementById('ovOfflineDevices').textContent = `Oflayn: ${data.offline_devices ?? 0}`;
+            document.getElementById('ovError24h').textContent = data.error_count_24h ?? '0';
+            
+            const rel = data.current_release;
+            if (rel && rel.version) {
+                document.getElementById('ovReleaseVer').textContent = 'v' + rel.version;
+                document.getElementById('ovReleaseId').textContent = 'ID: ' + rel.release_id.substring(0, 16) + '...';
+                document.getElementById('repoStatusText').textContent = `Aktiv v${rel.version} (İmzalanmış)`;
+            } else {
+                document.getElementById('ovReleaseVer').textContent = 'Yoxdur';
+                document.getElementById('ovReleaseId').textContent = 'Paket yayımlanmayıb';
+                document.getElementById('repoStatusText').textContent = 'Paket tapılmadı';
+            }
+
+            const us = data.update_summary || {};
+            document.getElementById('ovOtaCommitted').textContent = us.committed ?? '0';
+            document.getElementById('ovOtaRollback').textContent = `Rollback: ${us.rollback ?? 0} | Xəta: ${us.error ?? 0}`;
+            document.getElementById('ovTotalTelemetry').textContent = data.total_telemetry_events ?? '0';
+        }
+
+        // ================== 2. CİHAZLAR ==================
+        function debouncedLoadDevices() {
+            clearTimeout(debTimerDev);
+            debTimerDev = setTimeout(() => loadDevices(1), 300);
+        }
+
+        async function loadDevices(page = 1) {
+            devPage = page;
+            const q = document.getElementById('devSearchInput').value.trim();
+            const status = document.getElementById('devStatusFilter').value;
+            const online = document.getElementById('devOnlineFilter').value;
+            const sort = document.getElementById('devSortFilter').value;
+
+            const url = new URL('/admin/devices', location.origin);
+            if (q) url.searchParams.set('q', q);
+            if (status) url.searchParams.set('status', status);
+            if (online) url.searchParams.set('online', online);
+            if (sort) url.searchParams.set('sort', sort);
+            url.searchParams.set('page', page);
+            url.searchParams.set('page_size', 15);
+
+            try {
+                const res = await fetch(url, { headers: { 'X-Owner-Admin-Secret': adminSecret } });
+                if (res.status === 200) {
+                    const data = await res.json();
+                    renderDevices(data);
+                }
+            } catch(e) {}
+        }
+
+        function renderDevices(data) {
+            const list = data.devices || [];
+            devTotalPages = data.total_pages || 1;
+            const tbody = document.getElementById('devicesTableBody');
+
             if (list.length === 0) {
-                document.getElementById('devices-container').innerHTML = '<div style="color:#8e9e95;">Heç bir cihaz qeydiyyatdan keçməyib.</div>';
+                tbody.innerHTML = '<tr><td colspan="10" style="color:var(--text-muted); text-align:center;">Cihaz tapılmadı.</td></tr>';
+                document.getElementById('devicesCountInfo').textContent = 'Cəmi 0 cihaz';
                 return;
             }
-            let html = '<table><tr><th>Cihaz ID</th><th>Ad</th><th>Status</th><th>Xidmət versiyası</th><th>Serverdə son versiya</th><th>Kilid</th><th>PIN</th><th>Son Görülmə</th><th>Əməliyyat</th></tr>';
+
+            let html = '';
             for (const d of list) {
-                const stClass = d.status === 'ACTIVE' ? 'status-active' : 'status-revoked';
+                const stClass = d.status === 'ACTIVE' ? 'pill-active' : 'pill-revoked';
+                const onClass = d.is_online ? 'pill-online' : 'pill-offline';
+                const onText = d.is_online ? '🟢 Online' : '⚪ Offline';
+                const pinText = d.pin_status === 'ready' ? '✅ Hazır' : (d.pin_status === 'not_ready' ? '⏳ Yoxdur' : '—');
+                const lastSeen = d.last_seen_at ? new Date(d.last_seen_at * 1000).toLocaleString() : '—';
+
                 html += `<tr>
-                    <td><code>${escapeHtml(d.device_id.substring(0, 16))}...</code></td>
+                    <td><code>${escapeHtml(d.device_id.substring(0, 14))}...</code></td>
                     <td><strong>${escapeHtml(d.computer_name)}</strong></td>
-                    <td><span class="status-pill ${stClass}">${escapeHtml(d.status)}</span></td>
-                    <td>${d.worker_version ? 'v' + escapeHtml(d.worker_version) : 'Bildirilməyib'}</td>
-                    <td>${d.latest_version ? 'v' + escapeHtml(d.latest_version) : 'Paket yoxdur'}</td>
+                    <td><span class="pill ${onClass}">${onText}</span></td>
+                    <td><span class="pill ${stClass}">${escapeHtml(d.status)}</span></td>
+                    <td>${d.worker_version ? 'v' + escapeHtml(d.worker_version) : '<span style="color:var(--text-faint);">Bildirilməyib</span>'}</td>
+                    <td>${d.latest_version ? 'v' + escapeHtml(d.latest_version) : '<span style="color:var(--text-faint);">Paket yoxdur</span>'}</td>
                     <td>${d.locked ? '🔒 Bəli' : '🔓 Xeyr'}</td>
-                    <td>${d.pin_ready ? '✅ Hazır' : '⏳ Yoxdur'}</td>
-                    <td>${new Date(d.last_seen_at * 1000).toLocaleTimeString()}</td>
+                    <td>${pinText}</td>
+                    <td><span style="font-size:0.75rem; color:var(--text-muted);">${lastSeen}</span></td>
                     <td>
-                        <div style="display:flex; gap:6px; align-items:center;">
-                            <button class="btn btn-danger" data-device-id="${escapeHtml(d.device_id)}" data-action="${d.status === 'ACTIVE' ? 'revoke' : 'activate'}">${d.status === 'ACTIVE' ? 'Ləğv Et' : 'Aktivləşdir'}</button>
-                            <button class="btn btn-danger" style="background:#5c1d1d; border-color:#822727; color:#fca5a5;" data-device-id="${escapeHtml(d.device_id)}" data-action="delete">Sil</button>
+                        <div style="display:flex; gap:6px;">
+                            <button class="btn btn-secondary btn-sm" onclick="openDeviceDetail('${escapeHtml(d.device_id)}')">Detallar</button>
+                            <button class="btn btn-danger btn-sm" onclick="toggleDeviceStatus('${escapeHtml(d.device_id)}', '${d.status === 'ACTIVE' ? 'revoke' : 'activate'}')">${d.status === 'ACTIVE' ? 'Ləğv' : 'Aktiv'}</button>
+                            <button class="btn btn-danger btn-sm" style="background:#451212;" onclick="deleteDevice('${escapeHtml(d.device_id)}')">Sil</button>
                         </div>
                     </td>
                 </tr>`;
             }
-            html += '</table>';
-            document.getElementById('devices-container').innerHTML = html;
-            document.querySelectorAll('#devices-container button[data-device-id]').forEach(button => {
-                button.addEventListener('click', () => {
-                    if (button.dataset.action === 'delete') {
-                        deleteDev(button.dataset.deviceId);
-                    } else {
-                        revokeDev(button.dataset.deviceId, button.dataset.action);
-                    }
+            tbody.innerHTML = html;
+
+            document.getElementById('devicesCountInfo').textContent = `Cəmi ${data.total} cihazdan ${list.length} göstərilir`;
+            document.getElementById('devPageIndicator').textContent = `Səhifə ${data.page} / ${data.total_pages}`;
+            document.getElementById('btnDevPrev').disabled = (data.page <= 1);
+            document.getElementById('btnDevNext').disabled = (data.page >= data.total_pages);
+        }
+
+        function changeDevPage(delta) {
+            const next = devPage + delta;
+            if (next >= 1 && next <= devTotalPages) {
+                loadDevices(next);
+            }
+        }
+
+        async function toggleDeviceStatus(devId, action) {
+            const promptMsg = action === 'activate' ? 'Cihazı yenidən aktivləşdirmək istəyirsiniz?' : 'Cihazı ləğv etmək istəyirsiniz? Bütün mobil sessiyalar kəsiləcək.';
+            if (!confirm(promptMsg)) return;
+            try {
+                await fetch(action === 'activate' ? '/admin/activate' : '/admin/revoke', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json', 'X-Owner-Admin-Secret': adminSecret },
+                    body: JSON.stringify({ device_id: devId })
                 });
-            });
+                loadDevices(devPage);
+            } catch(e) { alert('Xəta: ' + e); }
         }
 
-        function renderTelemetry(events) {
-            if (events.length === 0) {
-                document.getElementById('telemetry-container').innerHTML = '<div style="color:#8e9e95;">Hadisə qeydə alınmayıb.</div>';
-                return;
-            }
-            const mobileLabels = {
-                COMMAND_TAP: 'Telefonda düyməyə basıldı', HTTP_200: 'Əmr serverə çatdı',
-                SERVER_PROCESSING: 'Server daxilində emal', COMMAND_COMPLETED: 'İcra təsdiqləndi',
-                COMMAND_FAILED: 'PC əmri uğursuz tamamladı', RESULT_UNCONFIRMED: 'Nəticə hələ təsdiqlənməyib',
-                REQUEST_TIMEOUT: 'Telefon sorğusunun vaxtı bitdi', NETWORK_ERROR: 'Telefon şəbəkə xətası',
-                UI_RESULT_UNCONFIRMED: 'Ekran: Əvvəlki nəticə təsdiqlənməyib', UI_NETWORK_UNKNOWN: 'Ekran: Server cavabı alınmadı',
-                UI_AUTH_ERROR: 'Ekran: Telefon bağlantısı ləğv edilib / icazə yoxdur', UI_RESULT_FAILED: 'Ekran: İcra uğursuz oldu',
-                UI_PAIR_FAILED: 'Ekran: Cütləşmə xətası', UI_NETWORK_ERROR: 'Ekran: Şəbəkə xətası',
-                UI_RESPONSE_ERROR: 'Ekran: Server xəta qaytardı', UI_SERVER_ACCEPTED: 'Ekran: Əmr serverə çatdı',
-                UI_RESULT_OK: 'Ekran: İcra tamamlandı', UI_LATEST_PENDING: 'Ekran: Son istək saxlanıldı',
-                UI_SENDING: 'Ekran: Əmr göndərilir', UI_SUPERSEDED: 'Ekran: Əvvəlki əmr son istəklə əvəz edilib',
-                JS_RUNTIME_ERROR: 'Telefon JavaScript xətası', JS_UNHANDLED_REJECTION: 'Telefon promise xətası'
-            };
-            let html = '<table><tr><th>Vaxt</th><th>Cihaz</th><th>Komponent</th><th>Mərhələ / Əlaqə ID</th><th>Hadisə</th><th>Müddət</th><th>Dərəcə</th><th>Xəta / Telefon ekranı</th></tr>';
-            for (const ev of events.slice(0, 100)) {
-                html += `<tr>
-                    <td>${new Date((ev.component === 'mobile' ? ev.local_time : ev.received_at) * 1000).toLocaleTimeString()}</td>
-                    <td>${escapeHtml(ev.device_id || '—')}</td>
-                    <td>${escapeHtml(ev.component)}</td>
-                    <td>${escapeHtml(ev.stage)}<br>${escapeHtml(ev.install_run_id || '')}</td>
-                    <td>${escapeHtml(ev.event_type)}</td>
-                    <td>${ev.duration_ms == null ? '—' : escapeHtml(ev.duration_ms) + ' ms'}</td>
-                    <td><strong>${escapeHtml(ev.severity)}</strong></td>
-                    <td>${escapeHtml(mobileLabels[ev.error_code] || ev.error_code || '—')}</td>
-                </tr>`;
-            }
-            html += '</table>';
-            document.getElementById('telemetry-container').innerHTML = html;
-        }
-
-        
-                async function deleteDev(devId) {
-            if (!confirm('DİQQƏT: Bu cihazı serverdən və admin panelindən tamamilə silmək istəyirsiniz?\\nBütün mobil sessiyalar və qeydiyyat silinəcək və kompüter təzədən ilk dəfə qeydiyyatdan keçə biləcək.')) return;
+        async function deleteDevice(devId) {
+            if (!confirm('DİQQƏT: Cihaz tamamilə silinəcək və yeni kimi qeydiyyatdan keçməli olacaq. Əminsiniz?')) return;
             try {
                 await fetch('/admin/delete', {
                     method: 'POST',
-                    headers: {
-                        'Content-Type': 'application/json',
-                        'X-Owner-Admin-Secret': adminSecret
-                    },
+                    headers: { 'Content-Type': 'application/json', 'X-Owner-Admin-Secret': adminSecret },
                     body: JSON.stringify({ device_id: devId })
                 });
-                loadDashboard();
-            } catch(e) {
-                alert('Silinmə xətası: ' + e);
-            }
-        }
-        async function revokeDev(devId, action = 'revoke') {
-            if (!confirm(action === 'activate' ? 'PC-ni yenidən aktivləşdirək? Köhnə telefon sessiyaları bərpa edilmir; yeni QR lazımdır.' : 'Cihazı ləğv etmək istədiyinizə əminsiniz?')) return;
-            await fetch(action === 'activate' ? '/admin/activate' : '/admin/revoke', {
-                method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json',
-                    'X-Owner-Admin-Secret': adminSecret
-                },
-                body: JSON.stringify({ device_id: devId })
-            });
-            loadDashboard();
+                loadDevices(devPage);
+            } catch(e) { alert('Silinmə xətası: ' + e); }
         }
 
-        if (adminSecret) {
-            loadDashboard();
+        // ================== CİHAZ DETALLARI VƏ TİMELİNE MODALI ==================
+        async function openDeviceDetail(devId) {
+            const modal = document.getElementById('deviceDetailModal');
+            modal.hidden = false;
+            document.getElementById('modalDevTitle').textContent = 'Cihaz Detalları: ' + devId;
+            document.getElementById('modalMetaGrid').innerHTML = '<div>Məlumatlar yüklənir...</div>';
+            document.getElementById('modalTimelineBox').style.display = 'none';
+
+            try {
+                const res = await fetch(`/admin/devices/${encodeURIComponent(devId)}`, {
+                    headers: { 'X-Owner-Admin-Secret': adminSecret }
+                });
+                if (res.status === 200) {
+                    const data = await res.json();
+                    renderModalDevice(data.device);
+                } else {
+                    document.getElementById('modalMetaGrid').innerHTML = '<div class="err-msg">Cihaz tapılmadı.</div>';
+                }
+            } catch(e) {
+                document.getElementById('modalMetaGrid').innerHTML = '<div class="err-msg">Şəbəkə xətası: ' + e + '</div>';
+            }
         }
-        setInterval(() => { if (adminSecret) loadDashboard(); }, 5000);
+
+        function closeDeviceDetail() {
+            document.getElementById('deviceDetailModal').hidden = true;
+        }
+
+        function renderModalDevice(dev) {
+            const pm = dev.pairing_metadata || {};
+            const grid = document.getElementById('modalMetaGrid');
+            grid.innerHTML = `
+                <div style="background:var(--panel-sub); padding:10px; border-radius:6px; border:1px solid var(--panel-border);">
+                    <div style="font-size:0.75rem; color:var(--text-muted);">KOMPÜTER ADI</div>
+                    <div style="font-weight:700;">${escapeHtml(dev.computer_name)}</div>
+                </div>
+                <div style="background:var(--panel-sub); padding:10px; border-radius:6px; border:1px solid var(--panel-border);">
+                    <div style="font-size:0.75rem; color:var(--text-muted);">STATUS / ƏLAQƏ</div>
+                    <div><span class="pill ${dev.status === 'ACTIVE' ? 'pill-active' : 'pill-revoked'}">${escapeHtml(dev.status)}</span> 
+                         <span class="pill ${dev.is_online ? 'pill-online' : 'pill-offline'}">${dev.is_online ? 'Online' : 'Offline'}</span></div>
+                </div>
+                <div style="background:var(--panel-sub); padding:10px; border-radius:6px; border:1px solid var(--panel-border);">
+                    <div style="font-size:0.75rem; color:var(--text-muted);">WORKER / SERVER VERSİYA</div>
+                    <div>${dev.worker_version ? 'v' + escapeHtml(dev.worker_version) : '—'} / ${dev.latest_version ? 'v' + escapeHtml(dev.latest_version) : '—'}</div>
+                </div>
+                <div style="background:var(--panel-sub); padding:10px; border-radius:6px; border:1px solid var(--panel-border);">
+                    <div style="font-size:0.75rem; color:var(--text-muted);">AKTİV TELEFON SESSİYALARI</div>
+                    <div>${pm.active_mobile_sessions ?? 0} ədəd</div>
+                </div>
+            `;
+
+            // Commands
+            const cbody = document.getElementById('modalCommandsBody');
+            const cmds = dev.recent_commands || [];
+            if (cmds.length === 0) {
+                cbody.innerHTML = '<tr><td colspan="6" style="color:var(--text-muted);">Əmr qeydə alınmayıb.</td></tr>';
+            } else {
+                let html = '';
+                for (const c of cmds) {
+                    html += `<tr>
+                        <td><code>${escapeHtml(c.command_id.substring(0, 10))}...</code></td>
+                        <td><strong>${escapeHtml(c.action)}</strong></td>
+                        <td>${escapeHtml(c.status)}</td>
+                        <td>${escapeHtml(c.result_status || '—')}</td>
+                        <td>${c.created_at ? new Date(c.created_at * 1000).toLocaleTimeString() : '—'}</td>
+                        <td><button class="btn btn-secondary btn-sm" onclick="loadCommandTimeline('${escapeHtml(c.command_id)}')">Timeline</button></td>
+                    </tr>`;
+                }
+                cbody.innerHTML = html;
+            }
+
+            // Telemetry
+            const tbody = document.getElementById('modalTelemetryBody');
+            const tels = dev.recent_telemetry || [];
+            if (tels.length === 0) {
+                tbody.innerHTML = '<tr><td colspan="6" style="color:var(--text-muted);">Telemetriya qeydi yoxdur.</td></tr>';
+            } else {
+                let html = '';
+                for (const t of tels) {
+                    html += `<tr>
+                        <td>${t.received_at ? new Date(t.received_at * 1000).toLocaleTimeString() : '—'}</td>
+                        <td>${escapeHtml(t.component)}</td>
+                        <td>${escapeHtml(t.stage)}</td>
+                        <td>${t.duration_ms != null ? t.duration_ms + ' ms' : '—'}</td>
+                        <td><span class="pill ${t.severity === 'ERROR' ? 'pill-revoked' : 'pill-info'}">${escapeHtml(t.severity)}</span></td>
+                        <td>${escapeHtml(t.error_code || '—')}</td>
+                    </tr>`;
+                }
+                tbody.innerHTML = html;
+            }
+        }
+
+        async function loadCommandTimeline(corrId) {
+            const box = document.getElementById('modalTimelineBox');
+            const stepsCont = document.getElementById('modalTimelineSteps');
+            box.style.display = 'block';
+            stepsCont.innerHTML = '<div>Mərhələlər yüklənir...</div>';
+
+            try {
+                const res = await fetch(`/admin/telemetry/timeline/${encodeURIComponent(corrId)}`, {
+                    headers: { 'X-Owner-Admin-Secret': adminSecret }
+                });
+                if (res.status === 200) {
+                    const data = await res.json();
+                    const steps = data.steps || [];
+                    if (steps.length === 0) {
+                        stepsCont.innerHTML = `<div style="color:var(--text-muted);">Bu ID (${escapeHtml(corrId)}) üzrə mərhələ qeydi tapılmadı.</div>`;
+                        return;
+                    }
+                    let html = '';
+                    for (const s of steps) {
+                        const tStr = s.received_at ? new Date(s.received_at * 1000).toLocaleTimeString() : '';
+                        const dur = s.duration_ms != null ? `(${s.duration_ms} ms)` : '';
+                        html += `
+                            <div class="timeline-item">
+                                <div class="timeline-dot"></div>
+                                <div class="timeline-title">${escapeHtml(s.stage || s.event_type)} ${dur}</div>
+                                <div class="timeline-meta">
+                                    <span>Vaxt: ${tStr}</span>
+                                    <span>Komponent: ${escapeHtml(s.component)}</span>
+                                    <span>Nəticə/Xəta: ${escapeHtml(s.error_code || 'Uğurlu')}</span>
+                                </div>
+                            </div>
+                        `;
+                    }
+                    stepsCont.innerHTML = html;
+                }
+            } catch(e) {
+                stepsCont.innerHTML = '<div class="err-msg">Timeline xətası: ' + e + '</div>';
+            }
+        }
+
+        // ================== 3. OTA YENİLƏNMƏLƏR VƏ PAKET YAYIMI ==================
+        async function loadUpdates() {
+            try {
+                const res = await fetch('/admin/overview', { headers: { 'X-Owner-Admin-Secret': adminSecret } });
+                if (res.status === 200) {
+                    const data = await res.json();
+                    renderOverview(data);
+                }
+                const resTel = await fetch('/admin/telemetry?stage=UPDATE_&page_size=20', {
+                    headers: { 'X-Owner-Admin-Secret': adminSecret }
+                });
+                if (resTel.status === 200) {
+                    const telData = await resTel.json();
+                    renderUpdateStages(telData.telemetry || []);
+                }
+            } catch(e) {}
+        }
+
+        function renderUpdateStages(list) {
+            const tbody = document.getElementById('updateStagesTableBody');
+            if (list.length === 0) {
+                tbody.innerHTML = '<tr><td colspan="6" style="color:var(--text-muted); text-align:center;">OTA hadisəsi qeydə alınmayıb.</td></tr>';
+                return;
+            }
+            let html = '';
+            for (const item of list) {
+                const isCommitted = item.stage.includes('COMMIT');
+                const isErr = item.stage.includes('ERROR') || item.stage.includes('ROLLBACK');
+                const badgeClass = isCommitted ? 'pill-active' : (isErr ? 'pill-revoked' : 'pill-info');
+                const tStr = item.received_at ? new Date(item.received_at * 1000).toLocaleString() : '—';
+                html += `<tr>
+                    <td><code>${escapeHtml(item.device_id || '—')}</code></td>
+                    <td><span class="pill ${badgeClass}">${escapeHtml(item.stage)}</span></td>
+                    <td>v${escapeHtml(item.version || '—')}</td>
+                    <td>${item.duration_ms != null ? item.duration_ms + ' ms' : '—'}</td>
+                    <td>${escapeHtml(item.error_code || '—')}</td>
+                    <td><span style="font-size:0.75rem; color:var(--text-muted);">${tStr}</span></td>
+                </tr>`;
+            }
+            tbody.innerHTML = html;
+        }
+
+        async function uploadPackage() {
+            const fileInput = document.getElementById('packageFileInput');
+            if (!fileInput.files || fileInput.files.length === 0) {
+                alert('Zəhmət olmasa imzalanmış WinKeyUpdate-*.zip faylını seçin.');
+                return;
+            }
+            const file = fileInput.files[0];
+            const pWrap = document.getElementById('uploadProgressWrap');
+            const pFill = document.getElementById('uploadBarFill');
+            const pLabel = document.getElementById('uploadPercentLabel');
+            const resMsg = document.getElementById('uploadResultMsg');
+
+            pWrap.style.display = 'flex';
+            pFill.style.width = '0%';
+            pLabel.textContent = '0%';
+            resMsg.textContent = '';
+
+            const xhr = new XMLHttpRequest();
+            xhr.open('POST', '/admin/updates/publish');
+            xhr.setRequestHeader('Authorization', 'Bearer ' + adminSecret);
+            xhr.setRequestHeader('X-Owner-Admin-Secret', adminSecret);
+            xhr.setRequestHeader('Content-Type', 'application/zip');
+
+            xhr.upload.onprogress = (e) => {
+                if (e.lengthComputable) {
+                    const percent = Math.round((e.loaded / e.total) * 100);
+                    pFill.style.width = percent + '%';
+                    pLabel.textContent = percent + '%';
+                }
+            };
+
+            xhr.onload = () => {
+                if (xhr.status === 200) {
+                    try {
+                        const resp = JSON.parse(xhr.responseText);
+                        resMsg.style.color = 'var(--green)';
+                        resMsg.textContent = `✅ UĞURLU: Paket qəbul edildi və yayımlandı! Versiya: v${resp.version}`;
+                        fileInput.value = '';
+                        loadUpdates();
+                    } catch(e) {
+                        resMsg.textContent = 'Yayım təsdiqləndi.';
+                    }
+                } else {
+                    resMsg.style.color = 'var(--red)';
+                    resMsg.textContent = `❌ Xəta (${xhr.status}): Paket imzası və ya formatı rədd edildi.`;
+                }
+            };
+
+            xhr.onerror = () => {
+                resMsg.style.color = 'var(--red)';
+                resMsg.textContent = 'Şəbəkə xətası baş verdi.';
+            };
+
+            xhr.send(file);
+        }
+
+        // ================== 4. TELEMETRİYA ==================
+        function debouncedLoadTelemetry() {
+            clearTimeout(debTimerTel);
+            debTimerTel = setTimeout(() => loadTelemetry(1), 300);
+        }
+
+        async function loadTelemetry(page = 1) {
+            telPage = page;
+            const devId = document.getElementById('telDevInput').value.trim();
+            const comp = document.getElementById('telCompFilter').value;
+            const sev = document.getElementById('telSevFilter').value;
+            const stage = document.getElementById('telStageInput').value.trim();
+
+            const url = new URL('/admin/telemetry', location.origin);
+            if (devId) url.searchParams.set('device_id', devId);
+            if (comp) url.searchParams.set('component', comp);
+            if (sev) url.searchParams.set('severity', sev);
+            if (stage) url.searchParams.set('stage', stage);
+            url.searchParams.set('page', page);
+            url.searchParams.set('page_size', 25);
+
+            try {
+                const res = await fetch(url, { headers: { 'X-Owner-Admin-Secret': adminSecret } });
+                if (res.status === 200) {
+                    const data = await res.json();
+                    renderTelemetry(data);
+                }
+            } catch(e) {}
+        }
+
+        function renderTelemetry(data) {
+            const list = data.telemetry || [];
+            telTotalPages = data.total_pages || 1;
+            const tbody = document.getElementById('telemetryTableBody');
+
+            if (list.length === 0) {
+                tbody.innerHTML = '<tr><td colspan="8" style="color:var(--text-muted); text-align:center;">Hadisə qeydə alınmayıb.</td></tr>';
+                document.getElementById('telemetryCountInfo').textContent = 'Cəmi 0 hadisə';
+                return;
+            }
+
+            let html = '';
+            for (const ev of list) {
+                const tStr = ev.received_at ? new Date(ev.received_at * 1000).toLocaleTimeString() : '—';
+                const sevClass = ev.severity === 'ERROR' || ev.severity === 'CRITICAL' ? 'pill-revoked' : (ev.severity === 'WARN' ? 'pill-warn' : 'pill-info');
+                html += `<tr>
+                    <td><span style="font-size:0.75rem; color:var(--text-muted);">${tStr}</span></td>
+                    <td><code>${escapeHtml(ev.device_id ? ev.device_id.substring(0, 10) + '...' : '—')}</code></td>
+                    <td><span class="pill pill-info">${escapeHtml(ev.component)}</span></td>
+                    <td><strong>${escapeHtml(ev.stage || '—')}</strong></td>
+                    <td>${escapeHtml(ev.event_type)}</td>
+                    <td>${ev.duration_ms != null ? ev.duration_ms + ' ms' : '—'}</td>
+                    <td><span class="pill ${sevClass}">${escapeHtml(ev.severity)}</span></td>
+                    <td>${escapeHtml(ev.error_code || '—')}</td>
+                </tr>`;
+            }
+            tbody.innerHTML = html;
+
+            document.getElementById('telemetryCountInfo').textContent = `Cəmi ${data.total} hadisədən ${list.length} göstərilir`;
+            document.getElementById('telPageIndicator').textContent = `Səhifə ${data.page} / ${data.total_pages}`;
+            document.getElementById('btnTelPrev').disabled = (data.page <= 1);
+            document.getElementById('btnTelNext').disabled = (data.page >= data.total_pages);
+        }
+
+        function changeTelPage(delta) {
+            const next = telPage + delta;
+            if (next >= 1 && next <= telTotalPages) {
+                loadTelemetry(next);
+            }
+        }
+
+        function exportTelemetry(fmt) {
+            const devId = document.getElementById('telDevInput').value.trim();
+            const sev = document.getElementById('telSevFilter').value;
+            const url = new URL('/admin/export/telemetry', location.origin);
+            url.searchParams.set('format', fmt);
+            if (devId) url.searchParams.set('device_id', devId);
+            if (sev) url.searchParams.set('severity', sev);
+            url.searchParams.set('limit', 1000);
+
+            // Fetch with admin secret and trigger download
+            fetch(url, { headers: { 'X-Owner-Admin-Secret': adminSecret } })
+                .then(r => r.blob())
+                .then(blob => {
+                    const blobUrl = window.URL.createObjectURL(blob);
+                    const a = document.createElement('a');
+                    a.href = blobUrl;
+                    a.download = `winkey_telemetry_${Date.now()}.${fmt}`;
+                    document.body.appendChild(a);
+                    a.click();
+                    a.remove();
+                })
+                .catch(e => alert('İxrac xətası: ' + e));
+        }
+
+        // Başlanğıc yoxlaması
+        if (adminSecret) {
+            initDashboard();
+        }
     </script>
 </body>
-</html>"""
+</html>
+"""
+
 
 class GatewayHandler(BaseHTTPRequestHandler):
     @classmethod
@@ -2526,28 +3445,87 @@ class GatewayHandler(BaseHTTPRequestHandler):
             self.wfile.write(admin_html.encode("utf-8"))
             return
 
-        # 2. Owner-Only Admin Devices
-        if path == "/admin/devices":
+        # 2a. Owner-Only Admin Overview
+        if path == "/admin/overview":
             admin_sec = self.headers.get("X-Owner-Admin-Secret")
-            if not admin_sec or admin_sec != get_admin_secret():
-                self._send_json(403, {"error": "E_ADMIN_UNAUTHORIZED", "message": "Yalnız sahib admin icazəlidir"})
-                return
-            with self.db.get_conn() as conn:
-                rows = conn.execute("SELECT device_id, computer_name, status, locked, pin_ready, last_seen_at FROM devices").fetchall()
-                devices = [dict(r) for r in rows]
-            self._send_json(200, {"devices": devices})
+            service = GatewayService(self.db, get_admin_secret)
+            status, data = service.admin_get_overview(admin_sec)
+            self._send_json(status, data)
             return
 
-        # 3. Owner-Only Admin Telemetry
+        # 2b. Owner-Only Admin Devices (Pagination & Search)
+        if path == "/admin/devices":
+            admin_sec = self.headers.get("X-Owner-Admin-Secret")
+            service = GatewayService(self.db, get_admin_secret)
+            qs = parse_qs(url.query)
+            q = qs.get("q", [None])[0]
+            dev_status = qs.get("status", [None])[0]
+            online = qs.get("online", [None])[0]
+            version = qs.get("version", [None])[0]
+            page = int(qs.get("page", ["1"])[0])
+            page_size = int(qs.get("page_size", ["15"])[0])
+            sort = qs.get("sort", ["created_desc"])[0]
+            status, data = service.admin_get_devices(admin_sec, q, dev_status, online, version, page, page_size, sort)
+            self._send_json(status, data)
+            return
+
+        # 2c. Owner-Only Admin Device Detail
+        if path.startswith("/admin/devices/"):
+            device_id = path[len("/admin/devices/"):]
+            admin_sec = self.headers.get("X-Owner-Admin-Secret")
+            service = GatewayService(self.db, get_admin_secret)
+            status, data = service.admin_get_device_detail(device_id, admin_sec)
+            self._send_json(status, data)
+            return
+
+        # 3a. Owner-Only Admin Telemetry (Pagination & Filters)
         if path == "/admin/telemetry":
             admin_sec = self.headers.get("X-Owner-Admin-Secret")
-            if not admin_sec or admin_sec != get_admin_secret():
-                self._send_json(403, {"error": "E_ADMIN_UNAUTHORIZED", "message": "Yalnız sahib admin icazəlidir"})
+            service = GatewayService(self.db, get_admin_secret)
+            qs = parse_qs(url.query)
+            device_id = qs.get("device_id", [None])[0]
+            component = qs.get("component", [None])[0]
+            severity = qs.get("severity", [None])[0]
+            stage = qs.get("stage", [None])[0]
+            error_code = qs.get("error_code", [None])[0]
+            page = int(qs.get("page", ["1"])[0])
+            page_size = int(qs.get("page_size", ["30"])[0])
+            from_ts = float(qs.get("from_ts", ["0"])[0]) if qs.get("from_ts") else None
+            to_ts = float(qs.get("to_ts", ["0"])[0]) if qs.get("to_ts") else None
+            status, data = service.admin_get_telemetry(admin_sec, device_id, component, severity, stage, error_code, page, page_size, from_ts, to_ts)
+            self._send_json(status, data)
+            return
+
+        # 3b. Owner-Only Admin Timeline
+        if path.startswith("/admin/telemetry/timeline/"):
+            corr_id = path[len("/admin/telemetry/timeline/"):]
+            admin_sec = self.headers.get("X-Owner-Admin-Secret")
+            service = GatewayService(self.db, get_admin_secret)
+            status, data = service.admin_get_timeline(corr_id, admin_sec)
+            self._send_json(status, data)
+            return
+
+        # 3c. Owner-Only Admin Telemetry Export
+        if path == "/admin/export/telemetry":
+            admin_sec = self.headers.get("X-Owner-Admin-Secret")
+            service = GatewayService(self.db, get_admin_secret)
+            qs = parse_qs(url.query)
+            fmt = qs.get("format", ["json"])[0]
+            device_id = qs.get("device_id", [None])[0]
+            severity = qs.get("severity", [None])[0]
+            limit = int(qs.get("limit", ["500"])[0])
+            status, data, media_type = service.admin_export_telemetry(admin_sec, fmt, device_id, severity, limit)
+            if status != 200:
+                self._send_json(status, data)
                 return
-            with self.db.get_conn() as conn:
-                rows = conn.execute("SELECT * FROM telemetry_events ORDER BY received_at DESC LIMIT 100").fetchall()
-                events = [dict(r) for r in rows]
-            self._send_json(200, {"telemetry": events})
+            if fmt.lower() == "csv":
+                self.send_response(200)
+                self.send_header("Content-Type", media_type)
+                self.send_header("Content-Disposition", 'attachment; filename="winkey_telemetry.csv"')
+                self.end_headers()
+                self.wfile.write(data.encode("utf-8"))
+                return
+            self._send_json(200, data)
             return
 
         # 4. Device Status (Device-Scoped Token ilə, Multi-Tenant IDOR qorumalı)
@@ -3076,6 +4054,24 @@ class GatewayHandler(BaseHTTPRequestHandler):
 
         # 9. Owner-Only Admin Cihaz Revoke (/admin/revoke)
                 # 9.1. Owner-Only Admin Cihaz Silmə (/admin/delete)
+        # 8.9. Owner-Only Admin Update Publish (/admin/updates/publish)
+        if path == "/admin/updates/publish":
+            admin_sec = self.headers.get("X-Owner-Admin-Secret") or self._get_bearer_token()
+            if not admin_sec or admin_sec != get_admin_secret():
+                self._send_json(403, {"error": "E_ADMIN_UNAUTHORIZED", "message": "Yalnız sahib admin icazəlidir"})
+                return
+            try:
+                from deploy.update_repository import UpdateRepository
+                repo = UpdateRepository()
+                # Read raw package binary
+                length = int(self.headers.get('Content-Length', '0'))
+                raw_bytes = self.rfile.read(length) if length > 0 else b''
+                release = repo.publish(raw_bytes)
+                self._send_json(200, {"published": True, "version": release["version"], "release_id": release["release_id"]})
+            except Exception as e:
+                self._send_json(400, {"error": "E_SIGNED_RELEASE_REJECTED", "detail": str(e)})
+            return
+
         if path == "/admin/delete":
             admin_sec = self.headers.get("X-Owner-Admin-Secret")
             if not admin_sec or admin_sec != get_admin_secret():

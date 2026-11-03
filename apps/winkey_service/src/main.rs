@@ -999,6 +999,7 @@ fn run_host_lifecycle(data_dir: PathBuf, is_scm: bool, timeout_sec: Option<u64>)
         unsafe { update_status(SERVICE_START_PENDING, 3000); }
     }
     RUNNING.store(true, Ordering::SeqCst);
+    diagnostics::init_telemetry(&data_dir);
 
     println!("[HOST_LIFECYCLE_START] WinKey Host Lifecycle Manager başladı: data_dir={:?}", data_dir);
 
@@ -1340,6 +1341,17 @@ fn main() {
         }
     }
 
+    if args.iter().any(|arg| arg == "--ipc-telemetry-writer") {
+        let data_dir = args.iter().position(|a| a == "--data-dir")
+            .and_then(|pos| args.get(pos + 1)).map(PathBuf::from).unwrap_or_else(get_app_data_dir);
+        let stage_name = args.iter().position(|a| a == "--stage")
+            .and_then(|pos| args.get(pos + 1)).cloned().unwrap_or_else(|| "UPDATE_STAGE_CHILD".to_string());
+        let code = args.iter().position(|a| a == "--code")
+            .and_then(|pos| args.get(pos + 1)).cloned().unwrap_or_else(|| "rel_id=rel_0.2.9 ver=0.2.9 dur_ms=40".to_string());
+        diagnostics::stage(&data_dir, &stage_name, &code);
+        std::process::exit(0);
+    }
+
     // REM-029: Child Worker Proses Entrypoint (Slot daxilində real worker icrası)
     if args.iter().any(|a| a == "--worker") {
         let version_marker = if let Some(pos) = args.iter().position(|a| a == "--version-marker") {
@@ -1374,6 +1386,7 @@ fn main() {
         };
 
         std::env::set_var("WINKEY_DATA_DIR", &data_dir);
+        diagnostics::init_telemetry(&data_dir);
         println!("[WORKER_START] WinKey Pro Native Worker aktivdir. Marker: {} PID: {}", version_marker, std::process::id());
 
         let stop_signal = Arc::new(AtomicBool::new(true));

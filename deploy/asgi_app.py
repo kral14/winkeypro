@@ -214,20 +214,100 @@ def build_asgi_app(service: GatewayService, dashboard_html_path: Optional[str] =
         resp.headers["Cache-Control"] = "no-store"
         return _security_headers(resp, round((time.monotonic() - start) * 1000))
 
+    async def handle_admin_overview(request: Request) -> Response:
+        start = time.monotonic()
+        admin_sec = request.headers.get("x-owner-admin-secret")
+        active_ws_ids = set(hub._agents.keys()) if hasattr(hub, "_agents") else set()
+        status, data = await asyncio.to_thread(service.admin_get_overview, admin_sec, active_ws_ids)
+        if status == 200:
+            cur = await asyncio.to_thread(repository.current)
+            if cur:
+                data["current_release"] = {
+                    "version": cur.get("version"),
+                    "release_id": cur.get("release_id"),
+                    "download_url_prefix": cur.get("download_url_prefix")
+                }
+        return _json_resp(status, data, start)
+
     async def handle_admin_devices(request: Request) -> Response:
         start = time.monotonic()
         admin_sec = request.headers.get("x-owner-admin-secret")
-        status, data = await asyncio.to_thread(service.admin_get_devices, admin_sec)
+        qp = request.query_params
+        q = qp.get("q")
+        dev_status = qp.get("status")
+        online = qp.get("online")
+        ver = qp.get("version")
+        page = int(qp.get("page", 1))
+        page_size = int(qp.get("page_size", 15))
+        sort = qp.get("sort", "created_desc")
+        active_ws_ids = set(hub._agents.keys()) if hasattr(hub, "_agents") else set()
+        status, data = await asyncio.to_thread(
+            service.admin_get_devices, admin_sec, q, dev_status, online, ver, page, page_size, sort, active_ws_ids
+        )
         if status == 200:
             release = await asyncio.to_thread(repository.current)
-            for device in data.get('devices',[]):
+            for device in data.get('devices', []):
                 device['latest_version'] = release['version'] if release else None
+        return _json_resp(status, data, start)
+
+    async def handle_admin_device_detail(request: Request) -> Response:
+        start = time.monotonic()
+        device_id = request.path_params.get("device_id", "")
+        admin_sec = request.headers.get("x-owner-admin-secret")
+        active_ws_ids = set(hub._agents.keys()) if hasattr(hub, "_agents") else set()
+        status, data = await asyncio.to_thread(
+            service.admin_get_device_detail, device_id, admin_sec, active_ws_ids
+        )
+        if status == 200 and "device" in data:
+            release = await asyncio.to_thread(repository.current)
+            data["device"]["latest_version"] = release["version"] if release else None
         return _json_resp(status, data, start)
 
     async def handle_admin_telemetry(request: Request) -> Response:
         start = time.monotonic()
         admin_sec = request.headers.get("x-owner-admin-secret")
-        status, data = await asyncio.to_thread(service.admin_get_telemetry, admin_sec)
+        qp = request.query_params
+        status, data = await asyncio.to_thread(
+            service.admin_get_telemetry,
+            admin_sec,
+            qp.get("device_id"),
+            qp.get("component"),
+            qp.get("severity"),
+            qp.get("stage"),
+            qp.get("error_code"),
+            int(qp.get("page", 1)),
+            int(qp.get("page_size", 30)),
+            float(qp.get("from_ts")) if qp.get("from_ts") else None,
+            float(qp.get("to_ts")) if qp.get("to_ts") else None
+        )
+        return _json_resp(status, data, start)
+
+    async def handle_admin_timeline(request: Request) -> Response:
+        start = time.monotonic()
+        corr_id = request.path_params.get("correlation_id", "")
+        admin_sec = request.headers.get("x-owner-admin-secret")
+        status, data = await asyncio.to_thread(service.admin_get_timeline, corr_id, admin_sec)
+        return _json_resp(status, data, start)
+
+    async def handle_admin_export_telemetry(request: Request) -> Response:
+        start = time.monotonic()
+        admin_sec = request.headers.get("x-owner-admin-secret")
+        qp = request.query_params
+        fmt = qp.get("format", "json")
+        status, data, media_type = await asyncio.to_thread(
+            service.admin_export_telemetry,
+            admin_sec,
+            fmt,
+            qp.get("device_id"),
+            qp.get("severity"),
+            int(qp.get("limit", 500))
+        )
+        if status != 200:
+            return _json_resp(status, data, start)
+        if fmt.lower() == "csv":
+            resp = Response(content=data, media_type=media_type, status_code=200)
+            resp.headers["Content-Disposition"] = 'attachment; filename="winkey_telemetry.csv"'
+            return _security_headers(resp, round((time.monotonic() - start) * 1000))
         return _json_resp(status, data, start)
 
     async def handle_device_status(request: Request) -> Response:
@@ -400,7 +480,7 @@ def build_asgi_app(service: GatewayService, dashboard_html_path: Optional[str] =
             with service.db.get_conn() as conn:
                 conn.execute(
                     "INSERT INTO telemetry_events (event_id, install_run_id, device_id, component, version, stage, event_type, severity, error_code, duration_ms, local_time, received_at) "
-                    "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+                    "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?) ON CONFLICT (event_id) DO NOTHING",
                     (event_id, body.get("install_run_id"), device_id,
                      str(body.get("component", "agent"))[:32], str(body.get("version", "0.1.0"))[:32],
                      str(body.get("stage", "UNKNOWN"))[:32], str(body.get("event_type", "heartbeat"))[:32],
@@ -409,7 +489,11 @@ def build_asgi_app(service: GatewayService, dashboard_html_path: Optional[str] =
                 )
                 conn.commit()
 
-        await asyncio.to_thread(_insert)
+                return conn.execute("SELECT device_id FROM telemetry_events WHERE event_id = ?", (event_id,)).fetchone()
+
+        stored = await asyncio.to_thread(_insert)
+        if not stored or stored["device_id"] != device_id:
+            return _json_resp(409, {"error": "E_TELEMETRY_EVENT_ID_CONFLICT"}, start)
         return _json_resp(200, {"success": True, "event_id": event_id}, start)
 
     async def handle_mobile_telemetry(request: Request) -> Response:
@@ -898,8 +982,12 @@ def build_asgi_app(service: GatewayService, dashboard_html_path: Optional[str] =
         Route("/admin", handle_admin_page, methods=["GET"]),
 
         # Admin API
+        Route("/admin/overview", handle_admin_overview, methods=["GET"]),
         Route("/admin/devices", handle_admin_devices, methods=["GET"]),
+        Route("/admin/devices/{device_id}", handle_admin_device_detail, methods=["GET"]),
         Route("/admin/telemetry", handle_admin_telemetry, methods=["GET"]),
+        Route("/admin/telemetry/timeline/{correlation_id}", handle_admin_timeline, methods=["GET"]),
+        Route("/admin/export/telemetry", handle_admin_export_telemetry, methods=["GET"]),
         Route("/admin/revoke", handle_admin_status_change, methods=["POST"]),
         Route("/admin/activate", handle_admin_status_change, methods=["POST"]),
         Route("/admin/delete", handle_admin_delete, methods=["POST"]),

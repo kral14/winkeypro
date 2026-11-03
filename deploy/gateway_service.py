@@ -514,21 +514,361 @@ class GatewayService:
 
     # --- ADMIN ENDPOINTS ---
 
-    def admin_get_devices(self, admin_sec: Optional[str]) -> Tuple[int, Dict[str, Any]]:
-        if not admin_sec or admin_sec != self.get_admin_secret():
+    def _verify_admin(self, admin_sec: Optional[str]) -> bool:
+        if not admin_sec:
+            return False
+        import hmac
+        return hmac.compare_digest(str(admin_sec), str(self.get_admin_secret()))
+
+    def admin_get_overview(self, admin_sec: Optional[str], active_ws_ids: Optional[set] = None) -> Tuple[int, Dict[str, Any]]:
+        if not self._verify_admin(admin_sec):
             return 403, {"error": "E_ADMIN_UNAUTHORIZED", "message": "Admin icazəsi tələb olunur"}
 
+        now = time.time()
+        active_ws = active_ws_ids or set()
         with self.db.get_conn() as conn:
-            rows = conn.execute("SELECT d.device_id, d.computer_name, d.status, d.created_at, d.last_seen_at, d.locked, d.pin_ready, v.worker_version, v.reported_at AS version_reported_at FROM devices d LEFT JOIN device_versions v ON v.device_id=d.device_id ORDER BY d.created_at DESC").fetchall()
-            return 200, {"devices": [dict(r) for r in rows]}
+            devices = conn.execute("SELECT device_id, status, last_seen_at FROM devices").fetchall()
+            total_devices = len(devices)
+            active_reg = sum(1 for d in devices if d["status"] == "ACTIVE")
+            revoked_reg = sum(1 for d in devices if d["status"] == "REVOKED")
+            
+            # Online freshness: WS active or last_seen within 60 seconds
+            online_count = sum(1 for d in devices if (d["device_id"] in active_ws or (now - (d["last_seen_at"] or 0) <= 60)))
+            offline_count = max(0, total_devices - online_count)
 
-    def admin_get_telemetry(self, admin_sec: Optional[str]) -> Tuple[int, Dict[str, Any]]:
-        if not admin_sec or admin_sec != self.get_admin_secret():
+            # 24h error count from telemetry
+            ts_24h = now - 86400
+            err_row = conn.execute(
+                "SELECT COUNT(*) AS err_count FROM telemetry_events WHERE received_at >= ? AND severity IN ('ERROR', 'CRITICAL')",
+                (ts_24h,)
+            ).fetchone()
+            error_count_24h = err_row["err_count"] if err_row else 0
+
+            # Total telemetry count
+            tel_count_row = conn.execute("SELECT COUNT(*) AS total FROM telemetry_events").fetchone()
+            total_telemetry = tel_count_row["total"] if tel_count_row else 0
+
+            # Update stages summary
+            update_summary = {
+                "download_done": 0,
+                "stage_done": 0,
+                "committed": 0,
+                "rollback": 0,
+                "error": 0
+            }
+            try:
+                stage_rows = conn.execute(
+                    "SELECT stage, COUNT(*) AS count FROM telemetry_events WHERE stage LIKE 'UPDATE_%' GROUP BY stage"
+                ).fetchall()
+                for r in stage_rows:
+                    st = r["stage"]
+                    cnt = r["count"]
+                    if "DOWNLOAD_DONE" in st:
+                        update_summary["download_done"] += cnt
+                    elif "STAGE_DONE" in st:
+                        update_summary["stage_done"] += cnt
+                    elif "COMMIT" in st:
+                        update_summary["committed"] += cnt
+                    elif "ROLLBACK" in st:
+                        update_summary["rollback"] += cnt
+                    elif "ERROR" in st or "FAIL" in st:
+                        update_summary["error"] += cnt
+            except Exception:
+                pass
+
+        # Check repository current release
+        current_release = None
+        try:
+            from deploy.update_repository import UpdateRepository
+            repo = UpdateRepository()
+            cur = repo.current()
+            if cur:
+                current_release = {
+                    "version": cur.get("version"),
+                    "release_id": cur.get("release_id"),
+                    "download_url_prefix": cur.get("download_url_prefix"),
+                    "files_count": len(cur.get("manifest", {}).get("files", []))
+                }
+        except Exception:
+            pass
+
+        return 200, {
+            "total_devices": total_devices,
+            "active_devices": active_reg,
+            "revoked_devices": revoked_reg,
+            "online_devices": online_count,
+            "offline_devices": offline_count,
+            "error_count_24h": error_count_24h,
+            "total_telemetry_events": total_telemetry,
+            "update_summary": update_summary,
+            "current_release": current_release,
+            "timestamp": now
+        }
+
+    def admin_get_devices(self, admin_sec: Optional[str], q: Optional[str] = None, status: Optional[str] = None,
+                          online: Optional[str] = None, version: Optional[str] = None, page: int = 1,
+                          page_size: int = 15, sort: str = "created_desc",
+                          active_ws_ids: Optional[set] = None) -> Tuple[int, Dict[str, Any]]:
+        if not self._verify_admin(admin_sec):
             return 403, {"error": "E_ADMIN_UNAUTHORIZED", "message": "Admin icazəsi tələb olunur"}
 
+        now = time.time()
+        active_ws = active_ws_ids or set()
+        page = max(1, int(page or 1))
+        page_size = max(1, min(100, int(page_size or 15)))
+
         with self.db.get_conn() as conn:
-            rows = conn.execute("SELECT * FROM telemetry_events ORDER BY received_at DESC LIMIT 100").fetchall()
-            return 200, {"telemetry": [dict(r) for r in rows]}
+            # Query with device_versions join
+            base_sql = """
+                SELECT d.device_id, d.computer_name, d.status, d.created_at, d.last_seen_at, d.locked, d.pin_ready,
+                       v.worker_version, v.reported_at AS version_reported_at
+                FROM devices d
+                LEFT JOIN device_versions v ON v.device_id = d.device_id
+                WHERE 1=1
+            """
+            params = []
+            if q:
+                base_sql += " AND (d.computer_name LIKE ? OR d.device_id LIKE ?)"
+                like_q = f"%{q}%"
+                params.extend([like_q, like_q])
+
+            if status and status.upper() in ("ACTIVE", "REVOKED"):
+                base_sql += " AND d.status = ?"
+                params.append(status.upper())
+
+            if version:
+                base_sql += " AND v.worker_version = ?"
+                params.append(version)
+
+            # Sort
+            if sort == "name_asc":
+                base_sql += " ORDER BY d.computer_name ASC"
+            elif sort == "name_desc":
+                base_sql += " ORDER BY d.computer_name DESC"
+            elif sort == "last_seen_desc":
+                base_sql += " ORDER BY d.last_seen_at DESC"
+            elif sort == "created_asc":
+                base_sql += " ORDER BY d.created_at ASC"
+            else:
+                base_sql += " ORDER BY d.created_at DESC"
+
+            all_rows = conn.execute(base_sql, params).fetchall()
+
+            # Filter online in-memory if requested (since online depends on WS active set & freshness)
+            filtered_rows = []
+            for r in all_rows:
+                is_online = (r["device_id"] in active_ws or (now - (r["last_seen_at"] or 0) <= 60))
+                if online is not None:
+                    req_online = str(online).lower() in ("true", "1", "yes")
+                    if is_online != req_online:
+                        continue
+
+                d_dict = dict(r)
+                d_dict["is_online"] = is_online
+                pin_val = d_dict.get("pin_ready")
+                d_dict["pin_status"] = "ready" if pin_val == 1 else ("not_ready" if pin_val == 0 else "unknown")
+                filtered_rows.append(d_dict)
+
+            total = len(filtered_rows)
+            total_pages = max(1, (total + page_size - 1) // page_size)
+            offset = (page - 1) * page_size
+            paged_devices = filtered_rows[offset:offset + page_size]
+
+            return 200, {
+                "devices": paged_devices,
+                "total": total,
+                "page": page,
+                "page_size": page_size,
+                "total_pages": total_pages
+            }
+
+    def admin_get_device_detail(self, device_id: str, admin_sec: Optional[str], active_ws_ids: Optional[set] = None) -> Tuple[int, Dict[str, Any]]:
+        if not self._verify_admin(admin_sec):
+            return 403, {"error": "E_ADMIN_UNAUTHORIZED", "message": "Admin icazəsi tələb olunur"}
+
+        now = time.time()
+        active_ws = active_ws_ids or set()
+        with self.db.get_conn() as conn:
+            dev = conn.execute("""
+                SELECT d.device_id, d.computer_name, d.status, d.created_at, d.last_seen_at, d.locked, d.pin_ready,
+                       v.worker_version, v.reported_at AS version_reported_at
+                FROM devices d
+                LEFT JOIN device_versions v ON v.device_id = d.device_id
+                WHERE d.device_id = ?
+            """, (device_id,)).fetchone()
+
+            if not dev:
+                return 404, {"error": "E_DEVICE_NOT_FOUND", "message": "Cihaz tapılmadı"}
+
+            dev_dict = dict(dev)
+            dev_dict["is_online"] = (device_id in active_ws or (now - (dev["last_seen_at"] or 0) <= 60))
+            pin_val = dev_dict.get("pin_ready")
+            dev_dict["pin_status"] = "ready" if pin_val == 1 else ("not_ready" if pin_val == 0 else "unknown")
+
+            # Recent commands (never exposes credentials or token payload)
+            cmd_rows = conn.execute("""
+                SELECT command_id, action, status, created_at, completed_at, result_status, claim_owner
+                FROM commands
+                WHERE device_id = ?
+                ORDER BY created_at DESC LIMIT 15
+            """, (device_id,)).fetchall()
+            dev_dict["recent_commands"] = [dict(c) for c in cmd_rows]
+
+            # Recent telemetry for this device
+            tel_rows = conn.execute("""
+                SELECT event_id, install_run_id, component, version, stage, event_type, severity, error_code, duration_ms, local_time, received_at
+                FROM telemetry_events
+                WHERE device_id = ?
+                ORDER BY received_at DESC LIMIT 25
+            """, (device_id,)).fetchall()
+            dev_dict["recent_telemetry"] = [dict(t) for t in tel_rows]
+
+            # Pairing count (only count/expiry metadata, NEVER the raw token or secret!)
+            session_count = conn.execute("SELECT COUNT(*) AS cnt FROM mobile_sessions WHERE device_id = ?", (device_id,)).fetchone()["cnt"]
+            pairing_req_count = conn.execute("SELECT COUNT(*) AS cnt FROM pairing_requests WHERE device_id = ?", (device_id,)).fetchone()["cnt"]
+            dev_dict["pairing_metadata"] = {
+                "active_mobile_sessions": session_count,
+                "total_pairing_requests": pairing_req_count
+            }
+
+            # Update history stages for this device
+            update_rows = conn.execute("""
+                SELECT event_id, stage, version, duration_ms, error_code, received_at
+                FROM telemetry_events
+                WHERE device_id = ? AND stage LIKE 'UPDATE_%'
+                ORDER BY received_at DESC LIMIT 20
+            """, (device_id,)).fetchall()
+            dev_dict["update_history"] = [dict(u) for u in update_rows]
+
+            return 200, {"device": dev_dict}
+
+    def admin_get_telemetry(self, admin_sec: Optional[str], device_id: Optional[str] = None,
+                            component: Optional[str] = None, severity: Optional[str] = None,
+                            stage: Optional[str] = None, error_code: Optional[str] = None,
+                            page: int = 1, page_size: int = 30,
+                            from_ts: Optional[float] = None, to_ts: Optional[float] = None) -> Tuple[int, Dict[str, Any]]:
+        if not self._verify_admin(admin_sec):
+            return 403, {"error": "E_ADMIN_UNAUTHORIZED", "message": "Admin icazəsi tələb olunur"}
+
+        page = max(1, int(page or 1))
+        page_size = max(1, min(100, int(page_size or 30)))
+
+        with self.db.get_conn() as conn:
+            base_sql = "FROM telemetry_events WHERE 1=1"
+            params = []
+            if device_id:
+                base_sql += " AND device_id = ?"
+                params.append(device_id)
+            if component:
+                base_sql += " AND component = ?"
+                params.append(component)
+            if severity:
+                base_sql += " AND severity = ?"
+                params.append(severity.upper())
+            if stage:
+                base_sql += " AND stage LIKE ?"
+                params.append(f"%{stage}%")
+            if error_code:
+                base_sql += " AND error_code LIKE ?"
+                params.append(f"%{error_code}%")
+            if from_ts:
+                base_sql += " AND received_at >= ?"
+                params.append(float(from_ts))
+            if to_ts:
+                base_sql += " AND received_at <= ?"
+                params.append(float(to_ts))
+
+            count_sql = "SELECT COUNT(*) AS total " + base_sql
+            total = conn.execute(count_sql, params).fetchone()["total"]
+
+            total_pages = max(1, (total + page_size - 1) // page_size)
+            offset = (page - 1) * page_size
+
+            data_sql = "SELECT event_id, install_run_id, device_id, component, version, stage, event_type, severity, error_code, duration_ms, local_time, received_at " + base_sql + " ORDER BY received_at DESC LIMIT ? OFFSET ?"
+            p_params = list(params) + [page_size, offset]
+            rows = conn.execute(data_sql, p_params).fetchall()
+
+            return 200, {
+                "telemetry": [dict(r) for r in rows],
+                "total": total,
+                "page": page,
+                "page_size": page_size,
+                "total_pages": total_pages
+            }
+
+    def admin_get_timeline(self, correlation_id: str, admin_sec: Optional[str]) -> Tuple[int, Dict[str, Any]]:
+        if not self._verify_admin(admin_sec):
+            return 403, {"error": "E_ADMIN_UNAUTHORIZED", "message": "Admin icazəsi tələb olunur"}
+
+        if not correlation_id:
+            return 400, {"error": "E_MISSING_CORRELATION_ID"}
+
+        with self.db.get_conn() as conn:
+            # Match by install_run_id or event_id or device_id
+            rows = conn.execute("""
+                SELECT event_id, install_run_id, device_id, component, version, stage, event_type, severity, error_code, duration_ms, local_time, received_at
+                FROM telemetry_events
+                WHERE install_run_id = ? OR event_id = ?
+                ORDER BY received_at ASC
+            """, (correlation_id, correlation_id)).fetchall()
+
+            return 200, {
+                "correlation_id": correlation_id,
+                "steps": [dict(r) for r in rows]
+            }
+
+    def admin_export_telemetry(self, admin_sec: Optional[str], format_type: str = "json",
+                               device_id: Optional[str] = None, severity: Optional[str] = None,
+                               limit: int = 500) -> Tuple[int, Any, str]:
+        """Təhlükəsiz export: CSV formula injection və məxfi məlumat sızması qoruması ilə."""
+        if not self._verify_admin(admin_sec):
+            return 403, {"error": "E_ADMIN_UNAUTHORIZED"}, "application/json"
+
+        limit = max(1, min(2000, int(limit or 500)))
+        with self.db.get_conn() as conn:
+            base_sql = "SELECT event_id, install_run_id, device_id, component, version, stage, event_type, severity, error_code, duration_ms, local_time, received_at FROM telemetry_events WHERE 1=1"
+            params = []
+            if device_id:
+                base_sql += " AND device_id = ?"
+                params.append(device_id)
+            if severity:
+                base_sql += " AND severity = ?"
+                params.append(severity.upper())
+            base_sql += " ORDER BY received_at DESC LIMIT ?"
+            params.append(limit)
+
+            rows = conn.execute(base_sql, params).fetchall()
+
+        if str(format_type).lower() == "csv":
+            import io, csv
+            output = io.StringIO()
+            writer = csv.writer(output)
+            writer.writerow(["event_id", "received_at_iso", "device_id", "component", "version", "stage", "event_type", "severity", "error_code", "duration_ms"])
+            for r in rows:
+                def sanitize_csv_cell(val):
+                    s = str(val or '')
+                    # Formula injection protection: sanitize =, +, -, @, \t, \r
+                    if s and (s[0] in ('=', '+', '-', '@') or s[0] == chr(9) or s[0] == chr(13)):
+                        return "'" + s
+                    return s
+
+                iso_time = time.strftime('%Y-%m-%d %H:%M:%S', time.gmtime(r['received_at']))
+                writer.writerow([
+                    sanitize_csv_cell(r['event_id']),
+                    iso_time,
+                    sanitize_csv_cell(r['device_id']),
+                    sanitize_csv_cell(r['component']),
+                    sanitize_csv_cell(r['version']),
+                    sanitize_csv_cell(r['stage']),
+                    sanitize_csv_cell(r['event_type']),
+                    sanitize_csv_cell(r['severity']),
+                    sanitize_csv_cell(r['error_code']),
+                    sanitize_csv_cell(r['duration_ms'])
+                ])
+            return 200, output.getvalue(), "text/csv; charset=utf-8"
+        else:
+            data = [dict(r) for r in rows]
+            return 200, {"telemetry": data, "exported_count": len(data)}, "application/json"
 
     def admin_set_device_status(self, device_id: str, target_status: str, admin_sec: Optional[str]) -> Tuple[int, Dict[str, Any]]:
         if not admin_sec or admin_sec != self.get_admin_secret():
