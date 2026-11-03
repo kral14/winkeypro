@@ -3,21 +3,28 @@ use serde_json::{json, Value};
 use sha2::{Digest, Sha256};
 
 fn origin() -> Result<String, String> {
-    #[cfg(debug_assertions)]
-    if let Ok(value) = std::env::var("WINKEY_DEV_ACCOUNT_ORIGIN") {
-        let value = super::gateway_config::normalize(&value)?;
-        let url = tauri::Url::parse(&value).map_err(|_| "E_ACCOUNT_ORIGIN")?;
-        if matches!(url.host_str(), Some("127.0.0.1") | Some("localhost") | Some("[::1]")) {
-            return Ok(value);
-        }
-        return Err("E_DEV_ACCOUNT_ORIGIN: yalnız localhost qəbul edilir".into());
-    }
     let cfg: Value = fs::read(super::get_app_data_dir().join("config.json")).ok()
         .and_then(|v| serde_json::from_slice(&v).ok()).unwrap_or(json!({}));
-    let origin = super::gateway_config::cloud_origin(cfg.get("cloud_gateway_origin").and_then(Value::as_str));
+    let saved_cloud = cfg.get("cloud_gateway_origin").or_else(|| cfg.get("gateway_origin")).and_then(Value::as_str);
+
+    #[cfg(debug_assertions)]
+    if let Ok(force_local) = std::env::var("WINKEY_FORCE_LOCAL_ACCOUNT") {
+        if force_local == "1" || force_local == "true" {
+            if let Ok(value) = std::env::var("WINKEY_DEV_ACCOUNT_ORIGIN") {
+                let value = super::gateway_config::normalize(&value)?;
+                let url = tauri::Url::parse(&value).map_err(|_| "E_ACCOUNT_ORIGIN")?;
+                if matches!(url.host_str(), Some("127.0.0.1") | Some("localhost") | Some("[::1]")) {
+                    return Ok(value);
+                }
+                return Err("E_DEV_ACCOUNT_ORIGIN: yalnız localhost qəbul edilir".into());
+            }
+        }
+    }
+
+    let origin = super::gateway_config::cloud_origin(saved_cloud);
     let url = tauri::Url::parse(&origin).map_err(|_| "E_ACCOUNT_ORIGIN")?;
     let host = url.host_str().unwrap_or("");
-    let is_trusted = host == "158.101.172.228" || matches!(url.host_str(), Some("127.0.0.1") | Some("localhost") | Some("[::1]"));
+    let is_trusted = host == "158.101.172.228" || host.ends_with(".duckdns.org") || matches!(url.host_str(), Some("127.0.0.1") | Some("localhost") | Some("[::1]"));
     if url.scheme() != "https" && !is_trusted {
         return Err("Qeydiyyat üçün etibarlı HTTPS serveri lazımdır. VM-də HTTPS qurduqdan sonra hesab ekranında server ünvanını dəyişin.".into());
     }
@@ -41,7 +48,7 @@ fn post(origin: &str, path: &str, body: Value, token: Option<&str>) -> Result<Va
             Err(value.get("message").or_else(|| value.get("error")).and_then(Value::as_str)
                 .unwrap_or("Hesaba giriş alınmadı.").to_string())
         }
-        Err(_) => Err("Hesab serverinə qoşulmaq alınmadı.".into()),
+        Err(e) => Err(format!("Hesab serverinə ({}) qoşulmaq alınmadı: {}", origin, e)),
     }
 }
 

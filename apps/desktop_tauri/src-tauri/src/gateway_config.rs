@@ -13,13 +13,18 @@ pub fn normalize(origin: &str) -> Result<String, String> {
 }
 
 pub fn cloud_origin(saved: Option<&str>) -> String {
+    if let Some(value) = saved {
+        if let Ok(origin) = normalize(value) {
+            if origin != LEGACY_ORIGIN {
+                return origin;
+            }
+        }
+    }
     #[cfg(debug_assertions)]
     if let Ok(value) = std::env::var("WINKEY_DEV_GATEWAY_ORIGIN") {
         if let Ok(origin) = normalize(&value) { return origin; }
     }
-    saved.and_then(|value| normalize(value).ok())
-        .filter(|value| value != LEGACY_ORIGIN)
-        .unwrap_or_else(|| CLOUD_ORIGIN.to_string())
+    CLOUD_ORIGIN.to_string()
 }
 
 pub fn record_registration(cfg: &mut serde_json::Value, origin: &str, local: bool) {
