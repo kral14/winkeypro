@@ -1,6 +1,6 @@
 [package]
 name = "winkey_service"
-version = "0.2.6"
+version = "0.2.7"
 description = "WinKey Pro - Windows Service & Session Security Worker"
 edition = "2021"
 
