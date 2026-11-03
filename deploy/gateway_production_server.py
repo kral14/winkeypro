@@ -850,24 +850,10 @@ def get_mobile_html() -> str:
 
         <!-- Main Card -->
         <main class="card">
-            <!-- Vahid Kompüter Seçimi və Sil Düyməsi -->
+            <!-- Vahid Kompüter Seçimi Dropdown -->
             <div id="deviceSelectWrapper" style="display:block; margin-bottom: 14px; text-align: left;">
-                <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom: 6px;">
-                    <label for="deviceSelect" style="font-size: 0.72rem; color: var(--text-muted); font-weight: 700; text-transform: uppercase; letter-spacing: 0.5px;">Aktiv Kompüter:</label>
-                    <span id="deviceCountBadge" style="font-size:0.72rem; padding:2px 8px; background:rgba(34,197,94,0.15); color:var(--accent-green); border-radius:10px; font-weight:700;">1 Kompüter</span>
-                </div>
-                <div style="display:flex; gap:8px; align-items:center;">
-                    <select id="deviceSelect" style="flex:1; background: #18221b; color: var(--text-main); border: 1px solid #2e3e32; border-radius: 10px; padding: 10px 12px; font-size: 0.9rem; font-weight: 600; outline: none; cursor: pointer;"></select>
-                    <!-- Zibil qutusu / Sil İkonu -->
-                    <button type="button" class="icon-btn" id="btnDeleteDevice" style="border-color:#4a2320; color:var(--danger); background:#1f1414; flex-shrink:0;" title="Bu Kompüteri Sil (Cütləşməni Ləğv Et)" onclick="openDisconnectModal()">
-                        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                            <polyline points="3 6 5 6 21 6"></polyline>
-                            <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path>
-                            <line x1="10" y1="11" x2="10" y2="17"></line>
-                            <line x1="14" y1="11" x2="14" y2="17"></line>
-                        </svg>
-                    </button>
-                </div>
+                <span id="deviceCountBadge" style="display:none;"></span>
+                <select id="deviceSelect" style="width:100%; background: #18221b; color: var(--text-main); border: 1px solid #2e3e32; border-radius: 10px; padding: 10px 14px; font-size: 0.9rem; font-weight: 600; outline: none; cursor: pointer;"></select>
             </div>
             <div class="device-info">
                 <div id="dev-name" class="device-name">PC Qoşulur...</div>
@@ -1301,22 +1287,54 @@ def get_mobile_html() -> str:
                 item.style.padding = '10px 12px';
                 const isOnline = Boolean(d.online);
                 const isSelected = (d.device_id === targetDevice);
+                const compName = (d.computer_name || 'Kompüter');
 
                 item.innerHTML = `
-                    <div style="display:flex; justify-content:space-between; align-items:center;">
-                        <div>
-                            <div style="font-size:0.86rem; font-weight:700; color:#fff;">${d.computer_name || 'Kompüter'} ${isSelected ? '<span style="color:var(--accent-green); font-size:0.75rem;">(Seçilib)</span>' : ''}</div>
-                            <div style="font-size:0.72rem; color:var(--text-dim);">${d.device_id}</div>
+                    <div style="display:flex; justify-content:space-between; align-items:center; gap:8px;">
+                        <div style="flex:1; min-width:0;">
+                            <div style="font-size:0.86rem; font-weight:700; color:#fff; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">${compName} ${isSelected ? '<span style="color:var(--accent-green); font-size:0.75rem;">(Seçilib)</span>' : ''}</div>
+                            <div style="font-size:0.72rem; color:var(--text-dim); white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">${d.device_id}</div>
                             <div style="font-size:0.72rem; margin-top:2px; color:${isOnline ? 'var(--accent-green)' : 'var(--danger)'};">
                                 ${isOnline ? '● Onlayn' : '○ Oflayn'} · ${d.locked ? '🔒 Kilidli' : '🔓 Açıq'}
                             </div>
                         </div>
-                        <button type="button" class="action-pill-btn" style="padding:6px 12px; font-size:0.76rem; ${isSelected ? 'background:var(--accent-green); color:#0c0f0d; font-weight:700;' : ''}" onclick="activateDeviceFromModal('${d.device_id}')">
-                            ${isSelected ? 'Aktivdir' : 'Seç'}
-                        </button>
+                        <div style="display:flex; gap:6px; align-items:center; flex-shrink:0;">
+                            <button type="button" class="action-pill-btn" style="padding:6px 12px; font-size:0.76rem; ${isSelected ? 'background:var(--accent-green); color:#0c0f0d; font-weight:700;' : ''}" onclick="activateDeviceFromModal('${d.device_id}')">
+                                ${isSelected ? 'Aktivdir' : 'Seç'}
+                            </button>
+                            <button type="button" class="icon-btn" style="border-color:#4a2320; color:var(--danger); background:#1f1414; padding:6px; width:34px; height:34px; display:inline-flex; align-items:center; justify-content:center; border-radius:8px; cursor:pointer;" title="Kompüteri Hesabdan Sil" onclick="deleteDeviceFromModal('${d.device_id}', '${compName.replace(/'/g, "\\'")}')">
+                                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                                    <polyline points="3 6 5 6 21 6"></polyline>
+                                    <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path>
+                                    <line x1="10" y1="11" x2="10" y2="17"></line>
+                                    <line x1="14" y1="11" x2="14" y2="17"></line>
+                                </svg>
+                            </button>
+                        </div>
                     </div>
                 `;
                 container.appendChild(item);
+            }
+        }
+
+        async function deleteDeviceFromModal(devId, compName) {
+            if (!confirm(`"${compName}" kompüterini silmək və telefon girişini ləğv etmək istəyirsiniz?`)) return;
+            try {
+                const acctToken = localStorage.getItem('winkey_account_token');
+                if (acctToken && devId) {
+                    await request('/accounts/device-action', {
+                        method: 'POST',
+                        headers: {'Authorization': 'Bearer ' + acctToken, 'Content-Type': 'application/json'},
+                        body: JSON.stringify({device_id: devId, action: 'delete'})
+                    });
+                }
+                if (window.WinKeyDevices) {
+                    window.WinKeyDevices.remove(devId);
+                }
+                recordNotification(false, "Kompüter Silindi", `"${compName}" hesaba bağlı cihazlardan silindi.`);
+                await refreshAccountDevices();
+            } catch (err) {
+                alert("Silinmə zamanı xəta baş verdi: " + err);
             }
         }
 
