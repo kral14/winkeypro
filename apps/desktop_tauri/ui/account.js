@@ -46,59 +46,19 @@
         return;
       }
       for (const device of devices) {
-        const isCurrent = (device.device_id === currentId);
-        const isLocked = Boolean(device.locked);
-
         const row = document.createElement('div');
         row.style.cssText = 'padding:6px 10px;border:1px solid var(--line);border-radius:8px;background:var(--card);display:flex;align-items:center;justify-content:space-between;gap:8px;';
 
-        // Sol tərəf: İkon + Ad + Bu PC bərici + ID
-        const left = document.createElement('div');
-        left.style.cssText = 'display:flex;align-items:center;gap:8px;min-width:0;';
-        
-        const iconSpan = document.createElement('span');
-        iconSpan.style.fontSize = '15px';
-        iconSpan.textContent = '💻';
-        left.appendChild(iconSpan);
+        const title = document.createElement('span');
+        title.style.cssText = 'font-weight:700;font-size:12px;color:var(--text);';
+        title.textContent = device.computer_name + (device.device_id === currentId ? ' (Bu PC)' : '');
+        row.appendChild(title);
 
-        const infoDiv = document.createElement('div');
-        infoDiv.style.minWidth = '0';
-
-        const nameLine = document.createElement('div');
-        nameLine.style.cssText = 'font-size:12px;font-weight:700;color:var(--text);display:flex;align-items:center;gap:6px;line-height:1.2;';
-        nameLine.textContent = device.computer_name || 'Kompüter';
-
-        if (isCurrent) {
-          const pcBadge = document.createElement('span');
-          pcBadge.style.cssText = 'font-size:9px;padding:1px 5px;border-radius:4px;background:var(--green-dark);color:var(--green);font-weight:700;';
-          pcBadge.textContent = 'Bu PC';
-          nameLine.appendChild(pcBadge);
-        }
-        infoDiv.appendChild(nameLine);
-
-        if (device.device_id) {
-          const idLine = document.createElement('div');
-          idLine.style.cssText = 'font-size:10px;color:var(--text-faint);font-family:monospace;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;';
-          idLine.textContent = device.device_id.length > 28 ? device.device_id.slice(0, 26) + '…' : device.device_id;
-          infoDiv.appendChild(idLine);
-        }
-        left.appendChild(infoDiv);
-        row.appendChild(left);
-
-        // Sağ tərəf: Status bərici + Əməliyyat düymələri
-        const right = document.createElement('div');
-        right.style.cssText = 'display:flex;align-items:center;gap:6px;flex-shrink:0;';
-
-        const isOnline = isCurrent || Boolean(device.online);
-        const onlineBadge = document.createElement('span');
-        onlineBadge.style.cssText = `font-size:10px;padding:2px 7px;border-radius:8px;font-weight:600;display:inline-flex;align-items:center;gap:4px;background:${isOnline ? '#13241b' : '#202124'};color:${isOnline ? 'var(--green)' : '#9ca3af'};border:1px solid ${isOnline ? 'rgba(74,222,128,0.25)' : 'var(--line)'};`;
-        onlineBadge.innerHTML = `<span style="width:6px;height:6px;border-radius:50%;background:${isOnline ? 'var(--green)' : '#6b7280'};display:inline-block;"></span> ${isOnline ? 'Onlayn' : 'Oflayn'}`;
-        right.appendChild(onlineBadge);
-
-        const stateBadge = document.createElement('span');
-        stateBadge.style.cssText = `font-size:10px;padding:2px 7px;border-radius:8px;font-weight:600;background:${isLocked ? '#2d1917' : '#13241b'};color:${isLocked ? 'var(--red)' : 'var(--green)'};`;
-        stateBadge.textContent = isLocked ? '🔒 Kilidli' : '🔓 Açıq';
-        right.appendChild(stateBadge);
+        const state = document.createElement('span');
+        const isOnline = Boolean(device.online);
+        state.textContent = (isOnline ? 'Onlayn' : 'Oflayn') + ' · ' + (device.locked ? 'Kilidli' : 'Açıq') + (device.paused ? ' · Dayandırılıb' : '');
+        state.style.cssText = `font-size:11px;font-weight:600;color:${isOnline ? 'var(--green)' : 'var(--text-muted)'};`;
+        row.appendChild(state);
 
         for (const [action, label, isDanger] of [
           [device.paused ? 'resume' : 'pause', device.paused ? 'Davam et' : 'Dayandır', false],
@@ -107,7 +67,7 @@
           const button = document.createElement('button');
           button.type = 'button';
           button.className = 'btn-secondary';
-          button.style.cssText = `font-size:10px;padding:2px 7px;${isDanger ? 'color:var(--red);border-color:var(--red-border);' : ''}`;
+          button.style.cssText = `font-size:10px;padding:3px 8px;${isDanger ? 'color:var(--red);border-color:var(--red-border);' : ''}`;
           button.textContent = label;
           button.onclick = async () => {
             if (action === 'delete' && !window.confirm(`"${device.computer_name}" kompüterini silib telefon girişini ləğv etmək istəyirsiniz?`)) return;
@@ -121,10 +81,8 @@
               button.disabled = false;
             }
           };
-          right.appendChild(button);
+          row.appendChild(button);
         }
-
-        row.appendChild(right);
         list.appendChild(row);
       }
     }
@@ -181,8 +139,14 @@
         const account=await invoke('account_authenticate',{action,email:byId('accountEmail').value.trim(),password:password.value});
         signedIn(true);updateUser(account.email);
         await refresh();
-        overlay.hidden=true;
-        if(window.switchTab) window.switchTab('status');
+        if (action === 'register') {
+          overlay.hidden = false;
+          if (continueButton) continueButton.hidden = false;
+          showMessage('Hesabınız uğurla yaradıldı! Bu PC hesaba bağlandı.', 'success');
+        } else {
+          overlay.hidden = true;
+          if (window.switchTab) window.switchTab('status');
+        }
       }catch(error){showMessage('Əməliyyat alınmadı: '+String(error),'error');}
       finally{password.value='';controls.forEach(button=>{button.disabled=false;});}
     };

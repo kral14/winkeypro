@@ -854,6 +854,13 @@ def get_mobile_html() -> str:
                 </button>
 
                 <!-- Power / Disconnect Icon -->
+                                <!-- Account / User Icon -->
+                <button class="icon-btn" id="accountBtn" title="Hesab / Giriş" onclick="openAccountModal()">
+                    <svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                        <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"></path>
+                        <circle cx="12" cy="7" r="4"></circle>
+                    </svg>
+                </button>
                 <button class="icon-btn power" id="btn-revoke" title="Bağlantını Kəs" onclick="openDisconnectModal()">
                     <svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
                         <path d="M18.36 6.64a9 9 0 1 1-12.73 0"></path>
@@ -865,6 +872,11 @@ def get_mobile_html() -> str:
 
         <!-- Main Card -->
         <main class="card">
+                        <!-- Multi-device selector (hesabda 1-dən çox cihaz olanda) -->
+            <div id="deviceSelectWrapper" style="display:none; margin-bottom: 12px; text-align: left;">
+                <label style="font-size: 0.72rem; color: var(--text-muted); font-weight: 700; text-transform: uppercase; letter-spacing: 0.5px; display: block; margin-bottom: 5px;">Aktiv Kompüter:</label>
+                <select id="deviceSelect" style="width: 100%; background: #18221b; color: var(--text-main); border: 1px solid #2e3e32; border-radius: 10px; padding: 9px 12px; font-size: 0.88rem; font-weight: 600; outline: none; cursor: pointer;"></select>
+            </div>
             <div class="device-info">
                 <div id="dev-name" class="device-name">PC Qoşulur...</div>
                 <div id="dev-id" class="device-sub">Cihaz ID: —</div>
@@ -978,6 +990,73 @@ def get_mobile_html() -> str:
         </div>
     </div>
 
+        <!-- Account Login & Device Management Modal -->
+    <div class="modal-overlay" id="accountModalOverlay" style="align-items: center;">
+        <div class="detail-modal-box" style="max-height: 85vh; overflow-y: auto;">
+            <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:14px;">
+                <h3 id="accountModalTitle" style="font-size:1.1rem; font-weight:700; display:flex; align-items:center; gap:8px;">
+                    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="var(--accent-green)" stroke-width="2">
+                        <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"></path>
+                        <circle cx="12" cy="7" r="4"></circle>
+                    </svg>
+                    <span>Hesab İdarəetməsi</span>
+                </h3>
+                <button class="drawer-close" onclick="closeAccountModal()">
+                    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
+                        <line x1="18" y1="6" x2="6" y2="18"></line>
+                        <line x1="6" y1="6" x2="18" y2="18"></line>
+                    </svg>
+                </button>
+            </div>
+
+            <!-- GİRİŞ FORMASI (Giriş edilmədikdə) -->
+            <div id="accountAuthSection">
+                <div style="display:flex; gap:8px; margin-bottom:14px; background:#121814; padding:4px; border-radius:10px;">
+                    <button type="button" id="tabAuthLogin" class="action-pill-btn" style="background:#223026; color:var(--accent-green);" onclick="switchAuthTab('login')">Daxil Ol</button>
+                    <button type="button" id="tabAuthRegister" class="action-pill-btn" onclick="switchAuthTab('register')">Qeydiyyat</button>
+                </div>
+                <div style="display:flex; flex-direction:column; gap:10px;">
+                    <div>
+                        <label style="font-size:0.75rem; color:var(--text-muted); margin-bottom:4px; display:block;">E-poçt ünvanı:</label>
+                        <input type="email" id="txtAuthEmail" placeholder="ad@domain.com" style="width:100%; padding:10px 12px; background:#19231d; border:1px solid #2e3e32; border-radius:10px; color:#fff; font-size:0.9rem; outline:none;" />
+                    </div>
+                    <div>
+                        <label style="font-size:0.75rem; color:var(--text-muted); margin-bottom:4px; display:block;">Şifrə (min. 10 simvol):</label>
+                        <input type="password" id="txtAuthPassword" placeholder="••••••••••" style="width:100%; padding:10px 12px; background:#19231d; border:1px solid #2e3e32; border-radius:10px; color:#fff; font-size:0.9rem; outline:none;" />
+                    </div>
+                    <div id="authErrorMsg" style="color:var(--danger); font-size:0.78rem; min-height:18px;"></div>
+                    <button type="button" id="btnSubmitAuth" class="action-pill-btn" style="background:var(--accent-green); color:#0c0f0d; font-weight:700; padding:12px; font-size:0.92rem; border:none; margin-top:4px;" onclick="submitAuth()">
+                        Daxil Ol
+                    </button>
+                    <p style="font-size:0.75rem; color:var(--text-dim); line-height:1.4; text-align:center; margin-top:6px;">
+                        Kompüterinizdə daxil olduğunuz eyni hesabla daxil olun. Bütün bağlı kompüterləriniz avtomatik görünəcək.
+                    </p>
+                </div>
+            </div>
+
+            <!-- HESAB PROFİLİ & CİHAZLAR (Giriş edildikdə) -->
+            <div id="accountProfileSection" style="display:none;">
+                <div style="background:#19231d; border:1px solid #2e3e32; border-radius:12px; padding:12px 14px; margin-bottom:14px; display:flex; justify-content:space-between; align-items:center;">
+                    <div>
+                        <div style="font-size:0.72rem; color:var(--text-dim); text-transform:uppercase; letter-spacing:0.5px;">Aktiv Hesab</div>
+                        <div id="lblAccountEmail" style="font-size:0.92rem; font-weight:700; color:#fff; word-break:break-all;">—</div>
+                    </div>
+                    <button type="button" class="action-pill-btn" style="background:#261818; border-color:var(--danger); color:#fca5a5; padding:6px 12px; font-size:0.78rem;" onclick="logoutAccount()">
+                        Çıxış
+                    </button>
+                </div>
+
+                <div style="font-size:0.8rem; font-weight:700; color:var(--text-muted); margin-bottom:8px; display:flex; justify-content:space-between; align-items:center;">
+                    <span>Hesaba Bağlı Kompüterlər</span>
+                    <button type="button" class="action-pill-btn" style="padding:4px 8px; font-size:0.72rem;" onclick="refreshAccountDevices()">Yenilə</button>
+                </div>
+                <div id="accountDevicesList" style="display:flex; flex-direction:column; gap:8px; max-height:240px; overflow-y:auto;">
+                    <!-- JS ilə dinamik doldurulur -->
+                </div>
+            </div>
+        </div>
+    </div>
+
     <script src="/mobile-assets/jsQR.js"></script>
     <script src="/mobile-assets/install.js"></script>
     <script src="/mobile-assets/devices.js"></script>
@@ -986,6 +1065,186 @@ def get_mobile_html() -> str:
         let targetDevice = urlParams.get('device') || localStorage.getItem('winkey_dev_id') || '';
         let pairCode = urlParams.get('code') || '';
         let authToken = localStorage.getItem('winkey_token') || '';
+
+        // --- HESAB GİRİŞİ VƏ ÇOXLU CİHAZ İDARƏETMƏSİ ---
+        let currentAuthMode = 'login';
+        let userAccountDevices = [];
+
+        function openAccountModal() {
+            const overlay = document.getElementById('accountModalOverlay');
+            if (overlay) overlay.style.display = 'flex';
+            checkAccountState();
+        }
+
+        function closeAccountModal() {
+            const overlay = document.getElementById('accountModalOverlay');
+            if (overlay) overlay.style.display = 'none';
+        }
+
+        function switchAuthTab(mode) {
+            currentAuthMode = mode;
+            const tabLogin = document.getElementById('tabAuthLogin');
+            const tabReg = document.getElementById('tabAuthRegister');
+            const submitBtn = document.getElementById('btnSubmitAuth');
+            const errEl = document.getElementById('authErrorMsg');
+            if (errEl) errEl.textContent = '';
+
+            if (mode === 'login') {
+                if (tabLogin) { tabLogin.style.background = '#223026'; tabLogin.style.color = 'var(--accent-green)'; }
+                if (tabReg) { tabReg.style.background = '#18221b'; tabReg.style.color = 'var(--text-main)'; }
+                if (submitBtn) submitBtn.textContent = 'Daxil Ol';
+            } else {
+                if (tabReg) { tabReg.style.background = '#223026'; tabReg.style.color = 'var(--accent-green)'; }
+                if (tabLogin) { tabLogin.style.background = '#18221b'; tabLogin.style.color = 'var(--text-main)'; }
+                if (submitBtn) submitBtn.textContent = 'Qeydiyyatdan Keç';
+            }
+        }
+
+        async function checkAccountState() {
+            const token = localStorage.getItem('winkey_account_token');
+            const email = localStorage.getItem('winkey_account_email');
+            const authSec = document.getElementById('accountAuthSection');
+            const profSec = document.getElementById('accountProfileSection');
+            const emailEl = document.getElementById('lblAccountEmail');
+
+            if (token && email) {
+                if (authSec) authSec.style.display = 'none';
+                if (profSec) profSec.style.display = 'block';
+                if (emailEl) emailEl.textContent = email;
+                await refreshAccountDevices();
+            } else {
+                if (authSec) authSec.style.display = 'block';
+                if (profSec) profSec.style.display = 'none';
+            }
+        }
+
+        async function submitAuth() {
+            const emailInput = document.getElementById('txtAuthEmail');
+            const passInput = document.getElementById('txtAuthPassword');
+            const errEl = document.getElementById('authErrorMsg');
+            const submitBtn = document.getElementById('btnSubmitAuth');
+
+            const email = (emailInput?.value || '').trim();
+            const password = (passInput?.value || '').trim();
+
+            if (!email || !password) {
+                if (errEl) errEl.textContent = 'Zəhmət olmasa e-poçt və şifrəni daxil edin.';
+                return;
+            }
+            if (password.length < 10) {
+                if (errEl) errEl.textContent = 'Şifrə ən azı 10 simvol olmalıdır.';
+                return;
+            }
+
+            if (submitBtn) { submitBtn.disabled = true; submitBtn.textContent = 'Gözləyin…'; }
+            if (errEl) errEl.textContent = '';
+
+            try {
+                let res;
+                if (currentAuthMode === 'login') {
+                    res = await window.WinKeyDevices?.login(email, password);
+                } else {
+                    res = await window.WinKeyDevices?.register(email, password);
+                }
+                if (emailInput) emailInput.value = '';
+                if (passInput) passInput.value = '';
+                await checkAccountState();
+                updateDeviceSwitcher();
+                recordNotification(true, 'Hesab Girişi', 'Uğurla daxil oldunuz: ' + (res?.email || email));
+            } catch (err) {
+                if (errEl) errEl.textContent = String(err.message || err);
+            } finally {
+                if (submitBtn) {
+                    submitBtn.disabled = false;
+                    submitBtn.textContent = currentAuthMode === 'login' ? 'Daxil Ol' : 'Qeydiyyatdan Keç';
+                }
+            }
+        }
+
+        async function logoutAccount() {
+            if (confirm('Hesabdan çıxmaq istəyirsiniz?')) {
+                await window.WinKeyDevices?.logout();
+                await checkAccountState();
+                updateDeviceSwitcher();
+                recordNotification(false, 'Hesabdan Çıxıldı', 'Hesab sessiyası sonlandırıldı.');
+                closeAccountModal();
+            }
+        }
+
+        async function refreshAccountDevices() {
+            const token = localStorage.getItem('winkey_account_token');
+            if (!token) return;
+            const container = document.getElementById('accountDevicesList');
+            if (container) container.innerHTML = '<div style="color:#888; font-size:0.75rem; text-align:center; padding:10px;">Cihazlar yüklənir…</div>';
+
+            try {
+                const res = await window.WinKeyDevices?.syncAccount();
+                if (res && res.devices) {
+                    userAccountDevices = res.devices;
+                    renderAccountDevicesList(res.devices);
+                    updateDeviceSwitcher();
+                } else {
+                    if (container) container.innerHTML = '<div style="color:#888; font-size:0.75rem; text-align:center; padding:10px;">Bu hesaba bağlı kompüter yoxdur. PC-də hesabınıza daxil olun.</div>';
+                }
+            } catch (e) {
+                if (container) container.innerHTML = '<div style="color:var(--danger); font-size:0.75rem; text-align:center; padding:10px;">Yüklənmə xətası: ' + e + '</div>';
+            }
+        }
+
+        function renderAccountDevicesList(devices) {
+            const container = document.getElementById('accountDevicesList');
+            if (!container) return;
+            if (!devices.length) {
+                container.innerHTML = '<div style="color:#888; font-size:0.75rem; text-align:center; padding:10px;">Bu hesaba bağlı kompüter tapılmadı.</div>';
+                return;
+            }
+            container.innerHTML = '';
+            for (const d of devices) {
+                const item = document.createElement('div');
+                item.className = 'notification-item';
+                item.style.padding = '10px 12px';
+                const isOnline = Boolean(d.online);
+                const isSelected = (d.device_id === targetDevice);
+
+                item.innerHTML = `
+                    <div style="display:flex; justify-content:space-between; align-items:center;">
+                        <div>
+                            <div style="font-size:0.86rem; font-weight:700; color:#fff;">${d.computer_name || 'Kompüter'} ${isSelected ? '<span style="color:var(--accent-green); font-size:0.75rem;">(Seçilib)</span>' : ''}</div>
+                            <div style="font-size:0.72rem; color:var(--text-dim);">${d.device_id}</div>
+                            <div style="font-size:0.72rem; margin-top:2px; color:${isOnline ? 'var(--accent-green)' : 'var(--danger)'};">
+                                ${isOnline ? '● Onlayn' : '○ Oflayn'} · ${d.locked ? '🔒 Kilidli' : '🔓 Açıq'}
+                            </div>
+                        </div>
+                        <button type="button" class="action-pill-btn" style="padding:6px 12px; font-size:0.76rem; ${isSelected ? 'background:var(--accent-green); color:#0c0f0d; font-weight:700;' : ''}" onclick="activateDeviceFromModal('${d.device_id}')">
+                            ${isSelected ? 'Aktivdir' : 'Seç'}
+                        </button>
+                    </div>
+                `;
+                container.appendChild(item);
+            }
+        }
+
+        function activateDeviceFromModal(devId) {
+            const sel = document.getElementById('deviceSelect');
+            if (sel) {
+                sel.value = devId;
+                sel.dispatchEvent(new Event('change'));
+            }
+            closeAccountModal();
+        }
+
+        function updateDeviceSwitcher() {
+            const wrapper = document.getElementById('deviceSelectWrapper');
+            const sel = document.getElementById('deviceSelect');
+            if (!sel || !wrapper) return;
+
+            if (sel.options.length > 1) {
+                wrapper.style.display = 'block';
+            } else {
+                wrapper.style.display = 'none';
+            }
+        }
+
 
         const devNameEl = document.getElementById('dev-name');
         const devIdEl = document.getElementById('dev-id');
@@ -1968,6 +2227,31 @@ def get_admin_html() -> str:
 </html>"""
 
 class GatewayHandler(BaseHTTPRequestHandler):
+    @classmethod
+    def _verify_device_token(cls, conn, device_id, token):
+        if not token or not device_id:
+            return False
+        import hashlib, time
+        sess = conn.execute(
+            "SELECT device_id FROM mobile_sessions WHERE session_token = ? AND (expires_at = 0 OR expires_at > ?)",
+            (token, time.time())
+        ).fetchone()
+        if sess and sess["device_id"] == device_id:
+            return True
+        token_hash = hashlib.sha256(token.encode('utf-8')).hexdigest()
+        acct = conn.execute(
+            "SELECT account_id FROM account_sessions WHERE token_hash = ? AND expires_at > ?",
+            (token_hash, time.time())
+        ).fetchone()
+        if acct:
+            owner = conn.execute(
+                "SELECT 1 FROM account_devices WHERE account_id = ? AND device_id = ?",
+                (acct['account_id'], device_id)
+            ).fetchone()
+            if owner:
+                return True
+        return False
+
     db: ProductionDatabase = None
     protocol_version = 'HTTP/1.1'
     disable_nagle_algorithm = True
@@ -2141,14 +2425,8 @@ class GatewayHandler(BaseHTTPRequestHandler):
                 return
 
             with self.db.get_conn() as conn:
-                sess = conn.execute("SELECT device_id FROM mobile_sessions WHERE session_token = ? AND (expires_at = 0 OR expires_at > ?)", (token, time.time())).fetchone()
-                if not sess:
-                    self._send_json(401, {"error": "E_INVALID_SESSION"})
-                    return
-
-                # MULTI-TENANT IDOR GUARD
-                if sess["device_id"] != req_device_id:
-                    self._send_json(403, {"error": "E_TENANT_IDOR_FORBIDDEN", "message": "Başqa cihazın statusuna giriş qadağandır!"})
+                if not self._verify_device_token(conn, req_device_id, token):
+                    self._send_json(403, {"error": "E_TENANT_IDOR_FORBIDDEN", "message": "Bu cihazın statusuna baxmaq icazəniz yoxdur"})
                     return
 
                 dev = conn.execute("SELECT device_id, computer_name, status, locked, pin_ready FROM devices WHERE device_id = ?", (req_device_id,)).fetchone()
@@ -2172,18 +2450,13 @@ class GatewayHandler(BaseHTTPRequestHandler):
                     return
 
                 with self.db.get_conn() as conn:
-                    sess = conn.execute("SELECT device_id FROM mobile_sessions WHERE session_token = ? AND (expires_at = 0 OR expires_at > ?)", (token, time.time())).fetchone()
-                    if not sess:
-                        self._send_json(401, {"error": "E_INVALID_SESSION"})
-                        return
-
                     cmd = conn.execute("SELECT command_id, device_id, action, status, result_status AS result, created_at, completed_at AS executed_at FROM commands WHERE command_id = ?", (cmd_id,)).fetchone()
                     if not cmd:
                         self._send_json(404, {"error": "E_COMMAND_NOT_FOUND"})
                         return
 
-                    # Multi-Tenant guard
-                    if cmd["device_id"] != sess["device_id"]:
+                    # Multi-Tenant guard (mobile session or account session)
+                    if not self._verify_device_token(conn, cmd["device_id"], token):
                         self._send_json(403, {"error": "E_TENANT_IDOR_FORBIDDEN", "message": "Başqa cihazın əmrinə giriş qadağandır"})
                         return
 
@@ -2516,14 +2789,8 @@ class GatewayHandler(BaseHTTPRequestHandler):
                     return
 
             with self.db.get_conn() as conn:
-                sess = conn.execute("SELECT device_id FROM mobile_sessions WHERE session_token = ? AND (expires_at = 0 OR expires_at > ?)", (token, time.time())).fetchone()
-                if not sess:
-                    self._send_json(401, {"error": "E_INVALID_SESSION"})
-                    return
-
-                # MULTI-TENANT IDOR GUARD
-                if sess["device_id"] != req_device_id:
-                    self._send_json(403, {"error": "E_TENANT_IDOR_FORBIDDEN", "message": "Başqa istifadəçinin cihazına komanda göndərə bilməzsiniz!"})
+                if not self._verify_device_token(conn, req_device_id, token):
+                    self._send_json(403, {"error": "E_TENANT_IDOR_FORBIDDEN", "message": "Bu cihaza komanda göndərmək icazəniz yoxdur və ya sessiya bitib."})
                     return
 
                 dev = conn.execute("SELECT status FROM devices WHERE device_id = ?", (req_device_id,)).fetchone()

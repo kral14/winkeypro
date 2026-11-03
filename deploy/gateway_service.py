@@ -244,6 +244,32 @@ class GatewayService:
 
         return 200, {"success": True, "message": "Mobil sessiya serverdə uğurla ləğv edildi"}, device_id
 
+    def verify_device_access(self, conn, device_id: str, bearer_token: Optional[str]) -> bool:
+        if not bearer_token or not device_id:
+            return False
+        # 1. Mobil sessiya (QR vasitəsilə cütləşmə)
+        sess = conn.execute(
+            "SELECT device_id FROM mobile_sessions WHERE session_token = ? AND (expires_at = 0 OR expires_at > ?)",
+            (bearer_token, time.time())
+        ).fetchone()
+        if sess and sess["device_id"] == device_id:
+            return True
+
+        # 2. İstifadəçi hesabı sessiyası (E-poçt / Şifrə ilə giriş)
+        token_hash = hashlib.sha256(bearer_token.encode('utf-8')).hexdigest()
+        acct_row = conn.execute(
+            "SELECT account_id FROM account_sessions WHERE token_hash = ? AND expires_at > ?",
+            (token_hash, time.time())
+        ).fetchone()
+        if acct_row:
+            owner_row = conn.execute(
+                "SELECT 1 FROM account_devices WHERE account_id = ? AND device_id = ?",
+                (acct_row['account_id'], device_id)
+            ).fetchone()
+            if owner_row:
+                return True
+        return False
+
     # --- COMMANDS ---
 
     def enqueue_command(self, req_device_id: str, action: str, request_id: Optional[str], token: Optional[str], raw_data: Dict[str, Any]) -> Tuple[int, Dict[str, Any]]:
@@ -256,12 +282,8 @@ class GatewayService:
                 }
 
         with self.db.get_conn() as conn:
-            sess = conn.execute("SELECT device_id FROM mobile_sessions WHERE session_token = ? AND (expires_at = 0 OR expires_at > ?)", (token, time.time())).fetchone()
-            if not sess:
-                return 401, {"error": "E_INVALID_SESSION"}
-
-            if sess["device_id"] != req_device_id:
-                return 403, {"error": "E_TENANT_IDOR_FORBIDDEN", "message": "Başqa istifadəçinin cihazına komanda göndərə bilməzsiniz!"}
+            if not token or not self.verify_device_access(conn, req_device_id, token):
+                return 403, {"error": "E_TENANT_IDOR_FORBIDDEN", "message": "Bu cihaza komanda göndərmək icazəniz yoxdur və ya sessiya bitib."}
 
             from deploy.account_service import remote_enabled
             conn.execute('UPDATE devices SET status=status WHERE device_id=?',(req_device_id,))
@@ -449,11 +471,7 @@ class GatewayService:
 
     def get_device_status(self, device_id: str, bearer_token: Optional[str]) -> Tuple[int, Dict[str, Any]]:
         with self.db.get_conn() as conn:
-            sess = conn.execute("SELECT device_id FROM mobile_sessions WHERE session_token = ? AND (expires_at = 0 OR expires_at > ?)", (bearer_token, time.time())).fetchone()
-            if not sess:
-                return 401, {"error": "E_INVALID_SESSION"}
-
-            if sess["device_id"] != device_id:
+            if not bearer_token or not self.verify_device_access(conn, device_id, bearer_token):
                 return 403, {"error": "E_TENANT_IDOR_FORBIDDEN", "message": "Bu cihazın statusuna baxmaq icazəniz yoxdur"}
 
             dev = conn.execute("SELECT device_id, computer_name, status, last_seen_at, locked, pin_ready FROM devices WHERE device_id = ?", (device_id,)).fetchone()
@@ -485,15 +503,11 @@ class GatewayService:
             return 401, {"error": "E_MISSING_TOKEN"}
 
         with self.db.get_conn() as conn:
-            sess = conn.execute("SELECT device_id FROM mobile_sessions WHERE session_token = ? AND (expires_at = 0 OR expires_at > ?)", (bearer_token, time.time())).fetchone()
-            if not sess:
-                return 401, {"error": "E_INVALID_SESSION"}
-
             cmd = conn.execute("SELECT command_id, device_id, action, status, result_status AS result, created_at, completed_at AS executed_at FROM commands WHERE command_id = ?", (cmd_id,)).fetchone()
             if not cmd:
                 return 404, {"error": "E_COMMAND_NOT_FOUND"}
 
-            if cmd["device_id"] != sess["device_id"]:
+            if not self.verify_device_access(conn, cmd["device_id"], bearer_token):
                 return 403, {"error": "E_TENANT_IDOR_FORBIDDEN", "message": "Başqa cihazın əmrinə giriş qadağandır"}
 
             return 200, dict(cmd)

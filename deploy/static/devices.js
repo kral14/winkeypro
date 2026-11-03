@@ -96,8 +96,95 @@
       message('Serverə əlaqə yoxdur. Cihaz seçimləri yadda saxlanılıb.');
     }finally{syncing=false;}
   }
+  function getSafeStorage() {
+    return root?.localStorage || (typeof localStorage !== 'undefined' ? localStorage : null);
+  }
+
+  async function syncAccount() {
+    const s = getSafeStorage();
+    const acctToken = s?.getItem ? s.getItem('winkey_account_token') : null;
+    if (!acctToken) return null;
+    try {
+      const data = await post('/accounts/session', {}, acctToken);
+      if (data && Array.isArray(data.devices)) {
+        for (const dev of data.devices) {
+          const existing = portfolio.devices.find(d => d.id === dev.device_id);
+          const devToken = existing?.token || acctToken;
+          portfolio.add({
+            id: dev.device_id,
+            token: devToken,
+            name: dev.computer_name || 'Kompüter'
+          }, false);
+        }
+        if (!portfolio.selected && portfolio.devices.length) {
+          portfolio.select(portfolio.devices[0].id);
+        }
+        render();
+        if (portfolio.current()) onSelect(portfolio.current());
+      }
+      return data;
+    } catch (e) {
+      if (String(e).includes('401') || String(e).includes('E_ACCOUNT')) {
+        const s = getSafeStorage();
+        if (s?.removeItem) {
+          s.removeItem('winkey_account_token');
+          s.removeItem('winkey_account_email');
+        }
+      }
+      return null;
+    }
+  }
+
+  async function login(email, password) {
+    const res = await post('/accounts/login', { email, password });
+    const s = getSafeStorage();
+    if (s?.setItem) {
+      s.setItem('winkey_account_token', res.account_token);
+      s.setItem('winkey_account_email', res.email);
+    }
+    await syncAccount();
+    return res;
+  }
+
+  async function register(email, password) {
+    const res = await post('/accounts/register', { email, password });
+    const s = getSafeStorage();
+    if (s?.setItem) {
+      s.setItem('winkey_account_token', res.account_token);
+      s.setItem('winkey_account_email', res.email);
+    }
+    await syncAccount();
+    return res;
+  }
+
+  async function logout() {
+    const s = getSafeStorage();
+    const acctToken = s?.getItem ? s.getItem('winkey_account_token') : null;
+    try {
+      if (acctToken) await post('/accounts/logout', {}, acctToken);
+    } catch (_) {}
+    if (s?.removeItem) {
+      s.removeItem('winkey_account_token');
+      s.removeItem('winkey_account_email');
+    }
+    portfolio.devices = [];
+    portfolio.selected = '';
+    portfolio.save();
+    render();
+    onSelect(null);
+  }
+
+  function getAccountInfo() {
+    const s = getSafeStorage();
+    return {
+      token: s?.getItem ? s.getItem('winkey_account_token') : null,
+      email: s?.getItem ? s.getItem('winkey_account_email') : null
+    };
+  }
+
   async function start(selectCallback,presenceCallback) {
     portfolio=new DevicePortfolio(localStorage);onSelect=selectCallback;onPresence=presenceCallback;
+    await syncAccount();
     const ticket=new URLSearchParams(location.hash.slice(1)).get('install');
     if(ticket && !portfolio.devices.length) {
       try {
@@ -151,5 +238,6 @@
     return portfolio.current();
   }
   root.WinKeyDevices={start,current:()=>portfolio?.current(),isPairing:()=>pairing,
+    login,register,logout,getAccountInfo,syncAccount,
     remove(id){if(!onSelect(null,true))return false;portfolio.remove(id);render();onSelect(portfolio.current());return true;}};
 })(typeof window!=='undefined'?window:null);
