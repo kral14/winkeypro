@@ -513,6 +513,9 @@ async function runUpdatePipelineUI(targetVersion) {
   if (updateSequenceActive) return;
   updateSequenceActive = true;
 
+  const container = document.getElementById('updateProgressContainer');
+  if (container) container.style.display = 'block';
+
   const progressBar = document.getElementById('barUpdateProgress');
   const progressPercent = document.getElementById('lblProgressPercent');
   const progressStage = document.getElementById('lblProgressStage');
@@ -535,16 +538,16 @@ async function runUpdatePipelineUI(targetVersion) {
     }
   }
 
-  // 1. MƏRHƏLƏ: YÜKLƏNİR (Endirilir)
+  // 1. MƏRHƏLƏ: YÜKLƏNİR
   setBar(20, '<span>📥</span> Yüklənir…', `Yeni versiya (v${targetVersion || ''}) üçün xidmətə yenilənmə sorğusu göndərildi; paket endirilir…`, '#38bdf8');
   await new Promise(r => setTimeout(r, 1200));
   setBar(45, '<span>📥</span> Yüklənir…', 'Paket faylları təhlükəsiz kanalla endirilir (45%)…', '#38bdf8');
   await new Promise(r => setTimeout(r, 1400));
 
-  // 2. MƏRHƏLƏ: BUILD OLUNUR (Fayllar hazırlanır, bütövlük və imza yoxlanılır)
-  setBar(70, '<span>⚙️</span> Build olunur…', 'Fayllar çıxarılır, Ed25519 kriptoqrafik imza və hash bütövlüyü yoxlanılır…', '#f59e0b');
+  // 2. MƏRHƏLƏ: QURULUR (Build olunur)
+  setBar(70, '<span>⚙️</span> Qurulur…', 'Fayllar çıxarılır, Ed25519 kriptoqrafik imza və hash bütövlüyü yoxlanılır…', '#f59e0b');
   await new Promise(r => setTimeout(r, 1500));
-  setBar(90, '<span>⚙️</span> Build olunur…', 'Slot faylları hazırlandı və xidmət konfiqurasiyası yeniləndi (90%)…', '#f59e0b');
+  setBar(90, '<span>⚙️</span> Qurulur…', 'Slot faylları hazırlandı və xidmət konfiqurasiyası yeniləndi (90%)…', '#f59e0b');
   await new Promise(r => setTimeout(r, 1200));
 
   // 3. MƏRHƏLƏ: PROQRAM RESTART EDƏCƏK
@@ -560,6 +563,9 @@ async function runUpdatePipelineUI(targetVersion) {
     if (typeof window !== 'undefined' && window.location && window.location.reload) {
       window.location.reload();
     }
+  } finally {
+    if (container) container.style.display = 'none';
+    updateSequenceActive = false;
   }
 }
 
@@ -629,20 +635,24 @@ async function loadUpdateStatus(isSilent = false) {
 
     const isNewer = status.status === 'requested' || status.phase === 'STAGING' || status.phase === 'PENDING_ACTIVATION';
 
+    const container = document.getElementById('updateProgressContainer');
+
     if (isNewer && !updateSequenceActive) {
       runUpdatePipelineUI(status.latest_version);
       return;
     }
 
+    // Normal vəziyyətdə (ən son versiyada olduqda) bar tamamilə gizlənir, heç nə görünmür
+    if (container && !updateSequenceActive) {
+      container.style.display = 'none';
+    }
+
     if (status.status === 'setup_required' || status.phase === 'SETUP_REQUIRED') {
+      if (container) container.style.display = 'block';
       setProgress(100, '<span>⚠️</span> Setup yenilənməsi tələb olunur', 'var(--red)');
     } else if (status.status === 'unreachable') {
-      setProgress(100, '<span>⚠️</span> Serverlə əlaqə kəsildi', '#ef4444');
-    } else if (status.phase === 'PROBATION') {
-      setProgress(95, '<span>🧪</span> Yeni versiya sınaqdan keçirilir…', '#a855f7');
-    } else {
-      // up_to_date, ahead, dev, COMMITTED
-      setProgress(100, '<span>✅</span> Sistem ən son versiyadadır', 'var(--green)');
+      // unreachable halında barı açmırıq, sadəcə mətndə göstəririk
+      if (container) container.style.display = 'none';
     }
 
     if (message && !updateSequenceActive) {
