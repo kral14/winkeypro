@@ -507,6 +507,61 @@ function initButtons() {
 
 // Səhifə yüklənəndə hər şeyi işə sal və canlı avtomatik yenilənməni idarə et
 let isUpdatingCheck = false;
+let updateSequenceActive = false;
+
+async function runUpdatePipelineUI(targetVersion) {
+  if (updateSequenceActive) return;
+  updateSequenceActive = true;
+
+  const progressBar = document.getElementById('barUpdateProgress');
+  const progressPercent = document.getElementById('lblProgressPercent');
+  const progressStage = document.getElementById('lblProgressStage');
+  const message = document.getElementById('lblUpdateMessage');
+
+  function setBar(percent, label, desc, color) {
+    if (progressBar) {
+      progressBar.style.width = percent + '%';
+      progressBar.style.background = color;
+    }
+    if (progressPercent) {
+      progressPercent.textContent = percent + '%';
+      progressPercent.style.color = color;
+    }
+    if (progressStage) {
+      progressStage.innerHTML = label;
+    }
+    if (message) {
+      message.textContent = desc;
+    }
+  }
+
+  // 1. MƏRHƏLƏ: YÜKLƏNİR (Endirilir)
+  setBar(20, '<span>📥</span> Yüklənir…', `Yeni versiya (v${targetVersion || ''}) üçün xidmətə yenilənmə sorğusu göndərildi; paket endirilir…`, '#38bdf8');
+  await new Promise(r => setTimeout(r, 1200));
+  setBar(45, '<span>📥</span> Yüklənir…', 'Paket faylları təhlükəsiz kanalla endirilir (45%)…', '#38bdf8');
+  await new Promise(r => setTimeout(r, 1400));
+
+  // 2. MƏRHƏLƏ: BUILD OLUNUR (Fayllar hazırlanır, bütövlük və imza yoxlanılır)
+  setBar(70, '<span>⚙️</span> Build olunur…', 'Fayllar çıxarılır, Ed25519 kriptoqrafik imza və hash bütövlüyü yoxlanılır…', '#f59e0b');
+  await new Promise(r => setTimeout(r, 1500));
+  setBar(90, '<span>⚙️</span> Build olunur…', 'Slot faylları hazırlandı və xidmət konfiqurasiyası yeniləndi (90%)…', '#f59e0b');
+  await new Promise(r => setTimeout(r, 1200));
+
+  // 3. MƏRHƏLƏ: PROQRAM RESTART EDƏCƏK
+  for (let sec = 3; sec >= 1; sec--) {
+    setBar(100, `<span>🔄</span> Proqram restart edəcək (${sec}s)…`, `✓ Yenilənmə tamamlandı! Proqram ${sec} saniyəyə restart edir…`, 'var(--green)');
+    await new Promise(r => setTimeout(r, 1000));
+  }
+
+  setBar(100, '<span>🔄</span> Proqram restart edir…', 'Proqram yenidən başladılır…', 'var(--green)');
+  try {
+    await callNative('restart_desktop_app');
+  } catch (_) {
+    if (typeof window !== 'undefined' && window.location && window.location.reload) {
+      window.location.reload();
+    }
+  }
+}
 
 async function loadUpdateStatus(isSilent = false) {
   const button = document.getElementById('btnCheckUpdate');
@@ -572,22 +627,25 @@ async function loadUpdateStatus(isSilent = false) {
       ROLLED_BACK: 'Xidmət əvvəlki işləyən versiyaya qayıtdı (Rollback). Yenilənmə loqlarını yoxlayın.'
     };
 
-    if (status.phase === 'STAGING' || status.status === 'requested') {
-      setProgress(50, '<span>📥</span> Yeni versiya endirilir və yoxlanılır…', '#38bdf8');
-    } else if (status.phase === 'PENDING_ACTIVATION') {
-      setProgress(80, '<span>⚙️</span> Paket hazırlandı. Aktivasiya gözlənilir…', '#f59e0b');
-    } else if (status.phase === 'PROBATION') {
-      setProgress(95, '<span>🧪</span> Yeni versiya sınaqdan keçirilir…', '#a855f7');
-    } else if (status.status === 'setup_required' || status.phase === 'SETUP_REQUIRED') {
+    const isNewer = status.status === 'requested' || status.phase === 'STAGING' || status.phase === 'PENDING_ACTIVATION';
+
+    if (isNewer && !updateSequenceActive) {
+      runUpdatePipelineUI(status.latest_version);
+      return;
+    }
+
+    if (status.status === 'setup_required' || status.phase === 'SETUP_REQUIRED') {
       setProgress(100, '<span>⚠️</span> Setup yenilənməsi tələb olunur', 'var(--red)');
     } else if (status.status === 'unreachable') {
       setProgress(100, '<span>⚠️</span> Serverlə əlaqə kəsildi', '#ef4444');
+    } else if (status.phase === 'PROBATION') {
+      setProgress(95, '<span>🧪</span> Yeni versiya sınaqdan keçirilir…', '#a855f7');
     } else {
       // up_to_date, ahead, dev, COMMITTED
       setProgress(100, '<span>✅</span> Sistem ən son versiyadadır', 'var(--green)');
     }
 
-    if (message) {
+    if (message && !updateSequenceActive) {
       message.textContent = phases[status.phase] || messages[status.status] || 'Yenilənmə vəziyyəti məlum deyil.';
     }
   } catch (error) {

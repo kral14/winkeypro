@@ -1245,6 +1245,20 @@ async fn get_update_status(check_server: bool) -> Result<serde_json::Value,Strin
     }).await.map_err(|_|"E_UPDATE_CHECK_TASK".to_string())?
 }
 
+#[tauri::command]
+fn restart_desktop_app() -> Result<(), String> {
+    if let Some(target) = slot_update::different_active_desktop() {
+        let cur_pid = std::process::id();
+        let fwd = vec!["--relaunch-handover".to_string(), cur_pid.to_string()];
+        std::process::Command::new(&target).args(&fwd).spawn().map_err(|e| e.to_string())?;
+        std::process::exit(0);
+    } else if let Ok(exe) = std::env::current_exe() {
+        let _ = std::process::Command::new(exe).spawn();
+        std::process::exit(0);
+    }
+    Ok(())
+}
+
 /// REM-014: Yerli PC-nin Ed25519 Kriptoqrafik İmzası ilə Təsdiq Funksiyası
 pub fn approve_device_on_server(origin: &str, device_id: &str) -> Result<serde_json::Value, String> {
     let (signing_key, _verifying_key) = get_or_create_device_keypair()?;
@@ -1689,6 +1703,7 @@ fn main() {
             toggle_remote_service_control,
             query_service_ipc_status,
             get_update_status,
+            restart_desktop_app,
         ])
         .setup(move |app| {
             std::thread::spawn(move || loop {
