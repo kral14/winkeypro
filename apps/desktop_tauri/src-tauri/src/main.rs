@@ -1199,7 +1199,13 @@ async fn get_update_status(check_server: bool) -> Result<serde_json::Value,Strin
     tauri::async_runtime::spawn_blocking(move || {
         let desktop=slot_update::current_version();
         let packaged=std::env::current_exe().ok().and_then(|p|p.parent().map(|p|p.join("manifest.json").is_file())).unwrap_or(false);
-        let mut result=serde_json::json!({"desktop_version":desktop,"channel":if packaged {"installed"} else {"dev"},"latest_version":null,"status":"not_checked"});
+        let mut result=serde_json::json!({
+            "desktop_version": desktop,
+            "channel": if packaged {"installed"} else {"dev"},
+            "latest_version": null,
+            "status": "not_checked",
+            "has_ready_target": slot_update::different_active_desktop().is_some()
+        });
         if let Ok(raw)=send_service_control_command("UPDATE_STATUS") {
             if let Ok(value)=serde_json::from_str::<serde_json::Value>(&raw) {
                 result["worker_version"]=value.get("worker_version").cloned().unwrap_or(serde_json::Value::Null);
@@ -1252,11 +1258,9 @@ fn restart_desktop_app() -> Result<(), String> {
         let fwd = vec!["--relaunch-handover".to_string(), cur_pid.to_string()];
         std::process::Command::new(&target).args(&fwd).spawn().map_err(|e| e.to_string())?;
         std::process::exit(0);
-    } else if let Ok(exe) = std::env::current_exe() {
-        let _ = std::process::Command::new(exe).spawn();
-        std::process::exit(0);
+    } else {
+        Err("E_NO_TARGET_READY: Yeni versiya hələ slota yazılmayıb və ya keçidə hazır deyil".to_string())
     }
-    Ok(())
 }
 
 /// REM-014: Yerli PC-nin Ed25519 Kriptoqrafik İmzası ilə Təsdiq Funksiyası

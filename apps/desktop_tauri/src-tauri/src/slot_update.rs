@@ -93,6 +93,10 @@ fn active_desktop_with_key(base: &Path, key_hex: &str) -> Option<PathBuf> {
                         }
                     }
                 }
+            } else {
+                // Yenilənmə hələ tamamlanmayıb (məs. STAGING, PENDING_ACTIVATION, PROBATION).
+                // Köhnə və ya yarımçıq slota erkən keçidin qarşısını almaq üçün None qaytarırıq.
+                return None;
             }
         }
     }
@@ -155,11 +159,26 @@ pub fn installed_base() -> PathBuf {
 }
 
 pub fn different_active_desktop() -> Option<PathBuf> {
-    let current=std::env::current_exe().ok()?.canonicalize().ok()?;
+    let current = std::env::current_exe().ok()?.canonicalize().ok()?;
     // Dev/test builds must never redirect into the installed production app.
     if !current.components().any(|c| c.as_os_str().eq_ignore_ascii_case("Program Files") || c.as_os_str().eq_ignore_ascii_case("ProgramData")) {
         return None;
     }
-    let target=active_desktop(&installed_base())?;
-    if current==target {None} else {Some(target)}
+    let target = active_desktop(&installed_base())?;
+    if current == target {
+        return None;
+    }
+
+    // Yalnız və yalnız hədəf versiya cari işləyən versiyadan BÖYÜK olduqda keçid edilməlidir!
+    let cur_ver = version_tuple(&current_version()).ok()?;
+    let target_manifest = target.parent()?.join("manifest.json");
+    let target_raw = fs::read(target_manifest).ok()?;
+    let target_json: serde_json::Value = serde_json::from_slice(&target_raw).ok()?;
+    let target_ver_str = target_json.get("version")?.as_str()?;
+    let target_ver = version_tuple(target_ver_str).ok()?;
+    if target_ver > cur_ver {
+        Some(target)
+    } else {
+        None
+    }
 }

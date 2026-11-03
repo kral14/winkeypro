@@ -507,12 +507,9 @@ function initButtons() {
 
 // Səhifə yüklənəndə hər şeyi işə sal və canlı avtomatik yenilənməni idarə et
 let isUpdatingCheck = false;
-let updateSequenceActive = false;
+let isSingleRestartScheduled = false;
 
-async function runUpdatePipelineUI(targetVersion) {
-  if (updateSequenceActive) return;
-  updateSequenceActive = true;
-
+function renderProgressBar(percent, label, desc, color) {
   const container = document.getElementById('updateProgressContainer');
   if (container) container.style.display = 'block';
 
@@ -521,60 +518,58 @@ async function runUpdatePipelineUI(targetVersion) {
   const progressStage = document.getElementById('lblProgressStage');
   const message = document.getElementById('lblUpdateMessage');
 
-  function setBar(percent, label, desc, color) {
-    if (progressBar) {
-      progressBar.style.width = percent + '%';
-      progressBar.style.background = color;
-    }
-    if (progressPercent) {
-      progressPercent.textContent = percent + '%';
-      progressPercent.style.color = color;
-    }
-    if (progressStage) {
-      progressStage.innerHTML = label;
-    }
-    if (message) {
-      message.textContent = desc;
-    }
+  if (progressBar) {
+    progressBar.style.width = percent + '%';
+    progressBar.style.background = color;
   }
+  if (progressPercent) {
+    progressPercent.textContent = percent + '%';
+    progressPercent.style.color = color;
+  }
+  if (progressStage) {
+    progressStage.innerHTML = label;
+  }
+  if (message) {
+    message.textContent = desc;
+  }
+}
 
-  // 1. MƏRHƏLƏ: YÜKLƏNİR
-  setBar(20, '<span>📥</span> Yüklənir…', `Yeni versiya (v${targetVersion || ''}) üçün xidmətə yenilənmə sorğusu göndərildi; paket endirilir…`, '#38bdf8');
-  await new Promise(r => setTimeout(r, 1200));
-  setBar(45, '<span>📥</span> Yüklənir…', 'Paket faylları təhlükəsiz kanalla endirilir (45%)…', '#38bdf8');
-  await new Promise(r => setTimeout(r, 1400));
+async function triggerSingleRestartCountdown() {
+  if (isSingleRestartScheduled) return;
+  isSingleRestartScheduled = true;
 
-  // 2. MƏRHƏLƏ: QURULUR (Build olunur)
-  setBar(70, '<span>⚙️</span> Qurulur…', 'Fayllar çıxarılır, Ed25519 kriptoqrafik imza və hash bütövlüyü yoxlanılır…', '#f59e0b');
-  await new Promise(r => setTimeout(r, 1500));
-  setBar(90, '<span>⚙️</span> Qurulur…', 'Slot faylları hazırlandı və xidmət konfiqurasiyası yeniləndi (90%)…', '#f59e0b');
-  await new Promise(r => setTimeout(r, 1200));
-
-  // 3. MƏRHƏLƏ: PROQRAM RESTART EDƏCƏK
   for (let sec = 3; sec >= 1; sec--) {
-    setBar(100, `<span>🔄</span> Proqram restart edəcək (${sec}s)…`, `✓ Yenilənmə tamamlandı! Proqram ${sec} saniyəyə restart edir…`, 'var(--green)');
+    renderProgressBar(
+      100,
+      `<span>🔄</span> Proqram restart edəcək (${sec}s)…`,
+      `✓ Yeni versiya slota uğurla quruldu! Proqram ${sec} saniyəyə yeni binarla restart edir…`,
+      'var(--green)'
+    );
     await new Promise(r => setTimeout(r, 1000));
   }
 
-  setBar(100, '<span>🔄</span> Proqram restart edir…', 'Proqram yenidən başladılır…', 'var(--green)');
+  renderProgressBar(
+    100,
+    '<span>🔄</span> Proqram restart edir…',
+    'Yalnız bir dəfə təmiz keçid: yeni versiya başladılır…',
+    'var(--green)'
+  );
+
   try {
     await callNative('restart_desktop_app');
-  } catch (_) {
+  } catch (e) {
+    console.error('restart_desktop_app xətası:', e);
+    isSingleRestartScheduled = false;
     if (typeof window !== 'undefined' && window.location && window.location.reload) {
       window.location.reload();
     }
-  } finally {
-    if (container) container.style.display = 'none';
-    updateSequenceActive = false;
   }
 }
 
 async function loadUpdateStatus(isSilent = false) {
   const button = document.getElementById('btnCheckUpdate');
   const message = document.getElementById('lblUpdateMessage');
-  const progressBar = document.getElementById('barUpdateProgress');
-  const progressPercent = document.getElementById('lblProgressPercent');
-  const progressStage = document.getElementById('lblProgressStage');
+  const container = document.getElementById('updateProgressContainer');
 
   if (isUpdatingCheck) return;
   if (!isTauri) {
@@ -583,25 +578,6 @@ async function loadUpdateStatus(isSilent = false) {
   }
   isUpdatingCheck = true;
   if (!isSilent && button) button.disabled = true;
-
-  function setProgress(percent, label, color = 'var(--green)') {
-    if (progressBar) {
-      progressBar.style.width = percent + '%';
-      progressBar.style.background = color;
-    }
-    if (progressPercent) {
-      progressPercent.textContent = percent + '%';
-      progressPercent.style.color = color;
-    }
-    if (progressStage) {
-      progressStage.innerHTML = label;
-    }
-  }
-
-  if (!isSilent && message) {
-    message.textContent = 'Serverdəki imzalı buraxılış yoxlanır…';
-    setProgress(30, '<span>🔄</span> Server yoxlanılır…', '#38bdf8');
-  }
 
   try {
     const status = await callNative('get_update_status', { checkServer: true });
@@ -612,71 +588,82 @@ async function loadUpdateStatus(isSilent = false) {
     if (document.getElementById('lblLatestVersion'))
       document.getElementById('lblLatestVersion').textContent = status.latest_version ? 'v' + status.latest_version : 'Məlum deyil';
 
-    const messages = {
-      up_to_date: '✓ Ən son versiya quraşdırılıb və təsdiqlənib.',
-      ahead: 'Yerli versiya serverdəki buraxılışdan yenidir; downgrade edilmir.',
-      dev: 'Dev build işləyir. Quraşdırılmış versiya kimi müqayisə edilmir və xidmət yenilənməsi başladılmır.',
-      service_unknown: 'Proqram versiyası yoxlandı, amma xidmət versiyası təsdiqlənmədi.',
-      requested: 'Yeni versiya aşkarlandı! Avtomatik yenilənmə sorğusu göndərildi, endirilmə başlayır…',
-      service_unavailable: 'Yeni versiya var, amma xidmət sorğunu qəbul etmədi. Xidmətin vəziyyətini yoxlayın.',
-      setup_required: 'Yeni versiya üçün proqram quraşdırıcısının (Setup.exe) yenilənməsi tələb olunur.',
-      no_release: 'Serverdə yenilənmə paketi yayımlanmayıb.',
-      unreachable: 'Serverə qoşulmaq alınmadı. Son versiya təsdiqlənmədi.'
-    };
-
-    const phases = {
-      STAGING: 'Yeni paket yüklənir və kriptoqrafik Ed25519 bütövlüyü yoxlanılır…',
-      PENDING_ACTIVATION: 'Yeni versiya paketi uğurla endirildi və hazırlandı; xidmət təhlükəsiz keçidi gözləyir.',
-      PROBATION: 'Yeni versiya aktivləşdirilib sağlamlıq sınağındadır (təsdiq gözlənilir).',
-      COMMITTED: '✓ Yenilənmə tam təsdiqləndi. Ən son versiya işləyir.',
-      SETUP_REQUIRED: 'Yeni versiya üçün proqram quraşdırıcısının (Setup.exe) yenilənməsi tələb olunur.',
-      ROLLED_BACK: 'Xidmət əvvəlki işləyən versiyaya qayıtdı (Rollback). Yenilənmə loqlarını yoxlayın.'
-    };
-
     const dVer = status.desktop_version;
     const wVer = status.worker_version;
     const lVer = status.latest_version;
     const isDev = status.channel === 'dev';
 
-    const isNewer = status.status === 'requested' || status.phase === 'STAGING' || status.phase === 'PENDING_ACTIVATION';
-    const isDesktopOutdated = Boolean(lVer && dVer && dVer !== lVer && !isDev);
-
-    const container = document.getElementById('updateProgressContainer');
-
-    if (isNewer && !updateSequenceActive) {
-      runUpdatePipelineUI(status.latest_version);
+    // 1. Setup tələb olunursa
+    if (status.status === 'setup_required' || status.phase === 'SETUP_REQUIRED') {
+      renderProgressBar(100, '<span>⚠️</span> Setup yenilənməsi tələb olunur', 'Yeni versiya üçün Setup.exe quraşdırıcısının yenilənməsi tələb olunur.', 'var(--red)');
       return;
     }
 
-    // Normal vəziyyətdə bar tamamilə gizlənir
-    if (container && !updateSequenceActive) {
-      container.style.display = 'none';
+    // 2. Dev build işləyirsə
+    if (isDev) {
+      if (container) container.style.display = 'none';
+      if (message) message.textContent = 'Dev build işləyir. Quraşdırılmış versiya kimi müqayisə edilmir və xidmət yenilənməsi başladılmır.';
+      return;
     }
 
-    if (status.status === 'setup_required' || status.phase === 'SETUP_REQUIRED') {
-      if (container) container.style.display = 'block';
-      setProgress(100, '<span>⚠️</span> Setup yenilənməsi tələb olunur', 'var(--red)');
-      if (message) message.textContent = 'Yeni versiya üçün Setup.exe quraşdırıcısının yenilənməsi tələb olunur.';
-    } else if (isDesktopOutdated) {
-      // Desktop proqramı ən son versiyaya keçməyibsə, yalançı "Ən son versiya işləyir" yazılmır!
-      if (wVer === lVer) {
-        if (message) message.textContent = `⚠️ Xidmət v${wVer} yeniləndi, lakin Desktop proqramı (v${dVer}) hələ köhnə binarla işləyir. Proqramı bağlayıb yenidən açın və ya avto-keçidi gözləyin.`;
-      } else {
-        if (message) message.textContent = `⚠️ Proqram hələ yenilənməyib (Desktop: v${dVer}, Xidmət: v${wVer || '?'}). Serverdə son versiya: v${lVer}.`;
-      }
-    } else if (status.status === 'unreachable') {
+    // 3. Əgər yeni hədəf slota yazılıb və tam hazırdırsa (yalnız İNDİ tək 1 dəfə restart):
+    if (status.has_ready_target && lVer && dVer !== lVer) {
+      await triggerSingleRestartCountdown();
+      return;
+    }
+
+    // 4. MƏRHƏLƏ 2: Qurulur / Doğrulanır (Xidmət paketi hazırlayır və yoxlayır, RESTART EDİLMİR)
+    if (status.phase === 'PENDING_ACTIVATION' || status.phase === 'PROBATION') {
+      renderProgressBar(
+        80,
+        '<span>⚙️</span> Qurulur…',
+        `Yeni versiya (v${lVer || ''}) faylları çıxarılır, Ed25519 kriptoqrafik imza və bütövlük yoxlanılır…`,
+        '#f59e0b'
+      );
+      // Canlı sürətli sorğu (2 saniyədən bir)
+      setTimeout(() => loadUpdateStatus(true), 2000);
+      return;
+    }
+
+    // 5. MƏRHƏLƏ 1: Yüklənir (Paket serverdən endirilir, RESTART EDİLMİR)
+    if (status.status === 'requested' || status.phase === 'STAGING') {
+      renderProgressBar(
+        45,
+        '<span>📥</span> Yüklənir…',
+        `Yeni versiya (v${lVer || ''}) üçün xidmətə yenilənmə sorğusu göndərildi; paket endirilir (45%)…`,
+        '#38bdf8'
+      );
+      // Canlı sürətli sorğu (2 saniyədən bir)
+      setTimeout(() => loadUpdateStatus(true), 2000);
+      return;
+    }
+
+    // 6. Əgər hər şey son versiyadadırsa
+    if (status.status === 'up_to_date' || (lVer && dVer === lVer)) {
+      if (container && !isSingleRestartScheduled) container.style.display = 'none';
+      if (message) message.textContent = '✓ Ən son versiya quraşdırılıb və təsdiqlənib.';
+      return;
+    }
+
+    // 7. Qalan digər statuslar
+    if (container && !isSingleRestartScheduled) container.style.display = 'none';
+    if (status.status === 'unreachable') {
       if (message) message.textContent = 'Serverə qoşulmaq alınmadı. Son versiya təsdiqlənmədi.';
-    } else {
-      if (message && !updateSequenceActive) {
-        message.textContent = phases[status.phase] || messages[status.status] || 'Yenilənmə vəziyyəti məlum deyil.';
-      }
+    } else if (status.status === 'ahead') {
+      if (message) message.textContent = 'Yerli versiya serverdəki buraxılışdan yenidir; downgrade edilmir.';
+    } else if (status.status === 'service_unavailable') {
+      if (message) message.textContent = 'Yeni versiya var, amma xidmət sorğunu qəbul etmədi. Xidmətin vəziyyətini yoxlayın.';
+    } else if (lVer && dVer !== lVer) {
+      if (message) message.textContent = `⚠️ Proqram hələ yenilənməyib (Desktop: v${dVer}, Xidmət: v${wVer || '?'}). Serverdə son versiya: v${lVer}.`;
+    } else if (message) {
+      message.textContent = '✓ Yenilənmə vəziyyəti normaldır.';
     }
   } catch (error) {
     if (document.getElementById('lblLatestVersion'))
       document.getElementById('lblLatestVersion').textContent = 'Yoxlama alınmadı';
     if (message)
       message.textContent = 'Yenilənmə yoxlanmadı: ' + String(error);
-    setProgress(100, '<span>⚠️</span> Yoxlama xətası', '#ef4444');
+    renderProgressBar(100, '<span>⚠️</span> Yoxlama xətası', 'Yenilənmə yoxlanmadı: ' + String(error), '#ef4444');
   } finally {
     isUpdatingCheck = false;
     if (button) button.disabled = false;
