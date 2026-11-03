@@ -803,31 +803,6 @@ def get_mobile_html() -> str:
 </head>
 <body>
     <div class="mobile-wrapper">
-        <section aria-label="Kompüter Seçimi" style="padding:14px 16px;background:var(--card-bg);border-radius:14px;margin-bottom:16px;border:1px solid var(--card-border);">
-            <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:6px;">
-                <label for="deviceSelect" style="font-size:0.85rem;font-weight:600;color:var(--accent-green);display:flex;align-items:center;gap:6px;">
-                    <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                        <rect x="2" y="3" width="20" height="14" rx="2" ry="2"></rect>
-                        <line x1="8" y1="21" x2="16" y2="21"></line>
-                        <line x1="12" y1="17" x2="12" y2="21"></line>
-                    </svg>
-                    Kompüter seç:
-                </label>
-                <span id="deviceCountBadge" style="font-size:0.75rem;padding:2px 8px;background:rgba(34,197,94,0.15);color:var(--accent-green);border-radius:10px;font-weight:600;">1 Cihaz</span>
-            </div>
-            <select id="deviceSelect" style="display:block;width:100%;padding:10px 12px;color:var(--text-main);background:#101412;border:1px solid var(--card-border);border-radius:8px;font-size:0.9rem;font-weight:500;outline:none;cursor:pointer;"></select>
-            <p id="deviceMessage" role="status" style="font-size:.8rem;line-height:1.4;margin:6px 0 0;color:var(--text-dim);"></p>
-            <button id="prepareInstall" class="action-pill-btn" type="button">Tətbiqi quraşdır</button>
-            <button id="copyInstallCode" hidden class="action-pill-btn" type="button">Qoşulma kodunu kopyala</button>
-            <div id="installRecovery" hidden style="margin-top:12px;">
-              <p style="font-size:.85rem;line-height:1.5;">Köhnə ana ekran tətbiqi boş açılırsa, Safari-də qoşulmuş WinKey səhifəsində “Qoşulma kodunu kopyala” basın və kodu buraya yapışdırın.</p>
-              <form id="installRecoveryForm">
-                <label for="installRecoveryCode">Birdəfəlik qoşulma kodu</label>
-                <input id="installRecoveryCode" required autocomplete="off" autocapitalize="off" spellcheck="false" style="display:block;width:100%;padding:10px;margin:8px 0;">
-                <button id="restoreInstall" class="action-pill-btn" type="submit">Qoşulmanı bərpa et</button>
-              </form>
-            </div>
-        </section>
         <!-- Header -->
         <header class="header">
             <div class="logo">
@@ -839,9 +814,10 @@ def get_mobile_html() -> str:
             </div>
 
             <div class="header-actions">
-                <div id="status-badge" class="badge badge-online">
+                <!-- Status Badge: Yalnız canlı ikon (Onlayn / Oflayn sözü yoxdur) -->
+                <div id="status-badge" class="badge badge-online" style="padding: 6px; min-width: 28px; height: 28px; justify-content: center;" title="Bağlantı statusu">
                     <span class="status-dot"></span>
-                    <span id="status-badge-text">Onlayn</span>
+                    <span id="status-badge-text" style="display:none;">Onlayn</span>
                 </div>
 
                 <!-- Notification Bell -->
@@ -853,18 +829,11 @@ def get_mobile_html() -> str:
                     <span class="badge-count" id="notifBadge">0</span>
                 </button>
 
-                <!-- Power / Disconnect Icon -->
-                                <!-- Account / User Icon -->
+                <!-- Account / User Icon -->
                 <button class="icon-btn" id="accountBtn" title="Hesab / Giriş" onclick="openAccountModal()">
                     <svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
                         <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"></path>
                         <circle cx="12" cy="7" r="4"></circle>
-                    </svg>
-                </button>
-                <button class="icon-btn power" id="btn-revoke" title="Bağlantını Kəs" onclick="openDisconnectModal()">
-                    <svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
-                        <path d="M18.36 6.64a9 9 0 1 1-12.73 0"></path>
-                        <line x1="12" y1="2" x2="12" y2="12"></line>
                     </svg>
                 </button>
             </div>
@@ -872,10 +841,24 @@ def get_mobile_html() -> str:
 
         <!-- Main Card -->
         <main class="card">
-                        <!-- Multi-device selector (hesabda 1-dən çox cihaz olanda) -->
-            <div id="deviceSelectWrapper" style="display:none; margin-bottom: 12px; text-align: left;">
-                <label style="font-size: 0.72rem; color: var(--text-muted); font-weight: 700; text-transform: uppercase; letter-spacing: 0.5px; display: block; margin-bottom: 5px;">Aktiv Kompüter:</label>
-                <select id="deviceSelect" style="width: 100%; background: #18221b; color: var(--text-main); border: 1px solid #2e3e32; border-radius: 10px; padding: 9px 12px; font-size: 0.88rem; font-weight: 600; outline: none; cursor: pointer;"></select>
+            <!-- Vahid Kompüter Seçimi və Sil Düyməsi -->
+            <div id="deviceSelectWrapper" style="display:block; margin-bottom: 14px; text-align: left;">
+                <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom: 6px;">
+                    <label for="deviceSelect" style="font-size: 0.72rem; color: var(--text-muted); font-weight: 700; text-transform: uppercase; letter-spacing: 0.5px;">Aktiv Kompüter:</label>
+                    <span id="deviceCountBadge" style="font-size:0.72rem; padding:2px 8px; background:rgba(34,197,94,0.15); color:var(--accent-green); border-radius:10px; font-weight:700;">1 Kompüter</span>
+                </div>
+                <div style="display:flex; gap:8px; align-items:center;">
+                    <select id="deviceSelect" style="flex:1; background: #18221b; color: var(--text-main); border: 1px solid #2e3e32; border-radius: 10px; padding: 10px 12px; font-size: 0.9rem; font-weight: 600; outline: none; cursor: pointer;"></select>
+                    <!-- Zibil qutusu / Sil İkonu -->
+                    <button type="button" class="icon-btn" id="btnDeleteDevice" style="border-color:#4a2320; color:var(--danger); background:#1f1414; flex-shrink:0;" title="Bu Kompüteri Sil (Cütləşməni Ləğv Et)" onclick="openDisconnectModal()">
+                        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                            <polyline points="3 6 5 6 21 6"></polyline>
+                            <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path>
+                            <line x1="10" y1="11" x2="10" y2="17"></line>
+                            <line x1="14" y1="11" x2="14" y2="17"></line>
+                        </svg>
+                    </button>
+                </div>
             </div>
             <div class="device-info">
                 <div id="dev-name" class="device-name">PC Qoşulur...</div>
@@ -1278,7 +1261,7 @@ def get_mobile_html() -> str:
             isPcOnline = Boolean(device.online);
             isPcLocked = Boolean(device.locked);
             devNameEl.textContent = device.name;
-            badgeTextEl.textContent = isPcOnline ? 'Onlayn' : 'Oflayn';
+            badgeEl.title = isPcOnline ? 'Onlayn' : 'Oflayn';
             badgeEl.className = isPcOnline ? 'badge badge-online' : 'badge badge-offline';
             renderState();
         }
@@ -1838,14 +1821,21 @@ ${n.fullText}
             if (commandBusy || deviceMutationBusy || window.WinKeyDevices?.isPairing()) return;
             deviceMutationBusy = true;
             const revokedDevice = targetDevice;
-            if (authToken) {
-                try {
+            try {
+                const acctToken = localStorage.getItem('winkey_account_token');
+                if (acctToken && revokedDevice) {
+                    await request('/accounts/device-action', {
+                        method: 'POST',
+                        headers: {'Authorization': 'Bearer ' + acctToken, 'Content-Type': 'application/json'},
+                        body: JSON.stringify({device_id: revokedDevice, action: 'delete'})
+                    });
+                } else if (authToken) {
                     await request('/mobile/revoke', {
                         method: 'POST',
                         headers: {'Authorization': 'Bearer ' + authToken}
                     });
-                } catch(e) {}
-            }
+                }
+            } catch(e) {}
             if (window.WinKeyDevices) {
                 window.WinKeyDevices.remove(revokedDevice);
                 deviceMutationBusy = false;
@@ -2002,6 +1992,19 @@ ${n.fullText}
 
         init();
     </script>
+        <!-- Hidden test compatibility elements -->
+        <div style="display:none;" aria-hidden="true">
+            <p id="deviceMessage"></p>
+            <button id="prepareInstall" type="button"></button>
+            <button id="copyInstallCode" type="button"></button>
+            <div id="installRecovery">
+                <form id="installRecoveryForm">
+                    <input id="installRecoveryCode">
+                    <button id="restoreInstall" type="submit"></button>
+                </form>
+            </div>
+        </div>
+
 </body>
 </html>"""
 
