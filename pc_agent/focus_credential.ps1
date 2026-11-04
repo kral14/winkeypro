@@ -33,6 +33,7 @@ public static class LockScreenInput {
 "@
 Write-Stage 'UIA_READY'
 $dismissCount = 0
+$errorDismissed = $false
 $editCondition = New-Object System.Windows.Automation.PropertyCondition([System.Windows.Automation.AutomationElement]::ControlTypeProperty, [System.Windows.Automation.ControlType]::Edit)
 for ($attempt = 0; $attempt -lt 12; $attempt++) {
     $root = [System.Windows.Automation.AutomationElement]::RootElement
@@ -73,6 +74,26 @@ for ($attempt = 0; $attempt -lt 12; $attempt++) {
         Write-Stage 'CURTAIN_STILL_VISIBLE waiting; credential input blocked'
         Start-Sleep -Milliseconds 150
         continue
+    }
+    # A rejected password leaves a modal acknowledgement above the password edit.
+    # Invoke only the visible, enabled acknowledgement owned by this session's LogonUI.
+    if (-not $errorDismissed -and $foregroundName -eq 'LogonUI') {
+        $buttonCondition = New-Object System.Windows.Automation.PropertyCondition([System.Windows.Automation.AutomationElement]::ControlTypeProperty, [System.Windows.Automation.ControlType]::Button)
+        foreach ($button in $root.FindAll([System.Windows.Automation.TreeScope]::Descendants, $buttonCondition)) {
+            try {
+                $buttonProps = $button.Current
+                if ($buttonProps.IsOffscreen -or -not $buttonProps.IsEnabled -or $buttonProps.Name.Trim() -notin @('Tamam', 'OK', 'Ok')) { continue }
+                $buttonOwner = Get-Process -Id $buttonProps.ProcessId -ErrorAction Stop
+                if ($buttonOwner.ProcessName -ne 'LogonUI' -or $buttonOwner.SessionId -ne (Get-Process -Id $PID).SessionId) { continue }
+                $invoke = $button.GetCurrentPattern([System.Windows.Automation.InvokePattern]::Pattern)
+                $invoke.Invoke()
+                $errorDismissed = $true
+                Write-Stage 'LOGIN_ERROR_DISMISSED'
+                Start-Sleep -Milliseconds 180
+                break
+            } catch { Write-Stage 'LOGIN_ERROR_DISMISS_FAILED' }
+        }
+        if ($errorDismissed) { continue }
     }
     foreach ($edit in $edits) {
         try {

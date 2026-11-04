@@ -35,7 +35,8 @@ async function browserFlow() {
   const element=id=>{if(!elements.has(id))elements.set(id,{value:'',hidden:true,children:[],replaceChildren(){this.children=[]},appendChild(c){this.children.push(c)}});return elements.get(id);};
   const document={hidden:false,getElementById:element,createElement:()=>({}),addEventListener(){}};
   const location={origin:'https://winkey.test',pathname:'/mobile',search,hash};
-  const root={document,location,isSecureContext:true,addEventListener(){},setInterval(fn){root.refresh=fn}};
+  const root={document,location,isSecureContext:true,addEventListener(name,fn){if(name==='pageshow')root.refresh=fn},setInterval(){throw Error('Periodic polling is disabled')}};
+  root.sockets=[];root.WebSocket=class {constructor(){root.sockets.push(this)} send(text){this.auth=JSON.parse(text)} close(){} };
   const storage={getItem:k=>values.get(k)||null,setItem:(k,v)=>values.set(k,v),removeItem:k=>values.delete(k)};
   const context=vm.createContext({window:root,document,location,localStorage:storage,URL,URLSearchParams,AbortSignal,history:{replaceState(){}},fetch:async(url,options)=>{
    calls.push({url,body:JSON.parse(options.body),headers:options.headers});
@@ -62,11 +63,14 @@ async function browserFlow() {
  busy=false;select.value='pc1';select.onchange({target:select});assert.equal(selected.id,'pc1');assert.equal(selected.token,'t1');
  b.states[0].online=false;await b.root.refresh();assert.equal(presence.online,false);
  assert.match(b.element('deviceSelect').children[0].textContent,/Oflayn/);
- await b.element('prepareInstall').onclick();assert.match(b.element('appManifest').href,/install=a{64}$/);
+ const socket=b.root.sockets[0];socket.onopen();assert.equal(socket.auth.device_id,'pc1');
+ const count=b.calls.length;socket.onmessage({data:JSON.stringify({type:'device_state',device_id:'pc1',online:true,locked:true})});
+ assert.equal(presence.online,true);assert.equal(presence.locked,true);assert.equal(b.calls.length,count,'Push state must not fetch status');
  const installed=browser({},'','#install='+'a'.repeat(64));
  const restored=await installed.root.WinKeyDevices.start(choose);
- assert.equal(restored.id,'pc1');assert.equal(JSON.parse(installed.values.get('winkey_devices_v1')).devices.length,2,'Existing phone group receives second PC without a mobile Add flow');
+ assert.equal(restored,null,'Old install tickets must not restore device credentials');
+ assert.equal(installed.calls.length,0);
  assert(!fs.readFileSync('deploy/gateway_production_server.py','utf8').includes('id="deviceAddForm"'));
- console.log('PASS PC-named QR, phone-group synchronization, remembered selection, presence and iOS restore; no mobile Add device');
+ console.log('PASS PC-named QR, phone-group synchronization, remembered selection, presence and retired install tickets; no mobile Add device');
 }
 browserFlow().catch(error=>{console.error(error);process.exitCode=1;});

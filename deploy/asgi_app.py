@@ -738,6 +738,11 @@ def build_asgi_app(service: GatewayService, dashboard_html_path: Optional[str] =
 
                 def _verify_sess():
                     with service.db.get_conn() as conn:
+                        requested_device = str(auth_data.get("device_id", "")).strip()
+                        if requested_device:
+                            if service.verify_device_access(conn, requested_device, session_token):
+                                return {"device_id": requested_device}
+                            return None
                         return service.authenticate_mobile_session(conn, session_token)
 
                 sess = await asyncio.to_thread(_verify_sess)

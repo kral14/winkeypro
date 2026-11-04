@@ -86,15 +86,48 @@
       const previous=portfolio.selected;
       portfolio.devices=data.devices.map(d=>({id:d.device_id,token:d.token,name:d.computer_name,online:Boolean(d.online),locked:Boolean(d.locked)}));
       if(!portfolio.devices.some(d=>d.id===previous))portfolio.selected=portfolio.devices[0]?.id || '';
-      portfolio.save();render();
+      portfolio.save();render();watchDevices();
       if(previous!==portfolio.selected)onSelect(portfolio.current());
       onPresence?.(portfolio.current());
-      root.WinKeyInstall?.refresh();
+
     }catch(error){
       for(const device of portfolio.devices)device.online=false;
       render();onPresence?.(portfolio.current());
       message('Serverə əlaqə yoxdur. Cihaz seçimləri yadda saxlanılıb.');
     }finally{syncing=false;}
+  }
+  const stateSockets=new Map();
+  function watchDevices() {
+    if(!root.WebSocket)return;
+    for(const [id,entry] of stateSockets) {
+      if(!portfolio.devices.some(d=>d.id===id && d.token===entry.token)) {
+        stateSockets.delete(id);clearTimeout(entry.retry);entry.socket?.close();
+      }
+    }
+    for(const device of portfolio.devices) {
+      if(stateSockets.has(device.id))continue;
+      const entry={token:device.token,socket:null,retry:null};stateSockets.set(device.id,entry);
+      const connect=()=>{
+        if(stateSockets.get(device.id)!==entry)return;
+        const socket=new root.WebSocket((location.protocol==='https:'?'wss://':'ws://')+location.host+'/ws');entry.socket=socket;
+        socket.onopen=()=>socket.send(JSON.stringify({type:'auth',role:'mobile',device_id:device.id,session_token:entry.token}));
+        socket.onmessage=event=>{
+          if(stateSockets.get(device.id)!==entry)return;
+          const data=JSON.parse(event.data);
+          if(data.type!=='device_state' || data.device_id!==device.id)return;
+          const current=portfolio.devices.find(d=>d.id===device.id);if(!current)return;
+          current.online=Boolean(data.online);current.locked=Boolean(data.locked);
+          render();if(portfolio.selected===device.id)onPresence?.(current);
+        };
+        socket.onclose=event=>{
+          if(stateSockets.get(device.id)!==entry)return;
+          if(event.code===4401 || event.code===4403){stateSockets.delete(device.id);return;}
+          entry.retry=setTimeout(connect,2000);
+        };
+        socket.onerror=()=>socket.close();
+      };
+      connect();
+    }
   }
   function getSafeStorage() {
     return root?.localStorage || (typeof localStorage !== 'undefined' ? localStorage : null);
@@ -119,7 +152,7 @@
         if (!portfolio.selected && portfolio.devices.length) {
           portfolio.select(portfolio.devices[0].id);
         }
-        render();
+        render();watchDevices();
         if (portfolio.current()) onSelect(portfolio.current());
       }
       return data;
@@ -171,6 +204,7 @@
     portfolio.selected = '';
     portfolio.save();
     render();
+    watchDevices();
     onSelect(null);
   }
 
@@ -185,15 +219,8 @@
   async function start(selectCallback,presenceCallback) {
     portfolio=new DevicePortfolio(localStorage);onSelect=selectCallback;onPresence=presenceCallback;
     await syncAccount();
-    const ticket=new URLSearchParams(location.hash.slice(1)).get('install');
-    if(ticket && !portfolio.devices.length) {
-      try {
-        const restored=root.WinKeyInstall ? await root.WinKeyInstall.restore(ticket) : await post('/mobile/restore',{ticket});
-        for(const device of restored.devices)portfolio.add(device);
-        portfolio.select(restored.selected);history.replaceState({},'',location.pathname);
-      }catch(error){message('Tətbiq qoşulması bərpa edilmədi. PC-də yeni QR yaradıb oxudun.');}
-    }
-    if(ticket && portfolio.devices.length)history.replaceState({},'',location.pathname);
+    // Old installed shortcuts may still contain a retired handoff ticket.
+    if(new URLSearchParams(location.hash.slice(1)).has('install'))history.replaceState({},'',location.pathname+location.search);
     const query=new URLSearchParams(location.search);
     const code=query.get('code') || query.get('pair_code');
     if(code) {
@@ -211,28 +238,12 @@
     if(select)select.onchange=event=>{
       const previous=portfolio.selected,next=portfolio.devices.find(d=>d.id===event.target.value);
       if(!next || !onSelect(next,true)){event.target.value=previous;message('Cari əmrin bitməsini gözləyin.');return;}
-      portfolio.select(next.id);onSelect(next);onPresence?.(next);message('Seçim yadda saxlanıldı.');root.WinKeyInstall?.refresh();
-    };
-    const prepare=byId('prepareInstall');
-    if(prepare && !root.WinKeyInstall)prepare.onclick=async()=>{
-      try {
-        if(!root.isSecureContext)throw Error('iPhone tətbiqi üçün serverdə HTTPS qurulmalıdır.');
-        const result=await post('/mobile/install',{devices:portfolio.devices,selected:portfolio.selected});
-        byId('appManifest').href='/mobile-assets/manifest.webmanifest?install='+encodeURIComponent(result.ticket);
-        message('Hazırdır. Safari → Paylaş → Ana ekrana əlavə et. İlk açılışı 24 saat içində edin.');
-      }catch(error){message(error.message);}
+      portfolio.select(next.id);onSelect(next);onPresence?.(next);message('Seçim yadda saxlanıldı.');
     };
     await sync();
-    if(!portfolio.devices.length)message('Cihaz əlavə etmək üçün PC-də hesabınıza daxil olub ad verin və QR-ni oxudun.');
-    if(root.WinKeyInstall)root.WinKeyInstall.init(()=>({
-      devices:portfolio.devices,selected:portfolio.selected,
-      restore:async payload=>{
-        if(!onSelect(null,true))throw Error('Cari əmrin bitməsini gözləyin.');
-        for(const device of payload.devices)portfolio.add(device);
-        portfolio.select(payload.selected);render();onSelect(portfolio.current());await sync();
-      }
-    }),message).catch(error=>message(error.message));
-    root.setInterval(sync,5000);
+    if(!portfolio.devices.length)message('Kompüterlərinizi görmək üçün hesabınıza daxil olun.');
+    root.WinKeyInstall?.init();
+    watchDevices();
     root.addEventListener('pageshow',sync);
     document.addEventListener('visibilitychange',()=>{if(!document.hidden)sync();});
     return portfolio.current();

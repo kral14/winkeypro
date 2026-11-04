@@ -133,6 +133,28 @@ class AccountTests(unittest.TestCase):
                     phone.send_json({'type':'ping'})
                     self.assertEqual(phone.receive_json()['type'],'pong')
 
+    def test_account_websocket_state_and_cross_account_rejection(self):
+        from starlette.testclient import TestClient
+        from starlette.websockets import WebSocketDisconnect
+        from deploy.asgi_app import build_asgi_app
+        _, account=self.accounts.authenticate('register',{'email':'live@example.com','password':'long valid password'})
+        self.seed_device('pc1','phone1',account['account_id'])
+        self.seed_device('other','phone2','another-account')
+        with TestClient(build_asgi_app(GatewayService(self.db,''))) as client:
+            with client.websocket_connect('/ws') as agent:
+                agent.send_json({'type':'auth','role':'agent','device_id':'pc1','token':'agent'})
+                self.assertEqual(agent.receive_json()['type'],'auth_ok')
+                with client.websocket_connect('/ws') as phone:
+                    phone.send_json({'type':'auth','role':'mobile','device_id':'pc1','session_token':account['account_token']})
+                    self.assertEqual(phone.receive_json()['type'],'auth_ok')
+                    self.assertTrue(phone.receive_json()['online'])
+                    agent.send_json({'type':'state','locked':True,'pin_ready':True})
+                    self.assertTrue(phone.receive_json()['locked'])
+            with self.assertRaises(WebSocketDisconnect):
+                with client.websocket_connect('/ws') as phone:
+                    phone.send_json({'type':'auth','role':'mobile','device_id':'other','session_token':account['account_token']})
+                    phone.receive_json()
+
     def seed_device(self, device_id, token, owner='account1'):
         import hashlib
         with self.db.get_conn() as conn:

@@ -1740,7 +1740,7 @@ ${n.fullText}
                 try {
                     const device = await window.WinKeyDevices.start(selectMobileDevice, updateMobilePresence);
                     selectMobileDevice(device);
-                    setInterval(pollStatus, 3000);
+
                     scheduleDiagnostics();
                 } catch (error) {
                     statusBox.textContent = 'Qoşulma alınmadı: ' + String(error) + '. Yeni cihaz əlavə et düyməsini istifadə edin.';
@@ -1777,7 +1777,7 @@ ${n.fullText}
                 devIdEl.textContent = 'Cihaz ID: ' + targetDevice;
                 connectWS();
                 pollStatus();
-                setInterval(pollStatus, 3000);
+
                 if (pendingCommand) sendCommand(pendingCommand.action, true);
                 scheduleDiagnostics();
             }
@@ -2017,7 +2017,8 @@ ${n.fullText}
                 ws.send(JSON.stringify({
                     type: 'auth',
                     role: 'mobile',
-                    session_token: authToken
+                    session_token: authToken,
+                    device_id: targetDevice
                 }));
             };
             ws.onmessage = (event) => {
@@ -2127,18 +2128,6 @@ ${n.fullText}
         checkInstallButtonVisibility();
         init();
     </script>
-        <!-- Hidden test compatibility elements -->
-        <div style="display:none;" aria-hidden="true">
-            <p id="deviceMessage"></p>
-            <button id="prepareInstall" type="button"></button>
-            <button id="copyInstallCode" type="button"></button>
-            <div id="installRecovery">
-                <form id="installRecoveryForm">
-                    <input id="installRecoveryCode">
-                    <button id="restoreInstall" type="submit"></button>
-                </form>
-            </div>
-        </div>
 
 </body>
 </html>"""
