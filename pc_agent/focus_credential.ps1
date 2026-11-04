@@ -82,16 +82,39 @@ for ($attempt = 0; $attempt -lt 12; $attempt++) {
         foreach ($button in $root.FindAll([System.Windows.Automation.TreeScope]::Descendants, $buttonCondition)) {
             try {
                 $buttonProps = $button.Current
-                if ($buttonProps.IsOffscreen -or -not $buttonProps.IsEnabled -or $buttonProps.Name.Trim() -notin @('Tamam', 'OK', 'Ok')) { continue }
+                if ($buttonProps.IsOffscreen -or -not $buttonProps.IsEnabled -or ($buttonProps.Name -replace '&', '').Trim() -notin @('Tamam', 'OK', 'Ok')) { continue }
                 $buttonOwner = Get-Process -Id $buttonProps.ProcessId -ErrorAction Stop
                 if ($buttonOwner.ProcessName -ne 'LogonUI' -or $buttonOwner.SessionId -ne (Get-Process -Id $PID).SessionId) { continue }
-                $invoke = $button.GetCurrentPattern([System.Windows.Automation.InvokePattern]::Pattern)
-                $invoke.Invoke()
+                Write-Stage 'LOGIN_ERROR_BUTTON_FOUND'
+                $invoked = $false
+                try {
+                    $invoke = $button.GetCurrentPattern([System.Windows.Automation.InvokePattern]::Pattern)
+                    $invoke.Invoke()
+                    $invoked = $true
+                    Start-Sleep -Milliseconds 180
+                } catch { Write-Stage 'LOGIN_ERROR_INVOKE_UNAVAILABLE' }
+                # Some credential providers expose Invoke but leave the dialog open.
+                $stillVisible = $false
+                try { $stillVisible = -not $button.Current.IsOffscreen -and $button.Current.IsEnabled } catch {}
+                if (-not $invoked -or $stillVisible) {
+                    [uint32]$clickPid = 0
+                    [void][LockScreenInput]::GetWindowThreadProcessId([LockScreenInput]::GetForegroundWindow(), [ref]$clickPid)
+                    if ($clickPid -ne $buttonProps.ProcessId) { Write-Stage 'LOGIN_ERROR_FOREGROUND_CHANGED'; continue }
+                    $point = New-Object System.Windows.Point
+                    if (-not $button.TryGetClickablePoint([ref]$point)) { Write-Stage 'LOGIN_ERROR_NO_CLICKABLE_POINT'; continue }
+                    # Check that the discovered point still belongs to this button.
+                    $hit = [System.Windows.Automation.AutomationElement]::FromPoint($point)
+                    if (-not [System.Windows.Automation.Automation]::Compare($hit, $button)) { Write-Stage 'LOGIN_ERROR_CLICK_TARGET_CHANGED'; continue }
+                    if (-not [LockScreenInput]::SetCursorPos([int]$point.X, [int]$point.Y)) { continue }
+                    [LockScreenInput]::mouse_event(2, 0, 0, 0, [UIntPtr]::Zero)
+                    [LockScreenInput]::mouse_event(4, 0, 0, 0, [UIntPtr]::Zero)
+                    Write-Stage 'LOGIN_ERROR_BUTTON_CLICK_SENT'
+                }
                 $errorDismissed = $true
-                Write-Stage 'LOGIN_ERROR_DISMISSED'
+                Write-Stage 'LOGIN_ERROR_ACK_ATTEMPTED'
                 Start-Sleep -Milliseconds 180
                 break
-            } catch { Write-Stage 'LOGIN_ERROR_DISMISS_FAILED' }
+            } catch { Write-Stage ('LOGIN_ERROR_DISMISS_FAILED type=' + $_.Exception.GetType().FullName + ' hresult=' + $_.Exception.HResult) }
         }
         if ($errorDismissed) { continue }
     }
