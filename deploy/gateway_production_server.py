@@ -3415,7 +3415,12 @@ class GatewayHandler(BaseHTTPRequestHandler):
             asset = path.rsplit('/', 1)[1]
             if asset == 'manifest.webmanifest':
                 ticket = parse_qs(url.query).get('install', [''])[0]
-                self._send_json(200, manifest(ticket))
+                payload = json.dumps(manifest(ticket)).encode('utf-8')
+                self.send_response(200)
+                self._set_security_headers('application/manifest+json; charset=utf-8')
+                self.send_header('Content-Length', str(len(payload)))
+                self.end_headers()
+                self.wfile.write(payload)
                 return
             if asset in ('devices.js','install.js','jsQR.js','icon.png','icon-192.png','icon-512.png','apple-touch-icon.png'):
                 content = (Path(__file__).parent / 'static' / asset).read_bytes()
