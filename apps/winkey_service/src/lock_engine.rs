@@ -346,16 +346,7 @@ pub fn validate_helper_binary(path: &std::path::Path) -> bool {
 
 /// Helper executable axtarışı (yalnız absolute kanonik yollar və bütöv fayllar qəbul edilir)
 pub fn find_helper_exe() -> Option<PathBuf> {
-    // 1. Qorunan Program Files qovluğu (SYSTEM-Only Tree üstünlüyü)
-    let pf_dir = std::env::var("ProgramFiles")
-        .map(PathBuf::from)
-        .unwrap_or_else(|_| PathBuf::from("C:\\Program Files"));
-    let pf_helper = pf_dir.join("WinKey Pro").join("winkey_helper.exe");
-    if pf_helper.is_file() && validate_helper_binary(&pf_helper) {
-        return pf_helper.canonicalize().ok().or(Some(pf_helper));
-    }
-
-    // 2. Mövcud prosesin yanındakı qovluq (Validated slot)
+    // Prefer the running worker's signed slot so OTA also updates helper behavior.
     if let Ok(current_exe) = std::env::current_exe() {
         if let Some(dir) = current_exe.parent() {
             let candidate = dir.join("winkey_helper.exe");
@@ -364,6 +355,16 @@ pub fn find_helper_exe() -> Option<PathBuf> {
             }
         }
     }
+
+    // Legacy installation fallback; validate before use.
+    let pf_dir = std::env::var("ProgramFiles")
+        .map(PathBuf::from)
+        .unwrap_or_else(|_| PathBuf::from("C:\\Program Files"));
+    let pf_helper = pf_dir.join("WinKey Pro").join("winkey_helper.exe");
+    if pf_helper.is_file() && validate_helper_binary(&pf_helper) {
+        return pf_helper.canonicalize().ok().or(Some(pf_helper));
+    }
+
     // 3. apps/winkey_service/target/release
     let c2 = PathBuf::from("apps/winkey_service/target/release/winkey_helper.exe");
     if c2.is_file() && validate_helper_binary(&c2) {
